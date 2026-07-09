@@ -1,0 +1,13 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Hermes.Common\Hermes.Common.csproj" />
+        <ProjectReference Include="..\Hermes.Storage\Hermes.Storage.csproj" />
+    </ItemGroup>
+
+</Project>

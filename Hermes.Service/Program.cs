@@ -1,0 +1,41 @@
+// Copyright (c) 2026 Theodoros Bebekis
+// Licensed under the MIT License.
+
+namespace Hermes.Service;
+
+/// <summary>
+/// Service application entry point.
+/// </summary>
+static public class Program
+{
+    // ● public
+
+    /// <summary>
+    /// Runs the Hermes service.
+    /// </summary>
+    static public async Task Main(string[] Args)
+    {
+        IHost Host = Microsoft.Extensions.Hosting.Host.CreateDefaultBuilder(Args)
+            .UseSystemd()
+            .ConfigureServices((Context, Services) =>
+            {
+                Services.Configure<SyncSettings>(Context.Configuration.GetSection("Sync"));
+                Services.Configure<GoogleDriveSettings>(Context.Configuration.GetSection("GoogleDrive"));
+                Services.AddSingleton<GoogleDriveAuthManager>();
+                Services.AddSingleton<GoogleDriveClient>();
+                Services.AddSingleton<GoogleDriveMapper>();
+                Services.AddSingleton<IStorageProvider, GoogleDriveStorageProvider>();
+                Services.AddSingleton<SyncPlanner>();
+                Services.AddSingleton<OperationQueue>();
+                Services.AddSingleton<ConflictResolver>();
+                Services.AddSingleton<LocalScanner>();
+                Services.AddSingleton<MetadataStore>();
+                Services.AddSingleton<SyncEngine>();
+                Services.AddSingleton<SyncService>();
+                Services.AddHostedService<Worker>();
+            })
+            .Build();
+
+        await Host.RunAsync();
+    }
+}
