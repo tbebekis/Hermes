@@ -10,9 +10,6 @@ public partial class MainWindow : Window
 {
     // ● private
 
-    private readonly GoogleDriveClient fClient;
-    private string fLastPageToken = string.Empty;
-
     private void AppendLog(string Text)
     {
         if (!string.IsNullOrWhiteSpace(LogBox.Text))
@@ -22,14 +19,26 @@ public partial class MainWindow : Window
         LogBox.CaretIndex = LogBox.Text.Length;
     }
 
-    private async Task RunOperationAsync(string OperationName, Func<Task> Operation)
+    private void SetButtonsEnabled(bool Enabled)
     {
-        AppendLog($"{OperationName}: started.");
+        foreach (Control Control in ButtonPanel.Children)
+        {
+            if (Control is Button Button)
+                Button.IsEnabled = Enabled;
+        }
+    }
+
+    private async Task RunButtonAsync(string OperationName, Func<Task> Operation)
+    {
+        DateTimeOffset StartedAt = DateTimeOffset.Now;
+
+        SetButtonsEnabled(false);
+        AppendLog($"{OperationName}: started at {StartedAt:yyyy-MM-dd HH:mm:ss}.");
 
         try
         {
             await Operation();
-            AppendLog($"{OperationName}: succeeded.");
+            AppendLog($"{OperationName}: completed.");
         }
         catch (Exception Ex)
         {
@@ -37,63 +46,65 @@ public partial class MainWindow : Window
             AppendLog($"{Ex.GetType().FullName}: {Ex.Message}");
             AppendLog(Ex.StackTrace ?? "No stack trace.");
         }
+        finally
+        {
+            SetButtonsEnabled(true);
+        }
+    }
+
+    private Task ConnectAsync()
+    {
+        AppendLog("Connect placeholder async method called.");
+        return Task.CompletedTask;
+    }
+
+    private Task AboutAsync()
+    {
+        AppendLog("About placeholder async method called.");
+        return Task.CompletedTask;
+    }
+
+    private Task GetStartPageTokenAsync()
+    {
+        AppendLog("Get Start Page Token placeholder async method called.");
+        return Task.CompletedTask;
+    }
+
+    private Task ListFilesAsync()
+    {
+        AppendLog("List Files placeholder async method called.");
+        return Task.CompletedTask;
+    }
+
+    private Task ListChangesAsync()
+    {
+        AppendLog("List Changes placeholder async method called.");
+        return Task.CompletedTask;
     }
 
     private async void ConnectClick(object Sender, RoutedEventArgs Args)
     {
-        await RunOperationAsync("Connect", async () =>
-        {
-            await fClient.AuthenticateAsync(CancellationToken.None);
-            AppendLog("DriveService created.");
-        });
+        await RunButtonAsync("Connect", ConnectAsync);
     }
 
     private async void AboutClick(object Sender, RoutedEventArgs Args)
     {
-        await RunOperationAsync("About", async () =>
-        {
-            GoogleDriveAbout About = await fClient.GetAboutAsync(CancellationToken.None);
-            AppendLog($"User: {About.DisplayName} <{About.EmailAddress}>");
-            AppendLog($"Root folder id: {About.RootFolderId}");
-            AppendLog($"Storage usage: {About.StorageUsage}");
-            AppendLog($"Storage limit: {About.StorageLimit}");
-        });
+        await RunButtonAsync("About", AboutAsync);
     }
 
     private async void GetStartPageTokenClick(object Sender, RoutedEventArgs Args)
     {
-        await RunOperationAsync("Get Start Page Token", async () =>
-        {
-            fLastPageToken = await fClient.GetStartPageTokenAsync(CancellationToken.None);
-            AppendLog($"Start page token: {fLastPageToken}");
-        });
+        await RunButtonAsync("Get Start Page Token", GetStartPageTokenAsync);
     }
 
     private async void ListFilesClick(object Sender, RoutedEventArgs Args)
     {
-        await RunOperationAsync("List Files", async () =>
-        {
-            IReadOnlyList<StorageItem> Items = await fClient.ListFilesAsync(CancellationToken.None);
-            AppendLog($"Files returned: {Items.Count}");
-
-            foreach (StorageItem Item in Items)
-                AppendLog($"{Item.Kind}: {Item.Name} [{Item.Id}]");
-        });
+        await RunButtonAsync("List Files", ListFilesAsync);
     }
 
     private async void ListChangesClick(object Sender, RoutedEventArgs Args)
     {
-        await RunOperationAsync("List Changes", async () =>
-        {
-            if (string.IsNullOrWhiteSpace(fLastPageToken))
-                fLastPageToken = await fClient.GetStartPageTokenAsync(CancellationToken.None);
-
-            IReadOnlyList<StorageChange> Changes = await fClient.ListChangesAsync(fLastPageToken, CancellationToken.None);
-            AppendLog($"Changes returned: {Changes.Count}");
-
-            foreach (StorageChange Change in Changes)
-                AppendLog($"{Change.ChangeType}: {Change.Item.Name} [{Change.ChangeId}]");
-        });
+        await RunButtonAsync("List Changes", ListChangesAsync);
     }
 
     // ● constructor
@@ -103,7 +114,6 @@ public partial class MainWindow : Window
     /// </summary>
     public MainWindow()
     {
-        fClient = new GoogleDriveClient(new GoogleDriveAuthManager(), new GoogleDriveMapper());
         InitializeComponent();
     }
 }

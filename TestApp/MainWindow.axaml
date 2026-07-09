@@ -6,11 +6,12 @@
         x:Class="TestApp.MainWindow"
         Title="Hermes TestApp"
         Width="980"
-        Height="640">
+        Height="640"
+        WindowStartupLocation="CenterScreen">
     <Grid RowDefinitions="Auto,*" Margin="20">
         <StackPanel Grid.Row="0" Spacing="12">
             <TextBlock Text="Hermes TestApp" FontSize="24" FontWeight="SemiBold"/>
-            <WrapPanel>
+            <WrapPanel x:Name="ButtonPanel">
                 <Button Content="Connect" Margin="0,0,8,8" Click="ConnectClick"/>
                 <Button Content="About" Margin="0,0,8,8" Click="AboutClick"/>
                 <Button Content="Get Start Page Token" Margin="0,0,8,8" Click="GetStartPageTokenClick"/>
