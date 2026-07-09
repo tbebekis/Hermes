@@ -12,12 +12,10 @@
             <TextBlock Text="Hermes TestApp" FontSize="24" FontWeight="SemiBold"/>
             <WrapPanel>
                 <Button Content="Connect" Margin="0,0,8,8" Click="ConnectClick"/>
+                <Button Content="About" Margin="0,0,8,8" Click="AboutClick"/>
                 <Button Content="Get Start Page Token" Margin="0,0,8,8" Click="GetStartPageTokenClick"/>
                 <Button Content="List Files" Margin="0,0,8,8" Click="ListFilesClick"/>
                 <Button Content="List Changes" Margin="0,0,8,8" Click="ListChangesClick"/>
-                <Button Content="Upload Test File" Margin="0,0,8,8" Click="UploadTestFileClick"/>
-                <Button Content="Download Test File" Margin="0,0,8,8" Click="DownloadTestFileClick"/>
-                <Button Content="Scan Local Folder" Margin="0,0,8,8" Click="ScanLocalFolderClick"/>
             </WrapPanel>
         </StackPanel>
 

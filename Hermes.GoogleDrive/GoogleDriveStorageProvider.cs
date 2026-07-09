@@ -33,20 +33,25 @@ public class GoogleDriveStorageProvider : IStorageProvider
     /// <inheritdoc/>
     public async Task<Result<string>> GetStartPageTokenAsync(CancellationToken CancellationToken)
     {
+        await fClient.AuthenticateAsync(CancellationToken);
         string Token = await fClient.GetStartPageTokenAsync(CancellationToken);
         return Result<string>.Success(Token);
     }
 
     /// <inheritdoc/>
-    public Task<Result<IReadOnlyList<StorageItem>>> ListFilesAsync(string FolderId, CancellationToken CancellationToken)
+    public async Task<Result<IReadOnlyList<StorageItem>>> ListFilesAsync(string FolderId, CancellationToken CancellationToken)
     {
-        throw new NotImplementedException();
+        await fClient.AuthenticateAsync(CancellationToken);
+        IReadOnlyList<StorageItem> Items = await fClient.ListFilesAsync(CancellationToken);
+        return Result<IReadOnlyList<StorageItem>>.Success(Items);
     }
 
     /// <inheritdoc/>
-    public Task<Result<IReadOnlyList<StorageChange>>> ListChangesAsync(string PageToken, CancellationToken CancellationToken)
+    public async Task<Result<IReadOnlyList<StorageChange>>> ListChangesAsync(string PageToken, CancellationToken CancellationToken)
     {
-        throw new NotImplementedException();
+        await fClient.AuthenticateAsync(CancellationToken);
+        IReadOnlyList<StorageChange> Changes = await fClient.ListChangesAsync(PageToken, CancellationToken);
+        return Result<IReadOnlyList<StorageChange>>.Success(Changes);
     }
 
     // ● properties
