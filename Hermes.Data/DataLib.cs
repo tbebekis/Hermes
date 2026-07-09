@@ -11,26 +11,21 @@ static public class DataLib
     // ● private
 
     const string DefaultDbConnectionsFileName = "DbConnections.json";
-
-    static private DbLogListenerHermes fLogListener;
-
-    static private string GetOutputDefaultDbConnectionsFilePath()
+    static DbLogListenerHermes fLogListener;
+    static string GetOutputDefaultDbConnectionsFilePath()
     {
         return Path.Combine(AppContext.BaseDirectory, DefaultDbConnectionsFileName);
     }
-
-    static private string GetApplicationDbConnectionsFilePath()
+    static string GetApplicationDbConnectionsFilePath()
     {
         return Path.Combine(SysConfig.AppFolderPath, DefaultDbConnectionsFileName);
     }
-
-    static private bool ShouldCopyFile(string SourceFilePath, string TargetFilePath)
+    static bool ShouldCopyFile(string SourceFilePath, string TargetFilePath)
     {
         return !File.Exists(TargetFilePath)
             || File.GetLastWriteTimeUtc(SourceFilePath) > File.GetLastWriteTimeUtc(TargetFilePath);
     }
-
-    static private void WriteEmbeddedDbConnectionsFile(string TargetFilePath)
+    static void WriteEmbeddedDbConnectionsFile(string TargetFilePath)
     {
         string JsonText = ResourceFiles.GetResourceFileText(typeof(DataLib).Assembly, string.Empty, DefaultDbConnectionsFileName);
         if (!string.IsNullOrWhiteSpace(JsonText))
@@ -44,8 +39,8 @@ static public class DataLib
     /// </summary>
     static public void Load()
     {
+        Settings.Load();
     }
-
     /// <summary>
     /// Ensures the default database connection settings file exists in the application folder.
     /// </summary>
@@ -67,7 +62,6 @@ static public class DataLib
         if (!File.Exists(TargetFilePath))
             WriteEmbeddedDbConnectionsFile(TargetFilePath);
     }
-
     /// <summary>
     /// Initializes data-layer services.
     /// </summary>
@@ -75,4 +69,11 @@ static public class DataLib
     {
         fLogListener = new DbLogListenerHermes();
     }
+
+    // ● properties
+
+    /// <summary>
+    /// Gets the application settings.
+    /// </summary>
+    static public AppSettings Settings { get; } = new();
 }

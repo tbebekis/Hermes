@@ -10,7 +10,7 @@ internal class DbLogListenerHermes : SyncedLogListener
 {
     // ● private
 
-    private readonly DataModule fModule;
+    readonly DataModule fModule;
 
     // ● constructor
 

@@ -10,12 +10,11 @@ static public class Registry
 {
     // ● private
 
-    static private readonly List<SchemaVersionDef> SchemaVersionList = new()
+    static readonly List<SchemaVersionDef> SchemaVersionList = new()
     {
         new SchemaVersion1()
     };
-
-    static private readonly List<RegistryVersion> RegistryVersionList = new()
+    static readonly List<RegistryVersion> RegistryVersionList = new()
     {
         new RegistryVersion1()
     };
@@ -30,7 +29,6 @@ static public class Registry
         foreach (SchemaVersionDef Version in SchemaVersionList)
             Version.Register();
     }
-
     /// <summary>
     /// Registers data descriptors.
     /// </summary>

@@ -10,7 +10,7 @@ public class GoogleDriveMapper
 {
     // ● private
 
-    private string GetParentId(DriveFile File)
+    string GetParentId(DriveFile File)
     {
         if (File.Parents == null || File.Parents.Count == 0)
             return string.Empty;
@@ -18,7 +18,7 @@ public class GoogleDriveMapper
         return File.Parents[0] ?? string.Empty;
     }
 
-    private long GetSize(DriveFile File)
+    long GetSize(DriveFile File)
     {
         if (File.Size.HasValue)
             return File.Size.Value;
@@ -54,11 +54,16 @@ public class GoogleDriveMapper
         string Name = File.Name ?? Id;
         string ParentId = GetParentId(File);
         string Path = "/" + Name;
+        string MimeType = File.MimeType ?? string.Empty;
+        DateTimeOffset CreatedTime = File.CreatedTimeDateTimeOffset ?? default;
+        DateTimeOffset ModifiedTime = File.ModifiedTimeDateTimeOffset ?? default;
+        long Version = File.Version ?? 0;
+        bool Trashed = File.Trashed == true;
 
-        if (File.MimeType == GoogleDriveConstants.FolderMimeType)
-            return new StorageFolder(Id, ParentId, Name, Path);
+        if (MimeType == GoogleDriveConstants.FolderMimeType)
+            return new StorageFolder(Id, ParentId, Name, Path, MimeType, CreatedTime, ModifiedTime, Version, Trashed);
 
-        return new StorageFile(Id, ParentId, Name, Path, GetSize(File), File.Md5Checksum ?? string.Empty);
+        return new StorageFile(Id, ParentId, Name, Path, MimeType, GetSize(File), File.Md5Checksum ?? string.Empty, CreatedTime, ModifiedTime, Version, Trashed);
     }
 
     /// <summary>
@@ -78,7 +83,7 @@ public class GoogleDriveMapper
         else
         {
             string FileId = Change.FileId ?? "unknown";
-            Item = new StorageItem(FileId, string.Empty, FileId, "/" + FileId, StorageItemKind.File);
+            Item = new StorageItem(FileId, string.Empty, FileId, "/" + FileId, StorageItemKind.File, string.Empty, 0, string.Empty, default, default, 0, true);
         }
 
         return new StorageChange(Change.FileId ?? Item.Id, ChangeType, Item);

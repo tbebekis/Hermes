@@ -21,7 +21,7 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime Desktop)
         {
-            Desktop.MainWindow = AppHost.HiddenMainWindow;
+            Desktop.MainWindow = AppHost.StartupWindow;
             Desktop.MainWindow.Opened += async (Sender, Args) => await AppHost.Start(Desktop);
         }
 

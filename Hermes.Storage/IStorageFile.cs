@@ -9,11 +9,6 @@ namespace Hermes.Storage;
 public interface IStorageFile : IStorageItem
 {
     /// <summary>
-    /// Gets the file size in bytes.
-    /// </summary>
-    long Size { get; }
-
-    /// <summary>
     /// Gets the provider checksum.
     /// </summary>
     string Checksum { get; }

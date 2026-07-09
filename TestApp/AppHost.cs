@@ -18,15 +18,15 @@ static public partial class AppHost
 #if DEBUG
         Sys.DebugMode = true;
 #endif
-        HiddenMainWindow = new HiddenMainWindow();
+        StartupWindow = new StartupWindow();
     }
 
     // ● properties
 
     /// <summary>
-    /// Gets the hidden startup window.
+    /// Gets the startup window.
     /// </summary>
-    static public HiddenMainWindow HiddenMainWindow { get; private set; }
+    static public StartupWindow StartupWindow { get; private set; }
 
     /// <summary>
     /// Gets the real main window.

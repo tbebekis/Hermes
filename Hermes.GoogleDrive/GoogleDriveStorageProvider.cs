@@ -10,7 +10,7 @@ public class GoogleDriveStorageProvider : IStorageProvider
 {
     // ● private
 
-    private readonly GoogleDriveClient fClient;
+    readonly GoogleDriveClient fClient;
 
     // ● constructor
 
@@ -37,7 +37,6 @@ public class GoogleDriveStorageProvider : IStorageProvider
         string Token = await fClient.GetStartPageTokenAsync(CancellationToken);
         return Result<string>.Success(Token);
     }
-
     /// <inheritdoc/>
     public async Task<Result<IReadOnlyList<StorageItem>>> ListFilesAsync(string FolderId, CancellationToken CancellationToken)
     {
@@ -45,7 +44,6 @@ public class GoogleDriveStorageProvider : IStorageProvider
         IReadOnlyList<StorageItem> Items = await fClient.ListFilesAsync(CancellationToken);
         return Result<IReadOnlyList<StorageItem>>.Success(Items);
     }
-
     /// <inheritdoc/>
     public async Task<Result<IReadOnlyList<StorageChange>>> ListChangesAsync(string PageToken, CancellationToken CancellationToken)
     {
@@ -58,7 +56,6 @@ public class GoogleDriveStorageProvider : IStorageProvider
 
     /// <inheritdoc/>
     public string Name => "Google Drive";
-
     /// <inheritdoc/>
     public StorageProviderCapabilities Capabilities { get; }
 }

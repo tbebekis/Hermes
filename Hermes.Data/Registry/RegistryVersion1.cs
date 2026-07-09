@@ -10,7 +10,7 @@ public class RegistryVersion1 : RegistryVersion
 {
     // ● private
 
-    static private void RegisterModuleLog()
+    static void RegisterModuleLog()
     {
         string SqlText = @"
 select
@@ -71,7 +71,7 @@ from
         SelectDef.ColumnTypes["EventId"] = DataColumnType.Text;
     }
 
-    static private void RegisterModuleSyncState()
+    static void RegisterModuleSyncState()
     {
         string SqlText = @"
 select

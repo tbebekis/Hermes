@@ -10,16 +10,21 @@ public class GoogleDriveClient
 {
     // ● private
 
-    private readonly GoogleDriveAuthManager fAuthManager;
-    private readonly GoogleDriveMapper fMapper;
-    private DriveService fDriveService;
+    readonly GoogleDriveAuthManager fAuthManager;
+    readonly GoogleDriveMapper fMapper;
+    DriveService fDriveService;
 
-    private DriveService RequireDriveService()
+    DriveService RequireDriveService()
     {
         if (fDriveService == null)
             throw new InvalidOperationException("Google Drive client is not authenticated.");
 
         return fDriveService;
+    }
+
+    static string EscapeDriveQueryValue(string Value)
+    {
+        return Value.Replace("'", "\\'");
     }
 
     // ● constructor
@@ -57,12 +62,7 @@ public class GoogleDriveClient
         AboutResource.GetRequest Request = Service.About.Get();
         Request.Fields = "user(displayName,emailAddress),storageQuota(limit,usage)";
         About About = await Request.ExecuteAsync(CancellationToken);
-
-        FilesResource.GetRequest RootRequest = Service.Files.Get("root");
-        RootRequest.Fields = "id";
-        DriveFile RootFolder = await RootRequest.ExecuteAsync(CancellationToken);
-
-        return fMapper.MapAbout(About, RootFolder.Id ?? string.Empty);
+        return fMapper.MapAbout(About, string.Empty);
     }
 
     /// <summary>
@@ -98,6 +98,49 @@ public class GoogleDriveClient
     }
 
     /// <summary>
+    /// Lists the immediate children of the Google Drive root folder.
+    /// </summary>
+    public async Task<IReadOnlyList<StorageItem>> ListRootFolderAsync(CancellationToken CancellationToken)
+    {
+        return await ListFolderAsync("root", CancellationToken);
+    }
+
+    /// <summary>
+    /// Lists the immediate children of the specified Google Drive folder.
+    /// </summary>
+    public async Task<IReadOnlyList<StorageItem>> ListFolderAsync(string FolderId, CancellationToken CancellationToken)
+    {
+        Guard.NotNullOrWhiteSpace(FolderId, nameof(FolderId));
+
+        DriveService Service = RequireDriveService();
+        FilesResource.ListRequest Request = Service.Files.List();
+        Request.Q = $"'{EscapeDriveQueryValue(FolderId)}' in parents and trashed = false";
+        Request.Fields = "files(id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version)";
+        FileList FileList = await Request.ExecuteAsync(CancellationToken);
+        List<StorageItem> Result = new();
+
+        if (FileList.Files == null)
+            return Result;
+
+        foreach (DriveFile File in FileList.Files)
+            Result.Add(fMapper.MapFile(File));
+
+        return Result;
+    }
+    /// <summary>
+    /// Gets a single Google Drive item.
+    /// </summary>
+    public async Task<StorageItem> GetFileAsync(string FileId, CancellationToken CancellationToken)
+    {
+        Guard.NotNullOrWhiteSpace(FileId, nameof(FileId));
+
+        DriveService Service = RequireDriveService();
+        FilesResource.GetRequest Request = Service.Files.Get(FileId);
+        Request.Fields = "id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version";
+        DriveFile File = await Request.ExecuteAsync(CancellationToken);
+        return fMapper.MapFile(File);
+    }
+    /// <summary>
     /// Lists changes after a page token.
     /// </summary>
     public async Task<IReadOnlyList<StorageChange>> ListChangesAsync(string PageToken, CancellationToken CancellationToken)
@@ -123,7 +166,7 @@ public class GoogleDriveClient
     /// <summary>
     /// Creates a Google Drive folder.
     /// </summary>
-    public async Task<StorageFolder> CreateFolderAsync(string Name, string ParentId = null, CancellationToken CancellationToken = default)
+    public async Task<StorageItem> CreateFolderAsync(string Name, string ParentId = null, CancellationToken CancellationToken = default)
     {
         Guard.NotNullOrWhiteSpace(Name, nameof(Name));
 
@@ -138,13 +181,8 @@ public class GoogleDriveClient
             FileMetadata.Parents = new List<string> { ParentId };
 
         FilesResource.CreateRequest Request = Service.Files.Create(FileMetadata);
-        Request.Fields = "id,name,mimeType,parents";
+        Request.Fields = "id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version";
         DriveFile Created = await Request.ExecuteAsync(CancellationToken);
-        StorageItem Item = fMapper.MapFile(Created);
-
-        if (Item is StorageFolder Folder)
-            return Folder;
-
-        throw new HermesException("Google Drive returned a non-folder item after folder creation.");
+        return fMapper.MapFile(Created);
     }
 }

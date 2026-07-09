@@ -10,31 +10,46 @@ public class GoogleDriveAuthManager
 {
     // ● private
 
-    private const string UserName = "user";
-    private const string CredentialsFolderName = "Credentials";
-    private const string ClientSecretFileName = "client_secret.json";
-    private const string TokenFileName = "google-token.json";
-    private readonly string[] fScopes = [DriveService.Scope.DriveMetadataReadonly];
+    const string UserName = "user";
+    const string CredentialsFolderName = "Credentials";
+    const string ClientSecretFileName = "client_secret.json";
+    const string TokenFileName = "google-token.json";
+    readonly string[] fScopes = [DriveService.Scope.DriveFile];
 
     // ● private
 
     /// <summary>
     /// Stores the Google OAuth token in the configured single token file.
     /// </summary>
-    private sealed class GoogleDriveTokenDataStore : IDataStore
+    sealed class GoogleDriveTokenDataStore : IDataStore
     {
         // ● private
 
-        private readonly string fTokenFilePath;
+        readonly string fTokenFilePath;
+        readonly string[] fRequiredScopes;
+        bool ContainsRequiredScopes(TokenResponse Token)
+        {
+            if (Token == null || string.IsNullOrWhiteSpace(Token.Scope))
+                return false;
+
+            foreach (string Scope in fRequiredScopes)
+            {
+                if (!Token.Scope.Contains(Scope, StringComparison.Ordinal))
+                    return false;
+            }
+
+            return true;
+        }
 
         // ● constructor
 
         /// <summary>
         /// Initializes a new instance of the <see cref="GoogleDriveTokenDataStore"/> class.
         /// </summary>
-        public GoogleDriveTokenDataStore(string TokenFilePath)
+        public GoogleDriveTokenDataStore(string TokenFilePath, string[] RequiredScopes)
         {
             fTokenFilePath = Guard.NotNullOrWhiteSpace(TokenFilePath, nameof(TokenFilePath));
+            fRequiredScopes = Guard.NotNull(RequiredScopes, nameof(RequiredScopes));
         }
 
         // ● public
@@ -47,7 +62,6 @@ public class GoogleDriveAuthManager
 
             return Task.CompletedTask;
         }
-
         /// <inheritdoc/>
         public Task DeleteAsync<T>(string Key)
         {
@@ -56,7 +70,6 @@ public class GoogleDriveAuthManager
 
             return Task.CompletedTask;
         }
-
         /// <inheritdoc/>
         public Task<T> GetAsync<T>(string Key)
         {
@@ -65,9 +78,14 @@ public class GoogleDriveAuthManager
 
             string JsonText = System.IO.File.ReadAllText(fTokenFilePath);
             T Result = NewtonsoftJsonSerializer.Instance.Deserialize<T>(JsonText);
+            if (Result is TokenResponse Token && !ContainsRequiredScopes(Token))
+            {
+                System.IO.File.Delete(fTokenFilePath);
+                return Task.FromResult(default(T));
+            }
+
             return Task.FromResult(Result);
         }
-
         /// <inheritdoc/>
         public Task StoreAsync<T>(string Key, T Value)
         {
@@ -81,7 +99,7 @@ public class GoogleDriveAuthManager
         }
     }
 
-    private async Task<UserCredential> RefreshIfNeededAsync(UserCredential Credential, CancellationToken CancellationToken)
+    async Task<UserCredential> RefreshIfNeededAsync(UserCredential Credential, CancellationToken CancellationToken)
     {
         if (Credential.Token != null && Credential.Token.IsStale)
             await Credential.RefreshTokenAsync(CancellationToken);
@@ -112,7 +130,7 @@ public class GoogleDriveAuthManager
             fScopes,
             UserName,
             CancellationToken,
-            new GoogleDriveTokenDataStore(TokenFilePath));
+            new GoogleDriveTokenDataStore(TokenFilePath, fScopes));
 
         return await RefreshIfNeededAsync(Credential, CancellationToken);
     }

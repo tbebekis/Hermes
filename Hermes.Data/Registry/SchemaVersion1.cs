@@ -14,7 +14,7 @@ public class SchemaVersion1 : SchemaVersionDef
     protected override void RegisterInternal()
     {
         string SqlText = @"
-CREATE TABLE {TableName} (
+CREATE TABLE SYS_LOG (
     Id  @NVARCHAR(40)  @NOT_NULL primary key
     ,Year int @NOT_NULL
     ,Month int @NOT_NULL
@@ -32,7 +32,7 @@ CREATE TABLE {TableName} (
         Version.AddTable(SqlText);
 
         SqlText = @"
-CREATE TABLE {TableName} (
+CREATE TABLE HERMES_SYNC_STATE (
     Id @NVARCHAR(40) @NOT_NULL primary key
     ,DriveStartPageToken @NVARCHAR(512) @NULL
     ,LastSuccessfulSyncUtc @DATE_TIME @NULL

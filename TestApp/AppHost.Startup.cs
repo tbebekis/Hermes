@@ -13,7 +13,7 @@ static public partial class AppHost
     /// <summary>
     /// Initializes Tripous system configuration.
     /// </summary>
-    static private void InitializeConfigs()
+    static void InitializeConfigs()
     {
         SysConfig.ApplicationMode = ApplicationMode.Desktop;
         SysConfig.MainAssembly = typeof(AppHost).Assembly;
@@ -23,7 +23,7 @@ static public partial class AppHost
     /// <summary>
     /// Loads database connection settings.
     /// </summary>
-    static private async Task LoadConnectionStrings()
+    static async Task LoadConnectionStrings()
     {
         DataLib.EnsureDefaultDbConnectionsFile();
         Db.Connections.Load();
@@ -34,7 +34,7 @@ static public partial class AppHost
     /// <summary>
     /// Creates the database when it does not exist.
     /// </summary>
-    static private async Task CreateDatabase()
+    static async Task CreateDatabase()
     {
         DbConnectionInfo ConnectionInfo = Db.GetDefaultConnectionInfo();
         SqlProvider Provider = ConnectionInfo.GetSqlProvider();
@@ -43,14 +43,14 @@ static public partial class AppHost
         if (!Provider.DatabaseExists(ConnectionString) && Provider.CanCreateDatabases)
         {
             Provider.CreateDatabase(ConnectionString);
-            await MessageBox.Info($"An empty SQLite database has been created.{Environment.NewLine}{Environment.NewLine}{ConnectionString}", HiddenMainWindow);
+            await Tripous.Desktop.MessageBox.Info($"An empty SQLite database has been created.{Environment.NewLine}{Environment.NewLine}{ConnectionString}", StartupWindow);
         }
     }
 
     /// <summary>
     /// Loads libraries required by the application.
     /// </summary>
-    static private void LoadLibraries()
+    static void LoadLibraries()
     {
         DataLib.Load();
     }
@@ -58,7 +58,7 @@ static public partial class AppHost
     /// <summary>
     /// Initializes libraries required by the application.
     /// </summary>
-    static private void InitializeLibraries()
+    static void InitializeLibraries()
     {
         DataLib.Initialize();
     }
@@ -73,7 +73,7 @@ static public partial class AppHost
     {
         bool Flag = true;
         AppHost.AvaloniaDesktop = AvaloniaDesktop;
-        Ui.MainWindow = HiddenMainWindow;
+        Tripous.Desktop.Ui.MainWindow = StartupWindow;
 
         try
         {
@@ -89,22 +89,24 @@ static public partial class AppHost
             InitializeLibraries();
 
             MainWindow = new MainWindow();
-            Ui.MainWindow = MainWindow;
+            AvaloniaDesktop.MainWindow = MainWindow;
+            Tripous.Desktop.Ui.MainWindow = MainWindow;
             MainWindow.Show();
+            StartupWindow.Close();
         }
         catch (Exception Ex)
         {
             Console.WriteLine(Ex);
-            await MessageBox.Error(Ex.Message, Ui.MainWindow);
+            await Tripous.Desktop.MessageBox.Error(Ex.Message, Tripous.Desktop.Ui.MainWindow);
             Flag = false;
         }
 
         if (!Flag)
         {
-            Ui.MainWindow.Close();
+            Tripous.Desktop.Ui.MainWindow.Close();
             return;
         }
 
-        DesktopExceptionHandler.Initialize();
+        Tripous.Desktop.DesktopExceptionHandler.Initialize();
     }
 }

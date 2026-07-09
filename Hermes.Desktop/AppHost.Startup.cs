@@ -43,7 +43,7 @@ static public partial class AppHost
         if (!Provider.DatabaseExists(ConnectionString) && Provider.CanCreateDatabases)
         {
             Provider.CreateDatabase(ConnectionString);
-            await MessageBox.Info($"An empty SQLite database has been created.{Environment.NewLine}{Environment.NewLine}{ConnectionString}", HiddenMainWindow);
+            await Tripous.Desktop.MessageBox.Info($"An empty SQLite database has been created.{Environment.NewLine}{Environment.NewLine}{ConnectionString}", StartupWindow);
         }
     }
 
@@ -73,7 +73,7 @@ static public partial class AppHost
     {
         bool Flag = true;
         AppHost.AvaloniaDesktop = AvaloniaDesktop;
-        Ui.MainWindow = HiddenMainWindow;
+        Tripous.Desktop.Ui.MainWindow = StartupWindow;
 
         try
         {
@@ -89,22 +89,24 @@ static public partial class AppHost
             InitializeLibraries();
 
             MainWindow = new MainWindow();
-            Ui.MainWindow = MainWindow;
+            AvaloniaDesktop.MainWindow = MainWindow;
+            Tripous.Desktop.Ui.MainWindow = MainWindow;
             MainWindow.Show();
+            StartupWindow.Close();
         }
         catch (Exception Ex)
         {
             Console.WriteLine(Ex);
-            await MessageBox.Error(Ex.Message, Ui.MainWindow);
+            await Tripous.Desktop.MessageBox.Error(Ex.Message, Tripous.Desktop.Ui.MainWindow);
             Flag = false;
         }
 
         if (!Flag)
         {
-            Ui.MainWindow.Close();
+            Tripous.Desktop.Ui.MainWindow.Close();
             return;
         }
 
-        DesktopExceptionHandler.Initialize();
+        Tripous.Desktop.DesktopExceptionHandler.Initialize();
     }
 }

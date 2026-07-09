@@ -15,12 +15,31 @@
                 <Button Content="Connect" Margin="0,0,8,8" Click="ConnectClick"/>
                 <Button Content="About" Margin="0,0,8,8" Click="AboutClick"/>
                 <Button Content="Get Start Page Token" Margin="0,0,8,8" Click="GetStartPageTokenClick"/>
-                <Button Content="List Files" Margin="0,0,8,8" Click="ListFilesClick"/>
+                <Button Content="List Root Folder" Margin="0,0,8,8" Click="ListRootFolderClick"/>
+                <TextBox x:Name="edtFolderId"
+                         Width="300"
+                         Margin="0,0,8,8"
+                         PlaceholderText="Folder id"/>
+                <Button Content="List Folder" Margin="0,0,8,8" Click="ListFolderClick"/>
+                <TextBox x:Name="edtFileId"
+                         Width="300"
+                         Margin="0,0,8,8"
+                         PlaceholderText="File id"/>
+                <Button Content="Get File" Margin="0,0,8,8" Click="GetFileClick"/>
+                <TextBox x:Name="edtNewFolderName"
+                         Width="220"
+                         Margin="0,0,8,8"
+                         PlaceholderText="New folder name"/>
+                <TextBox x:Name="edtNewFolderParentId"
+                         Width="300"
+                         Margin="0,0,8,8"
+                         PlaceholderText="Parent id optional"/>
+                <Button Content="Create Folder" Margin="0,0,8,8" Click="CreateFolderClick"/>
                 <Button Content="List Changes" Margin="0,0,8,8" Click="ListChangesClick"/>
             </WrapPanel>
         </StackPanel>
 
-        <TextBox x:Name="LogBox"
+        <TextBox x:Name="edtLog"
                  Grid.Row="1"
                  Margin="0,16,0,0"
                  Text="Ready."

@@ -11,4 +11,3 @@ global using System;
 global using System.Threading.Tasks;
 global using Tripous;
 global using Tripous.Data;
-global using Tripous.Desktop;
