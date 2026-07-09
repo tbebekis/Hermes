@@ -26,6 +26,19 @@
                          Margin="0,0,8,8"
                          PlaceholderText="File id"/>
                 <Button Content="Get File" Margin="0,0,8,8" Click="GetFileClick"/>
+                <TextBox x:Name="edtNewName"
+                         Width="220"
+                         Margin="0,0,8,8"
+                         PlaceholderText="New name"/>
+                <Button Content="Rename" Margin="0,0,8,8" Click="RenameClick"/>
+                <TextBox x:Name="edtMoveParentId"
+                         Width="300"
+                         Margin="0,0,8,8"
+                         PlaceholderText="New parent id"/>
+                <Button Content="Move" Margin="0,0,8,8" Click="MoveClick"/>
+                <Button Content="Trash" Margin="0,0,8,8" Click="TrashClick"/>
+                <Button Content="Restore" Margin="0,0,8,8" Click="RestoreClick"/>
+                <Button Content="Delete Permanently" Margin="0,0,8,8" Click="DeletePermanentlyClick"/>
                 <TextBox x:Name="edtNewFolderName"
                          Width="220"
                          Margin="0,0,8,8"
@@ -35,6 +48,25 @@
                          Margin="0,0,8,8"
                          PlaceholderText="Parent id optional"/>
                 <Button Content="Create Folder" Margin="0,0,8,8" Click="CreateFolderClick"/>
+                <TextBox x:Name="edtUploadFilePath"
+                         Width="360"
+                         Margin="0,0,8,8"
+                         PlaceholderText="Local file path"/>
+                <TextBox x:Name="edtUploadParentId"
+                         Width="300"
+                         Margin="0,0,8,8"
+                         PlaceholderText="Upload parent id optional"/>
+                <Button Content="Upload File" Margin="0,0,8,8" Click="UploadFileClick"/>
+                <Button Content="Update Content" Margin="0,0,8,8" Click="UpdateFileContentClick"/>
+                <TextBox x:Name="edtDownloadFilePath"
+                         Width="360"
+                         Margin="0,0,8,8"
+                         PlaceholderText="Download path"/>
+                <Button Content="Download File" Margin="0,0,8,8" Click="DownloadFileClick"/>
+                <TextBox x:Name="edtChangesPageToken"
+                         Width="180"
+                         Margin="0,0,8,8"
+                         PlaceholderText="Changes token"/>
                 <Button Content="List Changes" Margin="0,0,8,8" Click="ListChangesClick"/>
             </WrapPanel>
         </StackPanel>

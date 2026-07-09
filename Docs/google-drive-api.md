@@ -80,6 +80,8 @@ Observed behavior:
 
 - Only immediate root children are returned.
 - Nested files are not returned.
+- Normal listings with `trashed = false` represent the current visible tree.
+- Trashed items do not appear in normal folder listings unless explicitly requested.
 - The root parent id returned in `Parents` was:
 
 ```text
@@ -101,6 +103,7 @@ Observed behavior:
 - Only immediate folder children are returned.
 - Listing `Folder00` returned `NestedText00.txt`.
 - The nested file had `ParentId` equal to the `Folder00` id.
+- Normal folder listings should be treated as the current visible tree.
 
 ## Get File
 
@@ -145,6 +148,637 @@ Observed behavior when creating `CreatedByHermes00` in root:
 - `ParentId`: root id
 - `Trashed`: `False`
 - `Version`: `1`
+
+## Rename
+
+Rename uses `files.update`.
+
+Metadata sent:
+
+- `Name`
+
+No other metadata fields are sent.
+
+Requested response fields:
+
+```text
+id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version
+```
+
+Observed behavior when renaming the app-created folder from `CreatedByHermes00` to `CreatedByHermes01`:
+
+- `Id` stayed the same: `1cZyUmlCUb_JDYTjssYsF6phUdYC7ex35`
+- `Name` changed from `CreatedByHermes00` to `CreatedByHermes01`
+- `MimeType` stayed the same
+- `IsFolder` stayed `True`
+- `Size` stayed not available
+- `Md5Hash` stayed not available
+- `CreatedTime` stayed the same
+- `ModifiedTime` changed from `2026-07-09 22:08:41 UTC` to `2026-07-09 22:16:47 UTC`
+- `ParentId` stayed the same: root id
+- `Trashed` stayed `False`
+- `Version` changed from `1` to `2`
+
+The `files.update` response and the following `files.get` response matched for the observed fields.
+
+Rename is therefore a metadata change that preserves identity and parent, but updates `ModifiedTime` and increments `Version`.
+
+Sync implication:
+
+- A remote rename must be treated as a change to the existing item identified by `Id`.
+- It must not be treated as delete plus create.
+
+## Move
+
+Move uses `files.update`.
+
+Metadata sent:
+
+- empty metadata object
+
+Request settings:
+
+- `AddParents = newParentId`
+- `RemoveParents = oldParentId`
+
+The old parent id is obtained by calling `files.get` before the update.
+
+Requested response fields:
+
+```text
+id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version
+```
+
+Observed behavior when moving the app-created folder `CreatedByHermes01` from root into `Folder00`:
+
+- `Id` stayed the same: `1cZyUmlCUb_JDYTjssYsF6phUdYC7ex35`
+- `Name` stayed the same: `CreatedByHermes01`
+- `MimeType` stayed the same
+- `IsFolder` stayed `True`
+- `Size` stayed not available
+- `Md5Hash` stayed not available
+- `CreatedTime` stayed the same
+- `ModifiedTime` stayed the same: `2026-07-09 22:16:47 UTC`
+- `ParentId` changed from root id to `Folder00` id
+- `Trashed` stayed `False`
+- `Version` changed from `3` to `4`
+
+The `files.update` response and the following `files.get` response matched for the observed fields.
+
+Observed behavior when moving the same folder back from `Folder00` to root:
+
+- `Id` stayed the same: `1cZyUmlCUb_JDYTjssYsF6phUdYC7ex35`
+- `Name` stayed the same: `CreatedByHermes01`
+- `MimeType` stayed the same
+- `IsFolder` stayed `True`
+- `Size` stayed not available
+- `Md5Hash` stayed not available
+- `CreatedTime` stayed the same
+- `ModifiedTime` stayed the same: `2026-07-09 22:16:47 UTC`
+- `ParentId` changed from `Folder00` id back to root id
+- `Trashed` stayed `False`
+- `Version` changed from `4` to `5`
+
+Observation:
+
+- Move preserves item identity.
+- Move changes parent hierarchy.
+- Move increments `Version`.
+- Move did not change `ModifiedTime` in either folder move test.
+- Remote change detection cannot rely only on `ModifiedTime`.
+
+Sync implication:
+
+- A remote move must be treated as a hierarchy update to the existing item identified by `Id`.
+- It must not be treated as delete plus create.
+- `ModifiedTime` alone is not sufficient for detecting remote changes.
+- In this test, moving a folder changed `Version` but did not change `ModifiedTime`.
+
+## Trash
+
+Trash uses `files.update`.
+
+Metadata sent:
+
+- `Trashed = true`
+
+This is a soft-delete operation. Permanent delete is not used in this test.
+
+Requested response fields:
+
+```text
+id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version
+```
+
+Observed behavior when moving the app-created folder `CreatedByHermes01` to trash:
+
+- `Id` stayed the same: `1cZyUmlCUb_JDYTjssYsF6phUdYC7ex35`
+- `Name` stayed the same: `CreatedByHermes01`
+- `MimeType` stayed the same
+- `IsFolder` stayed `True`
+- `Size` stayed not available
+- `Md5Hash` stayed not available
+- `CreatedTime` stayed the same
+- `ModifiedTime` stayed the same: `2026-07-09 22:16:47 UTC`
+- `ParentId` stayed the same: root id
+- `Trashed` changed from `False` to `True`
+- `Version` changed from `5` to `6`
+
+The `files.update` response and the following `files.get` response matched for the observed fields.
+
+Observed behavior after trash:
+
+- The item can still be retrieved with `files.get`.
+- The item still has its parent id.
+- The item does not appear in normal folder listings that use `trashed = false`.
+- Trash changed `Version` but did not change `ModifiedTime` in this folder trash test.
+
+Sync implication:
+
+- A remote trash operation must be treated as a soft-delete state change on the existing item identified by `Id`.
+- It must not be treated as immediate permanent deletion.
+- `ModifiedTime` alone is not sufficient for detecting trash state changes.
+- In this test, trashing changed `Version` but did not change `ModifiedTime`.
+
+## Restore
+
+Restore uses `files.update`.
+
+Metadata sent:
+
+- `Trashed = false`
+
+Requested response fields:
+
+```text
+id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version
+```
+
+Observed behavior when restoring the app-created folder `CreatedByHermes01` from trash:
+
+- `Id` stayed the same: `1cZyUmlCUb_JDYTjssYsF6phUdYC7ex35`
+- `Name` stayed the same: `CreatedByHermes01`
+- `MimeType` stayed the same
+- `IsFolder` stayed `True`
+- `Size` stayed not available
+- `Md5Hash` stayed not available
+- `CreatedTime` stayed the same
+- `ModifiedTime` stayed the same: `2026-07-09 22:16:47 UTC`
+- `ParentId` stayed the same: root id
+- `Trashed` changed from `True` to `False`
+- `Version` changed from `6` to `7`
+
+The `files.update` response and the following `files.get` response matched for the observed fields.
+
+Observed behavior after restore:
+
+- The item appeared again in `files.list` for root with `trashed = false`.
+- The listed metadata matched the restored item.
+
+Sync implication:
+
+- A remote restore operation must be treated as a soft-delete state change on the existing item identified by `Id`.
+- It must not be treated as a new create.
+- In this test, restoring changed `Version` but did not change `ModifiedTime`.
+
+## Upload File
+
+Upload uses `files.create` media upload.
+
+Metadata sent:
+
+- `Name`
+- optional `Parents`
+
+Content sent:
+
+- local file stream
+- MIME type derived from the local file extension
+
+Requested response fields:
+
+```text
+id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version
+```
+
+Observed behavior when uploading `/home/teo/gdrive_dam/UploadByHermes00.txt` to root:
+
+- `Id`: `1uf1a3bc-zZOKXqDWmxyEbvNW6YE33Qfp`
+- `Name`: `UploadByHermes00.txt`
+- `MimeType`: `text/plain`
+- `IsFolder`: `False`
+- `Size`: `5`
+- `Md5Hash`: `d6c43639164bd159609fde47ae1477cc`
+- `CreatedTime` and `ModifiedTime` were equal
+- `ParentId`: root id
+- `Trashed`: `False`
+- `Version`: `1`
+
+Initial observation:
+
+- A newly uploaded regular file has `Size`.
+- A newly uploaded regular file has `Md5Hash`.
+- A newly uploaded regular file starts with `Version = 1`.
+- Upload creates a new Drive item with a new `Id`.
+- Upload establishes the initial local-to-remote mapping.
+
+Sync implication:
+
+- Uploading a local file creates a new remote Drive object.
+- The remote `Id` becomes the stable identity of the uploaded file.
+- The future sync model should store the relationship between local path/state and remote `Id`.
+- For regular files, `Md5Hash` can be used as a content comparison signal.
+
+Observed behavior in the following root listing:
+
+- The uploaded file appeared in `files.list` for root with `trashed = false`.
+- `Id`, `Name`, `MimeType`, `Size`, `Md5Hash`, `CreatedTime`, `ModifiedTime`, `ParentId`, and `Trashed` matched the upload response.
+- `Version` appeared as `3` in the listing, while the upload response had returned `Version = 1`.
+
+Open question:
+
+- `Version` may change shortly after upload or may be reported differently between upload response and later list response. This needs more observation before using `Version` as a direct local comparison value.
+- `Version` is not a content-only version. The upload response returned `Version = 1`, but later metadata reads showed `Version = 3` without a known user content update.
+- `Version` appears to be a general object revision counter or Drive-side state counter. It may increase because of metadata actions, indexing, internal Drive processing, or other provider behavior.
+- `Version` should not be used alone as proof that file content changed.
+
+## Download File
+
+Download uses `files.get` media download.
+
+Inputs:
+
+- remote file id
+- local destination path
+
+Observed behavior when downloading `UploadByHermes00.txt` to `/home/teo/gdrive_dam/DownloadedByHermes00.txt`:
+
+- Remote `Id`: `1uf1a3bc-zZOKXqDWmxyEbvNW6YE33Qfp`
+- Remote `Name`: `UploadByHermes00.txt`
+- Remote `MimeType`: `text/plain`
+- Remote `Size`: `5`
+- Remote `Md5Hash`: `d6c43639164bd159609fde47ae1477cc`
+- Remote `CreatedTime` stayed the same
+- Remote `ModifiedTime` stayed the same
+- Remote `ParentId` stayed root id
+- Remote `Trashed` stayed `False`
+- Remote `Version` stayed `3`
+- Downloaded local file size was `5`
+
+Initial observation:
+
+- Download does not change remote metadata.
+- Local output size matched remote `Size`.
+- For regular files, the remote `Md5Hash` can be used later to verify content equivalence if the local MD5 is computed.
+
+Sync implication:
+
+- Download materializes remote content locally.
+- The remote `Id` remains the identity anchor.
+- For regular files, `Md5Hash` is the natural content comparison signal after download.
+
+## Update File Content
+
+Content update uses `files.update` media upload.
+
+Inputs:
+
+- remote file id
+- local source file path
+
+Metadata sent:
+
+- empty metadata object
+
+Content sent:
+
+- local file stream
+- MIME type derived from the local file extension
+
+Requested response fields:
+
+```text
+id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version
+```
+
+Questions to answer:
+
+- Does `Id` remain unchanged?
+- Does `Name` remain unchanged?
+- Does `Size` change?
+- Does `Md5Hash` change?
+- Does `ModifiedTime` change?
+- Does `CreatedTime` remain unchanged?
+- Does `Version` increment?
+- Does `ParentId` remain unchanged?
+
+No observations have been recorded yet.
+
+Observed behavior when updating `UploadByHermes00.txt` from 5 bytes to 34 bytes:
+
+- `Id` stayed the same: `1uf1a3bc-zZOKXqDWmxyEbvNW6YE33Qfp`
+- `Name` stayed the same: `UploadByHermes00.txt`
+- `MimeType` stayed the same: `text/plain`
+- `Size` changed from `5` to `34`
+- `Md5Hash` changed from `d6c43639164bd159609fde47ae1477cc` to `c5e1a7283d80d84387f0fef6f80e3bf0`
+- `ModifiedTime` changed from `2026-07-09 22:40:08 UTC` to `2026-07-09 23:07:22 UTC`
+- `CreatedTime` stayed the same
+- `ParentId` stayed the same: root id
+- `Trashed` stayed `False`
+- `Version` changed from `3` to `4` in the update response
+- The refreshed item immediately after update matched the update response
+- The local MD5 matched the remote `Md5Hash`
+
+Observed behavior when downloading the updated file:
+
+- Downloaded local file size was `34`
+- Downloaded local MD5 was `c5e1a7283d80d84387f0fef6f80e3bf0`
+- Local size matched remote `Size`
+- Local MD5 matched remote `Md5Hash`
+- The remote metadata before download showed `Version = 6`, while the update response had returned `Version = 4`
+
+Observation:
+
+- Content update preserves remote identity.
+- Content update changes content metadata: `Size`, `Md5Hash`, and `ModifiedTime`.
+- Content update increments `Version`, but `Version` may advance again after the update without another known user content change.
+
+Sync implication:
+
+- A remote content update should be treated as content state change on the existing item identified by `Id`.
+- For regular files, `Md5Hash` is a stronger content comparison signal than `Version`.
+- `Version` remains useful as a change signal, but not as a direct content-version value.
+
+## Incremental Changes After Content Update
+
+Use the saved Changes API page token from before the content update.
+
+For the current test, that token is:
+
+```text
+26
+```
+
+Expected flow:
+
+```text
+Saved token 26
+        ->
+Update existing file content
+        ->
+Changes.List(pageToken: 26)
+        ->
+Process all returned pages
+        ->
+Save NewStartPageToken only after successful processing
+```
+
+Questions to answer:
+
+- Is exactly one changed `FileId` returned?
+- Is it the existing file id?
+- Does the change contain the updated `Size` and `Md5Hash`?
+- Does the change contain the new `ModifiedTime`?
+- Is `Removed` false?
+- Is `HasFile` true?
+- Does the new token advance beyond `26`?
+- Does the content download itself create another change?
+- Does a second `Changes.List` call using the new token return zero changes?
+
+No observations have been recorded yet.
+
+Observed behavior after content update using saved page token `26`:
+
+- Change count: `1`
+- Changed `FileId`: `1uf1a3bc-zZOKXqDWmxyEbvNW6YE33Qfp`
+- `Removed`: `False`
+- `HasFile`: `True`
+- `Time`: `2026-07-09 23:07:26 UTC`
+- `Size`: `34`
+- `Md5Hash`: `c5e1a7283d80d84387f0fef6f80e3bf0`
+- `ModifiedTime`: `2026-07-09 23:07:22 UTC`
+- `CreatedTime`: unchanged
+- `ParentId`: root id
+- `Trashed`: `False`
+- `Version`: `6`
+- `NewStartPageToken`: `29`
+
+Initial observation:
+
+- The content update appeared as exactly one changed object from token `26`.
+- The change contained the updated `Size`, `Md5Hash`, and `ModifiedTime`.
+- Downloading the file after the content update did not create a separate change in this result.
+- The returned `Change.Time` was later than `File.ModifiedTime`.
+- The change stream returned the current file state, including `Version = 6`.
+
+Pending check:
+
+- Run `Changes.List` again with token `29`; expected result is zero changes.
+
+Checkpoint verification:
+
+- Running `Changes.List` again with token `29` returned `change count = 0`.
+- `NewStartPageToken` remained `29`.
+- Already processed changes were not returned again.
+
+Sync implication:
+
+- The changes checkpoint behavior is suitable for incremental sync.
+- Persisting `NewStartPageToken` after successful processing prevents reprocessing the same changes.
+
+## Permanent Delete
+
+Permanent delete uses `files.delete`.
+
+This is different from trashing an item.
+
+Use only a safe app-created test object.
+
+Inputs:
+
+- remote file id
+
+Expected test sequence:
+
+- upload a fresh temporary file, such as `DeleteByHermes00.txt`
+- consume its creation change and save a clean checkpoint
+- get the file and log its current state
+- permanently delete it with `files.delete`
+- call `files.get` for the same id and observe whether it returns 404
+- list the former parent folder and verify whether the item disappears
+- call `changes.list` from the clean checkpoint
+- call `changes.list` again from the returned checkpoint
+
+Observed setup:
+
+- Uploaded temporary file: `DeleteByHermes00.txt`
+- File id: `1KzI8p4Vqha8VbqJl57yv_dkDhVG55Bwa`
+- Size: `17`
+- Md5Hash: `f56eaed39b7e7488960e00eac623900e`
+- ParentId: root id
+- Upload response version: `1`
+- Creation change version: `3`
+
+Clean checkpoint before permanent delete:
+
+```text
+32
+```
+
+Observed behavior:
+
+- `files.get` before deletion returned the file normally.
+- `files.delete` succeeded.
+- `files.get` after permanent deletion returned not found.
+- TestApp observed and logged the 404 through `GoogleDriveNotFoundException`.
+- The deleted item disappeared from normal root listing.
+
+After permanent deletion:
+
+- The deleted `FileId` was no longer fetchable through `files.get`.
+- No metadata was available through `files.get`.
+- The normal visible tree did not include the item.
+
+## Changes API After Permanent Delete
+
+Questions to answer:
+
+- Is `Removed` true?
+- Is `HasFile` false?
+- If `File` is present, which metadata fields remain available?
+- Does the change preserve the deleted `FileId`?
+- Does the deletion produce exactly one change?
+- Does the next checkpoint return zero changes?
+
+Storage model implication:
+
+- A permanently removed change may not contain a complete `StorageItem`.
+- The provider-neutral change model should allow item metadata to be absent.
+- The deleted `FileId` must be matched against the Hermes metadata store so the Sync Planner can locate the corresponding local item.
+
+Observed behavior when listing changes from checkpoint `32` after permanent deletion:
+
+- Change count: `1`
+- `FileId`: `1KzI8p4Vqha8VbqJl57yv_dkDhVG55Bwa`
+- `Removed`: `True`
+- `Time`: `2026-07-09 23:27:02 UTC`
+- `HasFile`: `False`
+- `NewStartPageToken`: `34`
+
+Observed conclusion:
+
+- Permanent delete produced exactly one change.
+- The change preserved the deleted `FileId`.
+- `Removed` was `True`.
+- `HasFile` was `False`.
+- No `StorageItem` metadata was available in the change.
+
+Sync implication:
+
+- Permanent delete must be handled through the Changes API.
+- The deleted `FileId` must be matched against the Hermes metadata store.
+- The metadata store is required because the remote object can no longer be fetched.
+- The provider-neutral change model must allow missing `StorageItem` metadata for removed changes.
+- A removed change means the remote identity no longer exists.
+- A permanent deletion is represented by a tombstone-like change.
+- A provider-neutral `StorageChange` cannot require `StorageItem` to be present.
+
+Checkpoint verification:
+
+- Running `Changes.List` again with token `34` returned `change count = 0`.
+- `NewStartPageToken` remained `34`.
+- The permanent delete change was not returned again.
+
+## Changes API
+
+Changes listing uses `changes.list`.
+
+Requested fields:
+
+```text
+nextPageToken
+newStartPageToken
+changes(fileId,removed,time,file(id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version))
+```
+
+Request settings:
+
+- `PageSize = 100`
+- `IncludeRemoved = true`
+
+The exploration command supports:
+
+- saved start page token from `AppSettings.Google.StartPageToken`
+- optional manually entered page token
+- automatic pagination through `NextPageToken`
+- capture and temporary persistence of `NewStartPageToken`
+- mapping `Change.File` to `StorageItem` when present
+
+Questions to answer:
+
+- Do rename, move, trash, restore, and upload operations appear in `changes.list`?
+- Does download appear as a remote change?
+- For trash, does the change contain `File` with `Trashed = true`, or `Removed = true`?
+- For permanent delete later, does `Removed` become `true`?
+- Do folder move operations appear even though `ModifiedTime` did not change?
+- Is `Version` useful inside the change stream?
+- Does `changes.list` return duplicate changes for the same `FileId`?
+- Does the final state of the file appear, or every intermediate operation?
+
+No observations have been recorded yet. Run `List Changes` from `TestApp` and add the results here.
+
+Observed behavior when listing changes from page token `4` after the first exploration cycle:
+
+- Change count: `2`
+- `NewStartPageToken`: `26`
+- Change for folder `1cZyUmlCUb_JDYTjssYsF6phUdYC7ex35`
+- Change for uploaded file `1uf1a3bc-zZOKXqDWmxyEbvNW6YE33Qfp`
+
+Folder change:
+
+- `FileId`: `1cZyUmlCUb_JDYTjssYsF6phUdYC7ex35`
+- `Removed`: `False`
+- `HasFile`: `True`
+- `Time`: `2026-07-09 22:33:23 UTC`
+- `Name`: `CreatedByHermes01`
+- `ParentId`: root id
+- `Trashed`: `False`
+- `Version`: `7`
+- `ModifiedTime`: `2026-07-09 22:16:47 UTC`
+
+Uploaded file change:
+
+- `FileId`: `1uf1a3bc-zZOKXqDWmxyEbvNW6YE33Qfp`
+- `Removed`: `False`
+- `HasFile`: `True`
+- `Time`: `2026-07-09 22:40:12 UTC`
+- `Name`: `UploadByHermes00.txt`
+- `ParentId`: root id
+- `Trashed`: `False`
+- `Size`: `5`
+- `Md5Hash`: `d6c43639164bd159609fde47ae1477cc`
+- `Version`: `3`
+- `ModifiedTime`: `2026-07-09 22:40:08 UTC`
+
+Initial observations:
+
+- `changes.list` did not return every intermediate operation separately from this token.
+- The folder had gone through create, rename, move, move back, trash, and restore, but the change stream returned one change for the folder with its final visible state.
+- The uploaded file had upload and download activity, but the change stream returned one change for the uploaded file.
+- Download did not appear as a separate remote change.
+- Folder move/trash/restore changes are represented through the final file state when listing from the older token.
+- `Change.Time` can be later than `File.ModifiedTime`.
+- `NewStartPageToken` must be persisted after processing changes.
+
+Sync implication:
+
+- The Changes API appears suitable for incremental remote synchronization, but it may coalesce multiple operations on the same file id into the latest state visible from the requested token.
+- The sync engine must process changes as state reconciliation by `FileId`, not as an exact replay of every user operation.
+- A local metadata store is required to compare previous known state with the changed `StorageItem` state.
+- Hermes should treat the Changes API as an incremental changed-object feed.
+- For each returned `FileId`, the sync engine should compare the returned current state against the locally persisted remote metadata snapshot and derive the required operation.
+- The page token is a synchronization checkpoint.
+- The new page token must only be committed after the complete page sequence has been processed successfully.
 
 ## File Object Observations
 

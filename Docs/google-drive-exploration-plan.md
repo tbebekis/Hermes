@@ -42,7 +42,7 @@ Recommended order:
 - Download
 - List Changes
 
-`About`, `Get Start Page Token`, `List Root Folder`, `List Folder`, `Get File`, and `Create Folder` are already implemented. The next likely operation is `Rename`.
+`About`, `Get Start Page Token`, `List Root Folder`, `List Folder`, `Get File`, `Create Folder`, `Rename`, `Move`, `Trash`, `Restore`, `Delete Permanently`, `Upload File`, `Download File`, `Update File Content`, and `List Changes` are already implemented. The next likely operation is permanent delete behavior analysis.
 
 ## Primary API Object
 

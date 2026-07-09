@@ -26,6 +26,30 @@ public class GoogleDriveClient
     {
         return Value.Replace("'", "\\'");
     }
+    static string GetMimeType(string FilePath)
+    {
+        string Extension = Path.GetExtension(FilePath).ToLowerInvariant();
+        return Extension switch
+        {
+            ".csv" => "text/csv",
+            ".html" => "text/html",
+            ".json" => "application/json",
+            ".md" => "text/markdown",
+            ".pdf" => "application/pdf",
+            ".png" => "image/png",
+            ".txt" => "text/plain",
+            ".xml" => "application/xml",
+            ".jpg" => "image/jpeg",
+            ".jpeg" => "image/jpeg",
+            _ => "application/octet-stream"
+        };
+    }
+    GoogleDriveChangeItem MapDriveChange(Change Change)
+    {
+        StorageItem Item = Change.File == null ? null : fMapper.MapFile(Change.File);
+        DateTimeOffset Time = Change.TimeDateTimeOffset ?? default;
+        return new GoogleDriveChangeItem(Change.FileId, Change.Removed == true, Time, Item);
+    }
 
     // ● constructor
 
@@ -137,8 +161,96 @@ public class GoogleDriveClient
         DriveService Service = RequireDriveService();
         FilesResource.GetRequest Request = Service.Files.Get(FileId);
         Request.Fields = "id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version";
-        DriveFile File = await Request.ExecuteAsync(CancellationToken);
-        return fMapper.MapFile(File);
+        try
+        {
+            DriveFile File = await Request.ExecuteAsync(CancellationToken);
+            return fMapper.MapFile(File);
+        }
+        catch (GoogleApiException Ex) when (Ex.HttpStatusCode == HttpStatusCode.NotFound)
+        {
+            throw new GoogleDriveNotFoundException(FileId, Ex);
+        }
+    }
+    /// <summary>
+    /// Renames a Google Drive item.
+    /// </summary>
+    public async Task<StorageItem> RenameFileAsync(string FileId, string Name, CancellationToken CancellationToken)
+    {
+        Guard.NotNullOrWhiteSpace(FileId, nameof(FileId));
+        Guard.NotNullOrWhiteSpace(Name, nameof(Name));
+
+        DriveService Service = RequireDriveService();
+        DriveFile FileMetadata = new()
+        {
+            Name = Name
+        };
+        FilesResource.UpdateRequest Request = Service.Files.Update(FileMetadata, FileId);
+        Request.Fields = "id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version";
+        DriveFile Updated = await Request.ExecuteAsync(CancellationToken);
+        return fMapper.MapFile(Updated);
+    }
+    /// <summary>
+    /// Moves a Google Drive item to a new parent folder.
+    /// </summary>
+    public async Task<StorageItem> MoveFileAsync(string FileId, string OldParentId, string NewParentId, CancellationToken CancellationToken)
+    {
+        Guard.NotNullOrWhiteSpace(FileId, nameof(FileId));
+        Guard.NotNullOrWhiteSpace(OldParentId, nameof(OldParentId));
+        Guard.NotNullOrWhiteSpace(NewParentId, nameof(NewParentId));
+
+        DriveService Service = RequireDriveService();
+        DriveFile FileMetadata = new();
+        FilesResource.UpdateRequest Request = Service.Files.Update(FileMetadata, FileId);
+        Request.AddParents = NewParentId;
+        Request.RemoveParents = OldParentId;
+        Request.Fields = "id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version";
+        DriveFile Updated = await Request.ExecuteAsync(CancellationToken);
+        return fMapper.MapFile(Updated);
+    }
+    /// <summary>
+    /// Moves a Google Drive item to trash.
+    /// </summary>
+    public async Task<StorageItem> TrashFileAsync(string FileId, CancellationToken CancellationToken)
+    {
+        Guard.NotNullOrWhiteSpace(FileId, nameof(FileId));
+
+        DriveService Service = RequireDriveService();
+        DriveFile FileMetadata = new()
+        {
+            Trashed = true
+        };
+        FilesResource.UpdateRequest Request = Service.Files.Update(FileMetadata, FileId);
+        Request.Fields = "id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version";
+        DriveFile Updated = await Request.ExecuteAsync(CancellationToken);
+        return fMapper.MapFile(Updated);
+    }
+    /// <summary>
+    /// Restores a Google Drive item from trash.
+    /// </summary>
+    public async Task<StorageItem> RestoreFileAsync(string FileId, CancellationToken CancellationToken)
+    {
+        Guard.NotNullOrWhiteSpace(FileId, nameof(FileId));
+
+        DriveService Service = RequireDriveService();
+        DriveFile FileMetadata = new()
+        {
+            Trashed = false
+        };
+        FilesResource.UpdateRequest Request = Service.Files.Update(FileMetadata, FileId);
+        Request.Fields = "id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version";
+        DriveFile Updated = await Request.ExecuteAsync(CancellationToken);
+        return fMapper.MapFile(Updated);
+    }
+    /// <summary>
+    /// Permanently deletes a Google Drive item.
+    /// </summary>
+    public async Task DeleteFileAsync(string FileId, CancellationToken CancellationToken)
+    {
+        Guard.NotNullOrWhiteSpace(FileId, nameof(FileId));
+
+        DriveService Service = RequireDriveService();
+        FilesResource.DeleteRequest Request = Service.Files.Delete(FileId);
+        await Request.ExecuteAsync(CancellationToken);
     }
     /// <summary>
     /// Lists changes after a page token.
@@ -162,6 +274,40 @@ public class GoogleDriveClient
 
         return Result;
     }
+    /// <summary>
+    /// Lists all Google Drive changes after a page token.
+    /// </summary>
+    public async Task<GoogleDriveChangeListResult> ListDriveChangesAsync(string PageToken, CancellationToken CancellationToken)
+    {
+        Guard.NotNullOrWhiteSpace(PageToken, nameof(PageToken));
+
+        DriveService Service = RequireDriveService();
+        List<GoogleDriveChangeItem> Result = new();
+        string CurrentToken = PageToken;
+        string NewStartPageToken = string.Empty;
+
+        while (!string.IsNullOrWhiteSpace(CurrentToken))
+        {
+            ChangesResource.ListRequest Request = Service.Changes.List(CurrentToken);
+            Request.PageSize = 100;
+            Request.IncludeRemoved = true;
+            Request.Fields = "nextPageToken,newStartPageToken,changes(fileId,removed,time,file(id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version))";
+            ChangeList ChangeList = await Request.ExecuteAsync(CancellationToken);
+
+            if (ChangeList.Changes != null)
+            {
+                foreach (Change Change in ChangeList.Changes)
+                    Result.Add(MapDriveChange(Change));
+            }
+
+            if (!string.IsNullOrWhiteSpace(ChangeList.NewStartPageToken))
+                NewStartPageToken = ChangeList.NewStartPageToken;
+
+            CurrentToken = ChangeList.NextPageToken ?? string.Empty;
+        }
+
+        return new GoogleDriveChangeListResult(PageToken, NewStartPageToken, Result);
+    }
 
     /// <summary>
     /// Creates a Google Drive folder.
@@ -184,5 +330,88 @@ public class GoogleDriveClient
         Request.Fields = "id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version";
         DriveFile Created = await Request.ExecuteAsync(CancellationToken);
         return fMapper.MapFile(Created);
+    }
+    /// <summary>
+    /// Uploads a local file to Google Drive.
+    /// </summary>
+    public async Task<StorageItem> UploadFileAsync(string LocalFilePath, string ParentId = null, CancellationToken CancellationToken = default)
+    {
+        Guard.NotNullOrWhiteSpace(LocalFilePath, nameof(LocalFilePath));
+
+        if (!System.IO.File.Exists(LocalFilePath))
+            throw new FileNotFoundException("Upload source file was not found.", LocalFilePath);
+
+        DriveService Service = RequireDriveService();
+        string FileName = Path.GetFileName(LocalFilePath);
+        string MimeType = GetMimeType(LocalFilePath);
+        DriveFile FileMetadata = new()
+        {
+            Name = FileName
+        };
+
+        if (!string.IsNullOrWhiteSpace(ParentId))
+            FileMetadata.Parents = new List<string> { ParentId };
+
+        await using FileStream Stream = System.IO.File.OpenRead(LocalFilePath);
+        FilesResource.CreateMediaUpload Request = Service.Files.Create(FileMetadata, Stream, MimeType);
+        Request.Fields = "id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version";
+        IUploadProgress Progress = await Request.UploadAsync(CancellationToken);
+
+        if (Progress.Status != UploadStatus.Completed)
+            throw new HermesException(Progress.Exception == null ? "Google Drive upload failed." : Progress.Exception.Message);
+
+        return fMapper.MapFile(Request.ResponseBody);
+    }
+    /// <summary>
+    /// Updates the content of an existing Google Drive file.
+    /// </summary>
+    public async Task<StorageItem> UpdateFileContentAsync(string FileId, string LocalFilePath, CancellationToken CancellationToken)
+    {
+        Guard.NotNullOrWhiteSpace(FileId, nameof(FileId));
+        Guard.NotNullOrWhiteSpace(LocalFilePath, nameof(LocalFilePath));
+
+        if (!System.IO.File.Exists(LocalFilePath))
+            throw new FileNotFoundException("Update source file was not found.", LocalFilePath);
+
+        DriveService Service = RequireDriveService();
+        string MimeType = GetMimeType(LocalFilePath);
+        DriveFile FileMetadata = new();
+
+        await using FileStream Stream = System.IO.File.OpenRead(LocalFilePath);
+        FilesResource.UpdateMediaUpload Request = Service.Files.Update(FileMetadata, FileId, Stream, MimeType);
+        Request.Fields = "id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version";
+        IUploadProgress Progress = await Request.UploadAsync(CancellationToken);
+
+        if (Progress.Status != UploadStatus.Completed)
+            throw new HermesException(Progress.Exception == null ? "Google Drive content update failed." : Progress.Exception.Message);
+
+        return fMapper.MapFile(Request.ResponseBody);
+    }
+    /// <summary>
+    /// Downloads a Google Drive file to a local file.
+    /// </summary>
+    public async Task<StorageItem> DownloadFileAsync(string FileId, string LocalFilePath, CancellationToken CancellationToken)
+    {
+        Guard.NotNullOrWhiteSpace(FileId, nameof(FileId));
+        Guard.NotNullOrWhiteSpace(LocalFilePath, nameof(LocalFilePath));
+
+        DriveService Service = RequireDriveService();
+        StorageItem Item = await GetFileAsync(FileId, CancellationToken);
+
+        if (Item.IsFolder)
+            throw new HermesException("Cannot download a Google Drive folder as a regular file.");
+
+        string FolderPath = Path.GetDirectoryName(LocalFilePath);
+        if (!string.IsNullOrWhiteSpace(FolderPath))
+            Directory.CreateDirectory(FolderPath);
+
+        await using FileStream Stream = System.IO.File.Create(LocalFilePath);
+        FilesResource.GetRequest Request = Service.Files.Get(FileId);
+        IDownloadProgress Progress = await Request.DownloadAsync(Stream, CancellationToken);
+
+        if (Progress.Status != DownloadStatus.Completed)
+            throw new HermesException(Progress.Exception == null ? "Google Drive download failed." : Progress.Exception.Message);
+
+        return Item;
     }
 }

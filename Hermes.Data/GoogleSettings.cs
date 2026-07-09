@@ -23,4 +23,8 @@ public class GoogleSettings
     /// Gets or sets the full path of the local Google Drive mirror folder.
     /// </summary>
     public string DriveFolderPath { get; set; } = string.Empty;
+    /// <summary>
+    /// Gets or sets the temporary Google Drive changes start page token.
+    /// </summary>
+    public string StartPageToken { get; set; } = string.Empty;
 }
