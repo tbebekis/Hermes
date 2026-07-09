@@ -20,7 +20,9 @@
     </ItemGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\Hermes.Data\Hermes.Data.csproj" />
         <ProjectReference Include="..\Hermes.GoogleDrive\Hermes.GoogleDrive.csproj" />
+        <ProjectReference Include="..\..\Tripous.Avalon\Tripous.Desktop\Tripous.Desktop.csproj" />
     </ItemGroup>
 
 </Project>

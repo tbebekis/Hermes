@@ -15,4 +15,12 @@
         <ProjectReference Include="..\..\Tripous.Avalon\Tripous.Logging\Tripous.Logging.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+        <Content Remove="DbConnections.json" />
+        <EmbeddedResource Include="DbConnections.json" />
+        <None Include="DbConnections.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
 </Project>

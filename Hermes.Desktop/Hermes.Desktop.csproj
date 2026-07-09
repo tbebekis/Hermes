@@ -18,4 +18,9 @@
             <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
         </PackageReference>
     </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Hermes.Data\Hermes.Data.csproj" />
+        <ProjectReference Include="..\..\Tripous.Avalon\Tripous.Desktop\Tripous.Desktop.csproj" />
+    </ItemGroup>
 </Project>

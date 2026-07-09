@@ -20,7 +20,10 @@ public partial class App : Application
     public override void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime Desktop)
-            Desktop.MainWindow = new MainWindow();
+        {
+            Desktop.MainWindow = AppHost.HiddenMainWindow;
+            Desktop.MainWindow.Opened += async (Sender, Args) => await AppHost.Start(Desktop);
+        }
 
         base.OnFrameworkInitializationCompleted();
     }

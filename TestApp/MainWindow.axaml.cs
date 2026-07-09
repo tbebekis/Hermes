@@ -57,6 +57,8 @@ public partial class MainWindow : Window
     private async Task ConnectAsync()
     {
         AppendLog("starting authentication");
+        AppendLog($"client secret: {GoogleDriveAuthManager.GetClientSecretFilePath()}");
+        AppendLog($"token file: {GoogleDriveAuthManager.GetTokenFilePath()}");
         await fAuthManager.AuthenticateAsync(CancellationToken.None);
         AppendLog("authentication succeeded");
     }

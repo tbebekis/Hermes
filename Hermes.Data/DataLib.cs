@@ -10,7 +10,32 @@ static public class DataLib
 {
     // ● private
 
+    const string DefaultDbConnectionsFileName = "DbConnections.json";
+
     static private DbLogListenerHermes fLogListener;
+
+    static private string GetOutputDefaultDbConnectionsFilePath()
+    {
+        return Path.Combine(AppContext.BaseDirectory, DefaultDbConnectionsFileName);
+    }
+
+    static private string GetApplicationDbConnectionsFilePath()
+    {
+        return Path.Combine(SysConfig.AppFolderPath, DefaultDbConnectionsFileName);
+    }
+
+    static private bool ShouldCopyFile(string SourceFilePath, string TargetFilePath)
+    {
+        return !File.Exists(TargetFilePath)
+            || File.GetLastWriteTimeUtc(SourceFilePath) > File.GetLastWriteTimeUtc(TargetFilePath);
+    }
+
+    static private void WriteEmbeddedDbConnectionsFile(string TargetFilePath)
+    {
+        string JsonText = ResourceFiles.GetResourceFileText(typeof(DataLib).Assembly, string.Empty, DefaultDbConnectionsFileName);
+        if (!string.IsNullOrWhiteSpace(JsonText))
+            File.WriteAllText(TargetFilePath, JsonText);
+    }
 
     // ● public
 
@@ -19,6 +44,28 @@ static public class DataLib
     /// </summary>
     static public void Load()
     {
+    }
+
+    /// <summary>
+    /// Ensures the default database connection settings file exists in the application folder.
+    /// </summary>
+    static public void EnsureDefaultDbConnectionsFile()
+    {
+        Directory.CreateDirectory(SysConfig.AppFolderPath);
+
+        string SourceFilePath = GetOutputDefaultDbConnectionsFilePath();
+        string TargetFilePath = GetApplicationDbConnectionsFilePath();
+
+        if (File.Exists(SourceFilePath))
+        {
+            if (ShouldCopyFile(SourceFilePath, TargetFilePath))
+                File.Copy(SourceFilePath, TargetFilePath, true);
+
+            return;
+        }
+
+        if (!File.Exists(TargetFilePath))
+            WriteEmbeddedDbConnectionsFile(TargetFilePath);
     }
 
     /// <summary>
