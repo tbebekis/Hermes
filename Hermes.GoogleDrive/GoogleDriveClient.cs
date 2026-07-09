@@ -40,7 +40,12 @@ public class GoogleDriveClient
     /// </summary>
     public async Task AuthenticateAsync(CancellationToken CancellationToken)
     {
-        fDriveService = await fAuthManager.AuthenticateAsync(CancellationToken);
+        UserCredential Credential = await fAuthManager.AuthenticateAsync(CancellationToken);
+        fDriveService = new DriveService(new BaseClientService.Initializer
+        {
+            HttpClientInitializer = Credential,
+            ApplicationName = CommonConstants.ApplicationName
+        });
     }
 
     /// <summary>

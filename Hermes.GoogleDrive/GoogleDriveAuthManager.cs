@@ -11,18 +11,14 @@ public class GoogleDriveAuthManager
     // ● private
 
     private const string UserName = "user";
-    private readonly string[] fScopes =
-    [
-        DriveService.Scope.DriveMetadataReadonly,
-        DriveService.Scope.DriveFile
-    ];
+    private readonly string[] fScopes = [DriveService.Scope.DriveMetadataReadonly];
 
     // ● public
 
     /// <summary>
-    /// Authenticates the user and creates a Drive service.
+    /// Authenticates the user.
     /// </summary>
-    public async Task<DriveService> AuthenticateAsync(CancellationToken CancellationToken)
+    public async Task<UserCredential> AuthenticateAsync(CancellationToken CancellationToken)
     {
         string ConfigFolder = GetHermesConfigFolder();
         string ClientSecretPath = Path.Combine(ConfigFolder, "client_secret.json");
@@ -35,18 +31,12 @@ public class GoogleDriveAuthManager
 
         await using FileStream Stream = new(ClientSecretPath, FileMode.Open, FileAccess.Read);
         ClientSecrets Secrets = GoogleClientSecrets.FromStream(Stream).Secrets;
-        UserCredential Credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
+        return await GoogleWebAuthorizationBroker.AuthorizeAsync(
             Secrets,
             fScopes,
             UserName,
             CancellationToken,
             new FileDataStore(TokenFolder, true));
-
-        return new DriveService(new BaseClientService.Initializer
-        {
-            HttpClientInitializer = Credential,
-            ApplicationName = CommonConstants.ApplicationName
-        });
     }
 
     /// <summary>

@@ -10,6 +10,8 @@ public partial class MainWindow : Window
 {
     // ● private
 
+    private readonly GoogleDriveAuthManager fAuthManager = new();
+
     private void AppendLog(string Text)
     {
         if (!string.IsNullOrWhiteSpace(LogBox.Text))
@@ -52,10 +54,11 @@ public partial class MainWindow : Window
         }
     }
 
-    private Task ConnectAsync()
+    private async Task ConnectAsync()
     {
-        AppendLog("Connect placeholder async method called.");
-        return Task.CompletedTask;
+        AppendLog("starting authentication");
+        await fAuthManager.AuthenticateAsync(CancellationToken.None);
+        AppendLog("authentication succeeded");
     }
 
     private Task AboutAsync()
@@ -84,7 +87,7 @@ public partial class MainWindow : Window
 
     private async void ConnectClick(object Sender, RoutedEventArgs Args)
     {
-        await RunButtonAsync("Connect", ConnectAsync);
+        await RunButtonAsync("authentication", ConnectAsync);
     }
 
     private async void AboutClick(object Sender, RoutedEventArgs Args)

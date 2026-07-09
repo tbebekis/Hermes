@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <NoWarn>$(NoWarn);NU1510;NU1903</NoWarn>
+        <CopyRefAssembliesToPublishDirectory>true</CopyRefAssembliesToPublishDirectory>
+        <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Hermes.Common\Hermes.Common.csproj" />
+        <ProjectReference Include="..\..\Tripous.Avalon\Tripous\Tripous.csproj" />
+        <ProjectReference Include="..\..\Tripous.Avalon\Tripous.Data\Tripous.Data.csproj" />
+        <ProjectReference Include="..\..\Tripous.Avalon\Tripous.Logging\Tripous.Logging.csproj" />
+    </ItemGroup>
+
+</Project>
