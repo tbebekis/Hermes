@@ -39,4 +39,9 @@ public class SyncExecutionRequest
     /// Gets or sets the latest remote observation.
     /// </summary>
     public RemoteObservedSnapshotRecord RemoteObservation { get; set; }
+
+    /// <summary>
+    /// Gets or sets the resolved local relative path of the remote parent item.
+    /// </summary>
+    public string RemoteParentLocalRelativePath { get; set; }
 }

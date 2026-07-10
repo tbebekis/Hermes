@@ -202,6 +202,25 @@ public class SyncExecutionIntentFactoryTests
         Assert.Empty(Intent.ValidationMessages);
     }
     /// <summary>
+    /// Verifies nested remote downloads can resolve the local path from the parent local path.
+    /// </summary>
+    [Fact]
+    public void CreateResolvesNestedRemoteDownloadPathFromParentLocalPath()
+    {
+        SyncExecutionRequest ExecutionRequest = Request(SyncPlanDecisionKind.DownloadToLocal);
+        ExecutionRequest.BaseSnapshot.LocalRelativePath = string.Empty;
+        ExecutionRequest.LocalObservation = null;
+        ExecutionRequest.RemoteObservation.RemoteParentId = "remote-folder";
+        ExecutionRequest.RemoteParentLocalRelativePath = "Folder";
+
+        SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(ExecutionRequest);
+
+        Assert.Equal(SyncExecutionIntentKind.DownloadToLocal, Intent.IntentKind);
+        Assert.Equal("Folder/File.txt", Intent.LocalRelativePath);
+        Assert.True(Intent.CanExecute);
+        Assert.Empty(Intent.ValidationMessages);
+    }
+    /// <summary>
     /// Verifies remote delete propagation can use the base local path.
     /// </summary>
     [Fact]

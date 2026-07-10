@@ -91,20 +91,47 @@ public class MetadataSyncSession
         if (!string.Equals(SyncRootId, Checkpoint.SyncRootId, StringComparison.Ordinal))
             throw new ArgumentException("Checkpoint sync root id must match the imported sync root id.", nameof(Checkpoint));
     }
+    static string ExistingLocalPath(LocalObservedSnapshotRecord LocalObservation, BaseSnapshotRecord BaseSnapshot)
+    {
+        if (LocalObservation != null && LocalObservation.ExistsFlag && !string.IsNullOrWhiteSpace(LocalObservation.RelativePath))
+            return LocalObservation.RelativePath;
+
+        if (BaseSnapshot != null && BaseSnapshot.ExistsFlag && !string.IsNullOrWhiteSpace(BaseSnapshot.LocalRelativePath))
+            return BaseSnapshot.LocalRelativePath;
+
+        return null;
+    }
+    string ResolveRemoteParentLocalPath(SyncRootRecord SyncRoot, RemoteObservedSnapshotRecord RemoteObservation)
+    {
+        if (SyncRoot == null || RemoteObservation == null || string.IsNullOrWhiteSpace(RemoteObservation.RemoteParentId))
+            return null;
+
+        if (string.Equals(RemoteObservation.RemoteParentId, SyncRoot.RemoteRootItemId, StringComparison.Ordinal))
+            return string.Empty;
+
+        TrackedItemRecord ParentItem = fStore.GetTrackedItemByRemoteId(SyncRoot.Id, RemoteObservation.RemoteParentId);
+        if (ParentItem == null)
+            return null;
+
+        return ExistingLocalPath(fStore.GetLocalObservation(ParentItem.Id), fStore.GetBaseSnapshot(ParentItem.Id));
+    }
     SyncExecutionRequest CreateExecutionRequest(SyncPlanDecision Decision)
     {
         Guard.NotNull(Decision, nameof(Decision));
 
         TrackedItemRecord TrackedItem = fStore.GetTrackedItem(Decision.TrackedItemId);
+        SyncRootRecord SyncRoot = TrackedItem == null ? null : fStore.GetSyncRoot(TrackedItem.SyncRootId);
+        RemoteObservedSnapshotRecord RemoteObservation = fStore.GetRemoteObservation(Decision.TrackedItemId);
 
         return new SyncExecutionRequest()
         {
             Decision = Decision,
-            SyncRoot = TrackedItem == null ? null : fStore.GetSyncRoot(TrackedItem.SyncRootId),
+            SyncRoot = SyncRoot,
             TrackedItem = TrackedItem,
             BaseSnapshot = fStore.GetBaseSnapshot(Decision.TrackedItemId),
             LocalObservation = fStore.GetLocalObservation(Decision.TrackedItemId),
-            RemoteObservation = fStore.GetRemoteObservation(Decision.TrackedItemId),
+            RemoteObservation = RemoteObservation,
+            RemoteParentLocalRelativePath = ResolveRemoteParentLocalPath(SyncRoot, RemoteObservation),
         };
     }
     static bool CanCommitExecutionResult(SyncExecutionResult Result)

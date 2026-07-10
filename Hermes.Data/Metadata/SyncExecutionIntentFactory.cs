@@ -41,6 +41,9 @@ static public class SyncExecutionIntentFactory
             && string.Equals(Request.RemoteObservation.RemoteParentId, Request.SyncRoot?.RemoteRootItemId, StringComparison.Ordinal))
             return Request.RemoteObservation.Name;
 
+        if (HasText(Request.RemoteObservation?.Name) && HasText(Request.RemoteParentLocalRelativePath))
+            return Request.RemoteParentLocalRelativePath + "/" + Request.RemoteObservation.Name;
+
         return string.Empty;
     }
     static string TrackedItemId(SyncExecutionRequest Request)
