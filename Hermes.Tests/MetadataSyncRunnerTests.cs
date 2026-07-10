@@ -167,6 +167,9 @@ public class MetadataSyncRunnerTests
         public Task<StorageResult<StorageChangeListResult>> ListChangesAsync(string PageToken, CancellationToken CancellationToken)
         {
             ListChangesTokens.Add(PageToken);
+            if (ListChangesResult != null)
+                return Task.FromResult(ListChangesResult);
+
             return Task.FromResult(StorageResult<StorageChangeListResult>.Success(ChangeListResult));
         }
 
@@ -200,6 +203,10 @@ public class MetadataSyncRunnerTests
         /// Gets or sets the change list result.
         /// </summary>
         public StorageChangeListResult ChangeListResult { get; set; } = new("token-1", "token-2", []);
+        /// <summary>
+        /// Gets or sets the storage result returned by changes listing.
+        /// </summary>
+        public StorageResult<StorageChangeListResult> ListChangesResult { get; set; }
         /// <summary>
         /// Gets the number of start page token calls.
         /// </summary>
@@ -343,5 +350,71 @@ public class MetadataSyncRunnerTests
         Assert.Equal(["token-1"], Provider.ListChangesTokens);
         Assert.Equal(0, Provider.StartPageTokenCalls);
         Assert.Equal("token-2", Store.GetRemoteCheckpoint("root-1").StartPageToken);
+    }
+    /// <summary>
+    /// Verifies invalid checkpoints clear the stored token and fail the current pass.
+    /// </summary>
+    [Fact]
+    public async Task RunOnceAsyncClearsInvalidCheckpointToken()
+    {
+        using TestDatabase Database = new();
+        using TempFolder Folder = new();
+        SqlMetadataStore Store = new(Database.Store);
+        Store.InsertSyncRoot(CreateSyncRoot(Folder.Path));
+        Store.UpsertRemoteCheckpoint(new RemoteCheckpointRecord()
+        {
+            SyncRootId = "root-1",
+            ProviderName = "Fake",
+            ConnectionId = "account-1",
+            StartPageToken = "invalid-token",
+            UpdatedTime = new DateTime(2026, 7, 10, 10, 0, 0, DateTimeKind.Utc),
+        });
+        FakeStorageProvider Provider = new()
+        {
+            ListChangesResult = StorageResult<StorageChangeListResult>.Failure(new StorageError(StorageErrorKind.CheckpointInvalid, "Invalid checkpoint.")),
+        };
+        CompletingExecutor Executor = new();
+        MetadataSyncRunner Runner = CreateRunner(Store, Provider, Executor);
+
+        Result<MetadataSyncRunResult> Result = await Runner.RunOnceAsync("root-1", CancellationToken.None);
+
+        Assert.True(Result.Failed);
+        Assert.Equal(["invalid-token"], Provider.ListChangesTokens);
+        Assert.Equal(string.Empty, Store.GetRemoteCheckpoint("root-1").StartPageToken);
+        Assert.Empty(Executor.Requests);
+    }
+    /// <summary>
+    /// Verifies a cleared invalid checkpoint makes the next pass bootstrap a full remote snapshot.
+    /// </summary>
+    [Fact]
+    public async Task RunOnceAsyncBootstrapsAfterInvalidCheckpointTokenWasCleared()
+    {
+        using TestDatabase Database = new();
+        using TempFolder Folder = new();
+        SqlMetadataStore Store = new(Database.Store);
+        Store.InsertSyncRoot(CreateSyncRoot(Folder.Path));
+        Store.UpsertRemoteCheckpoint(new RemoteCheckpointRecord()
+        {
+            SyncRootId = "root-1",
+            ProviderName = "Fake",
+            ConnectionId = "account-1",
+            StartPageToken = string.Empty,
+            UpdatedTime = new DateTime(2026, 7, 10, 10, 0, 0, DateTimeKind.Utc),
+        });
+        FakeStorageProvider Provider = new();
+        StorageItem RemoteFile = FileItem("remote-file", "remote-root", "File.txt");
+        Provider.FolderItems["remote-root"] = [RemoteFile];
+        Provider.ItemsById[RemoteFile.Id] = RemoteFile;
+        CompletingExecutor Executor = new();
+        MetadataSyncRunner Runner = CreateRunner(Store, Provider, Executor);
+
+        Result<MetadataSyncRunResult> Result = await Runner.RunOnceAsync("root-1", CancellationToken.None);
+
+        Assert.True(Result.Succeeded);
+        Assert.Equal(MetadataSyncRunKind.Bootstrap, Result.Value.Kind);
+        Assert.Equal(1, Provider.StartPageTokenCalls);
+        Assert.Empty(Provider.ListChangesTokens);
+        Assert.Equal("token-1", Store.GetRemoteCheckpoint("root-1").StartPageToken);
+        Assert.NotNull(Store.GetTrackedItemByRemoteId("root-1", "remote-file"));
     }
 }

@@ -122,7 +122,16 @@ public class MetadataSyncRunner : IMetadataSyncRunner
         StorageResult<StorageChangeListResult> ChangesResult = await fStorageProvider.ListChangesAsync(CurrentCheckpoint.StartPageToken, CancellationToken);
 
         if (ChangesResult.Failed)
+        {
+            if (ChangesResult.Error?.Kind == StorageErrorKind.CheckpointInvalid)
+            {
+                CurrentCheckpoint.StartPageToken = string.Empty;
+                CurrentCheckpoint.UpdatedTime = RemoteObservedTime;
+                fStore.UpsertRemoteCheckpoint(CurrentCheckpoint);
+            }
+
             return Result<MetadataSyncRunResult>.Failure(ChangesResult.ErrorText);
+        }
 
         string NextStartPageToken = string.IsNullOrWhiteSpace(ChangesResult.Value.NewStartPageToken)
             ? CurrentCheckpoint.StartPageToken
