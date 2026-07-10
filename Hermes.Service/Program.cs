@@ -19,7 +19,10 @@ static public class Program
             .UseSystemd()
             .ConfigureServices((Context, Services) =>
             {
-                Services.Configure<SyncSettings>(Context.Configuration.GetSection("Sync"));
+                Services.AddOptions<SyncSettings>()
+                    .Bind(Context.Configuration.GetSection("Sync"))
+                    .ValidateOnStart();
+                Services.AddSingleton<IValidateOptions<SyncSettings>, SyncSettingsValidator>();
                 Services.Configure<GoogleDriveSettings>(Context.Configuration.GetSection("GoogleDrive"));
                 Services.AddSingleton<GoogleDriveAuthManager>();
                 Services.AddSingleton<GoogleDriveClient>();
