@@ -145,6 +145,36 @@ public class MetadataSyncSessionTests
             CommittedTime = Time,
         });
     }
+    static RemoteCheckpointRecord CreateCheckpoint(string Token, DateTime Time) => new()
+    {
+        SyncRootId = "root-1",
+        ProviderName = "GoogleDrive",
+        ConnectionId = "account-1",
+        StartPageToken = Token,
+        UpdatedTime = Time,
+    };
+    static LocalScanItem CreateLocalScanItem(string Name, string Hash, DateTime Time) => new()
+    {
+        RelativePath = Name,
+        Name = Name,
+        ItemType = "File",
+        Size = 42,
+        ContentHash = Hash,
+        ModifiedTime = Time,
+    };
+    static StorageItem CreateStorageItem(string RemoteItemId, string Name, string Hash, long Version) => new(
+        RemoteItemId,
+        "remote-root",
+        Name,
+        "/" + Name,
+        StorageItemKind.File,
+        "text/plain",
+        42,
+        Hash,
+        default,
+        default,
+        Version,
+        false);
 
     // ● public
 
@@ -443,7 +473,333 @@ public class MetadataSyncSessionTests
 
         Assert.Equal(2, Result.Decisions.Count);
         Assert.Single(Result.CommittedBaseSnapshots);
+        Assert.Single(Result.PendingExecutorDecisions);
+        Assert.Single(Result.PendingExecutionRequests);
         Assert.Contains(Result.Decisions, Item => Item.DecisionKind == SyncPlanDecisionKind.CommitBase);
         Assert.Contains(Result.Decisions, Item => Item.DecisionKind == SyncPlanDecisionKind.UploadToRemote);
+        Assert.Equal(SyncPlanDecisionKind.UploadToRemote, Result.PendingExecutorDecisions[0].DecisionKind);
+        Assert.Equal(SyncPlanDecisionKind.UploadToRemote, Result.PendingExecutionRequests[0].Decision.DecisionKind);
+        Assert.Equal("item-2", Result.PendingExecutionRequests[0].TrackedItem.Id);
+        Assert.Equal("hash-base-2", Result.PendingExecutionRequests[0].BaseSnapshot.ContentHash);
+        Assert.Equal("hash-local-2", Result.PendingExecutionRequests[0].LocalObservation.ContentHash);
+        Assert.Equal("hash-base-2", Result.PendingExecutionRequests[0].RemoteObservation.ContentHash);
+    }
+    /// <summary>
+    /// Verifies metadata-only advancement does not return no-op decisions as pending executor work.
+    /// </summary>
+    [Fact]
+    public void AdvanceMetadataOnlyDoesNotReturnNoChangeAsPending()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 7, 35, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        AddBaseSnapshot(Store, "item-1", "File1.txt", "hash-1", Time);
+        AddObservedItem(Store, "item-1", "remote-1", "File1.txt", "hash-1", Time);
+
+        MetadataSyncSessionResult Result = Session.AdvanceMetadataOnly("root-1", Time);
+
+        Assert.Single(Result.Decisions);
+        Assert.Equal(SyncPlanDecisionKind.None, Result.Decisions[0].DecisionKind);
+        Assert.Empty(Result.CommittedBaseSnapshots);
+        Assert.Empty(Result.PendingExecutorDecisions);
+        Assert.Empty(Result.PendingExecutionRequests);
+    }
+    /// <summary>
+    /// Verifies a full snapshot session imports observations and commits compatible endpoint changes.
+    /// </summary>
+    [Fact]
+    public void AdvanceWithRemoteSnapshotImportsAndCommitsMetadataOnlyChanges()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 7, 40, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        AddBaseSnapshot(Store, "item-1", "File1.txt", "hash-base", Time);
+
+        MetadataSyncSessionResult Result = Session.AdvanceWithRemoteSnapshot(
+            "root-1",
+            [CreateLocalScanItem("File1.txt", "hash-1", Time)],
+            [CreateStorageItem("remote-1", "File1.txt", "hash-1", 1)],
+            CreateCheckpoint("token-1", Time),
+            Time,
+            Time,
+            Time,
+            "scan-1");
+
+        Assert.Single(Result.Decisions);
+        Assert.Single(Result.CommittedBaseSnapshots);
+        Assert.Empty(Result.PendingExecutorDecisions);
+        Assert.Empty(Result.PendingExecutionRequests);
+        Assert.Empty(Result.UntrackedRemoteChanges);
+        Assert.Equal(SyncPlanDecisionKind.CommitBase, Result.Decisions[0].DecisionKind);
+        Assert.Equal("hash-1", Store.GetBaseSnapshot("item-1").ContentHash);
+        Assert.Equal("token-1", Store.GetRemoteCheckpoint("root-1").StartPageToken);
+    }
+    /// <summary>
+    /// Verifies an incremental changes session returns executor work after importing changes.
+    /// </summary>
+    [Fact]
+    public void AdvanceWithRemoteChangesImportsAndReturnsPendingExecutorDecisions()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 7, 45, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        AddBaseSnapshot(Store, "item-1", "File1.txt", "hash-base", Time);
+
+        MetadataSyncSessionResult Result = Session.AdvanceWithRemoteChanges(
+            "root-1",
+            [CreateLocalScanItem("File1.txt", "hash-base", Time)],
+            [
+                new StorageChange(
+                    "remote-1",
+                    false,
+                    new DateTimeOffset(Time),
+                    CreateStorageItem("remote-1", "File1.txt", "hash-remote", 2)),
+            ],
+            CreateCheckpoint("token-2", Time),
+            Time,
+            Time,
+            Time,
+            "scan-2");
+
+        Assert.Single(Result.Decisions);
+        Assert.Single(Result.PendingExecutorDecisions);
+        Assert.Single(Result.PendingExecutionRequests);
+        Assert.Empty(Result.CommittedBaseSnapshots);
+        Assert.Empty(Result.UntrackedRemoteChanges);
+        Assert.Equal(SyncPlanDecisionKind.DownloadToLocal, Result.PendingExecutorDecisions[0].DecisionKind);
+        Assert.Equal(SyncPlanDecisionKind.DownloadToLocal, Result.PendingExecutionRequests[0].Decision.DecisionKind);
+        Assert.Equal("item-1", Result.PendingExecutionRequests[0].TrackedItem.Id);
+        Assert.Equal("hash-base", Result.PendingExecutionRequests[0].LocalObservation.ContentHash);
+        Assert.Equal("hash-remote", Result.PendingExecutionRequests[0].RemoteObservation.ContentHash);
+        Assert.Equal("hash-base", Store.GetBaseSnapshot("item-1").ContentHash);
+        Assert.Equal("token-2", Store.GetRemoteCheckpoint("root-1").StartPageToken);
+    }
+    /// <summary>
+    /// Verifies an incremental changes session stops before local import and planning when remote changes cannot be tracked.
+    /// </summary>
+    [Fact]
+    public void AdvanceWithRemoteChangesStopsBeforePlanningWhenUntrackedChangesRemain()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 7, 50, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+
+        MetadataSyncSessionResult Result = Session.AdvanceWithRemoteChanges(
+            "root-1",
+            [CreateLocalScanItem("Local.txt", "hash-local", Time)],
+            [new StorageChange("remote-missing", true, new DateTimeOffset(Time), null)],
+            CreateCheckpoint("token-3", Time),
+            Time,
+            Time,
+            Time,
+            "scan-3");
+
+        Assert.Empty(Result.Decisions);
+        Assert.Empty(Result.PendingExecutorDecisions);
+        Assert.Empty(Result.PendingExecutionRequests);
+        Assert.Empty(Result.CommittedBaseSnapshots);
+        Assert.Single(Result.UntrackedRemoteChanges);
+        Assert.Null(Store.GetRemoteCheckpoint("root-1"));
+        Assert.Null(Store.GetTrackedItemByLocalKey("root-1", "Local.txt"));
+    }
+    /// <summary>
+    /// Verifies verified execution results commit their current observations as base snapshots.
+    /// </summary>
+    [Fact]
+    public void CommitVerifiedExecutionResultsCommitsCompletedAndVerifiedItems()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 8, 0, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        AddBaseSnapshot(Store, "item-1", "File1.txt", "hash-base", Time);
+        MetadataSyncSessionResult SessionResult = Session.AdvanceWithRemoteChanges(
+            "root-1",
+            [CreateLocalScanItem("File1.txt", "hash-base", Time)],
+            [
+                new StorageChange(
+                    "remote-1",
+                    false,
+                    new DateTimeOffset(Time),
+                    CreateStorageItem("remote-1", "File1.txt", "hash-remote", 2)),
+            ],
+            CreateCheckpoint("token-4", Time),
+            Time,
+            Time,
+            Time,
+            "scan-4");
+
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            ExistsFlag = true,
+            RelativePath = "File1.txt",
+            Name = "File1.txt",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-remote",
+            ObservedTime = Time,
+        });
+
+        SyncExecutionApplyResult Result = Session.ApplyExecutionResults(
+            [
+                new SyncExecutionResult()
+                {
+                    Request = SessionResult.PendingExecutionRequests[0],
+                    ResultKind = SyncExecutionResultKind.CompletedAndVerified,
+                },
+            ],
+            Time);
+
+        Assert.Single(Result.CommittedResults);
+        Assert.Empty(Result.UncommittedResults);
+        Assert.Single(Result.CommittedBaseSnapshots);
+        Assert.Equal("hash-remote", Store.GetBaseSnapshot("item-1").ContentHash);
+    }
+    /// <summary>
+    /// Verifies failed execution results do not commit base snapshots.
+    /// </summary>
+    [Fact]
+    public void CommitVerifiedExecutionResultsIgnoresFailedItems()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 8, 5, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        AddBaseSnapshot(Store, "item-1", "File1.txt", "hash-base", Time);
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            ExistsFlag = true,
+            RelativePath = "File1.txt",
+            Name = "File1.txt",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-local",
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            RemoteItemId = "remote-1",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "File1.txt",
+            RemoteParentId = "remote-root",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-base",
+            ProviderVersion = 1,
+            Trashed = false,
+            ObservedTime = Time,
+        });
+        MetadataSyncSessionResult SessionResult = Session.AdvanceMetadataOnly("root-1", Time);
+
+        SyncExecutionApplyResult Result = Session.ApplyExecutionResults(
+            [
+                new SyncExecutionResult()
+                {
+                    Request = SessionResult.PendingExecutionRequests[0],
+                    ResultKind = SyncExecutionResultKind.FailedRetryable,
+                },
+            ],
+            Time);
+
+        Assert.Empty(Result.CommittedResults);
+        Assert.Single(Result.UncommittedResults);
+        Assert.Empty(Result.CommittedBaseSnapshots);
+        Assert.Equal("hash-base", Store.GetBaseSnapshot("item-1").ContentHash);
+    }
+    /// <summary>
+    /// Verifies the verified execution commit helper returns committed base snapshots.
+    /// </summary>
+    [Fact]
+    public void CommitVerifiedExecutionResultsReturnsCommittedBaseSnapshots()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 8, 10, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        AddBaseSnapshot(Store, "item-1", "File1.txt", "hash-base", Time);
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            ExistsFlag = true,
+            RelativePath = "File1.txt",
+            Name = "File1.txt",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-local",
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            RemoteItemId = "remote-1",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "File1.txt",
+            RemoteParentId = "remote-root",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-base",
+            ProviderVersion = 1,
+            Trashed = false,
+            ObservedTime = Time,
+        });
+        MetadataSyncSessionResult SessionResult = Session.AdvanceMetadataOnly("root-1", Time);
+
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            RemoteItemId = "remote-1",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "File1.txt",
+            RemoteParentId = "remote-root",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-local",
+            ProviderVersion = 2,
+            Trashed = false,
+            ObservedTime = Time,
+        });
+
+        IReadOnlyList<BaseSnapshotRecord> Committed = Session.CommitVerifiedExecutionResults(
+            [
+                new SyncExecutionResult()
+                {
+                    Request = SessionResult.PendingExecutionRequests[0],
+                    ResultKind = SyncExecutionResultKind.CompletedAndVerified,
+                },
+            ],
+            Time);
+
+        Assert.Single(Committed);
+        Assert.Equal("hash-local", Store.GetBaseSnapshot("item-1").ContentHash);
     }
 }

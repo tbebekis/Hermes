@@ -46,6 +46,18 @@ public class MetadataSyncSession
 
         return fStore.CommitBaseSnapshotsFromObservations(TrackedItemIds, CommittedTime);
     }
+    static bool IsPendingExecutorDecision(SyncPlanDecision Decision)
+    {
+        return Decision.DecisionKind != SyncPlanDecisionKind.None
+            && Decision.DecisionKind != SyncPlanDecisionKind.CommitBase;
+    }
+    static void AddPlanningResult(MetadataSyncSessionResult Target, MetadataSyncSessionResult Source)
+    {
+        Target.Decisions.AddRange(Source.Decisions);
+        Target.CommittedBaseSnapshots.AddRange(Source.CommittedBaseSnapshots);
+        Target.PendingExecutorDecisions.AddRange(Source.PendingExecutorDecisions);
+        Target.PendingExecutionRequests.AddRange(Source.PendingExecutionRequests);
+    }
     static string LocalKey(LocalScanItem Item) => Item.RelativePath;
     static TrackedItemRecord CreateLocalTrackedItem(string SyncRootId, LocalScanItem Item) => new()
     {
@@ -78,6 +90,31 @@ public class MetadataSyncSession
     {
         if (!string.Equals(SyncRootId, Checkpoint.SyncRootId, StringComparison.Ordinal))
             throw new ArgumentException("Checkpoint sync root id must match the imported sync root id.", nameof(Checkpoint));
+    }
+    SyncExecutionRequest CreateExecutionRequest(SyncPlanDecision Decision)
+    {
+        Guard.NotNull(Decision, nameof(Decision));
+
+        return new SyncExecutionRequest()
+        {
+            Decision = Decision,
+            TrackedItem = fStore.GetTrackedItem(Decision.TrackedItemId),
+            BaseSnapshot = fStore.GetBaseSnapshot(Decision.TrackedItemId),
+            LocalObservation = fStore.GetLocalObservation(Decision.TrackedItemId),
+            RemoteObservation = fStore.GetRemoteObservation(Decision.TrackedItemId),
+        };
+    }
+    static bool CanCommitExecutionResult(SyncExecutionResult Result)
+    {
+        return Result.ResultKind == SyncExecutionResultKind.CompletedAndVerified;
+    }
+    static string TrackedItemId(SyncExecutionResult Result)
+    {
+        Guard.NotNull(Result, nameof(Result));
+        Guard.NotNull(Result.Request, nameof(Result.Request));
+        Guard.NotNull(Result.Request.Decision, nameof(Result.Request.Decision));
+
+        return Guard.NotNullOrWhiteSpace(Result.Request.Decision.TrackedItemId, nameof(Result.Request.Decision.TrackedItemId));
     }
 
     // ● constructor
@@ -253,6 +290,108 @@ public class MetadataSyncSession
 
         Result.Decisions.AddRange(Decisions);
         Result.CommittedBaseSnapshots.AddRange(CommittedBaseSnapshots);
+        Result.PendingExecutorDecisions.AddRange(Decisions.Where(IsPendingExecutorDecision));
+
+        foreach (SyncPlanDecision Decision in Result.PendingExecutorDecisions)
+            Result.PendingExecutionRequests.Add(CreateExecutionRequest(Decision));
+
+        return Result;
+    }
+    /// <summary>
+    /// Applies execution results and commits base snapshots for results that completed and were verified.
+    /// </summary>
+    public SyncExecutionApplyResult ApplyExecutionResults(IEnumerable<SyncExecutionResult> Results, DateTime CommittedTime)
+    {
+        Guard.NotNull(Results, nameof(Results));
+
+        SyncExecutionApplyResult Result = new();
+        List<string> TrackedItemIds = new();
+
+        foreach (SyncExecutionResult ExecutionResult in Results)
+        {
+            Guard.NotNull(ExecutionResult, nameof(Results));
+
+            if (CanCommitExecutionResult(ExecutionResult))
+            {
+                TrackedItemIds.Add(TrackedItemId(ExecutionResult));
+                Result.CommittedResults.Add(ExecutionResult);
+            }
+            else
+            {
+                Result.UncommittedResults.Add(ExecutionResult);
+            }
+        }
+
+        Result.CommittedBaseSnapshots.AddRange(fStore.CommitBaseSnapshotsFromObservations(TrackedItemIds, CommittedTime));
+
+        return Result;
+    }
+    /// <summary>
+    /// Commits base snapshots for execution results that completed and were verified.
+    /// </summary>
+    public IReadOnlyList<BaseSnapshotRecord> CommitVerifiedExecutionResults(IEnumerable<SyncExecutionResult> Results, DateTime CommittedTime)
+    {
+        return ApplyExecutionResults(Results, CommittedTime).CommittedBaseSnapshots;
+    }
+    /// <summary>
+    /// Imports local and full remote observations, creates decisions, and commits metadata-only base advancements.
+    /// </summary>
+    public MetadataSyncSessionResult AdvanceWithRemoteSnapshot(
+        string SyncRootId,
+        IEnumerable<LocalScanItem> LocalItems,
+        IEnumerable<StorageItem> RemoteItems,
+        RemoteCheckpointRecord Checkpoint,
+        DateTime LocalObservedTime,
+        DateTime RemoteObservedTime,
+        DateTime CommittedTime,
+        string ScanId)
+    {
+        Guard.NotNullOrWhiteSpace(SyncRootId, nameof(SyncRootId));
+        Guard.NotNull(LocalItems, nameof(LocalItems));
+        Guard.NotNull(RemoteItems, nameof(RemoteItems));
+        Guard.NotNull(Checkpoint, nameof(Checkpoint));
+
+        MetadataSyncSessionResult Result = new();
+        LocalScanImportResult LocalImport = ImportLocalScan(SyncRootId, LocalItems, LocalObservedTime, ScanId);
+        RemoteBootstrapResult RemoteImport = ImportRemoteSnapshot(SyncRootId, RemoteItems, Checkpoint, RemoteObservedTime);
+        MetadataSyncSessionResult AdvanceResult = AdvanceMetadataOnly(SyncRootId, CommittedTime);
+
+        Result.CreatedTrackedItems.AddRange(LocalImport.CreatedTrackedItems);
+        Result.CreatedTrackedItems.AddRange(RemoteImport.CreatedTrackedItems);
+        AddPlanningResult(Result, AdvanceResult);
+
+        return Result;
+    }
+    /// <summary>
+    /// Imports local observations and remote changes, creates decisions, and commits metadata-only base advancements.
+    /// </summary>
+    public MetadataSyncSessionResult AdvanceWithRemoteChanges(
+        string SyncRootId,
+        IEnumerable<LocalScanItem> LocalItems,
+        IEnumerable<StorageChange> RemoteChanges,
+        RemoteCheckpointRecord Checkpoint,
+        DateTime LocalObservedTime,
+        DateTime RemoteObservedTime,
+        DateTime CommittedTime,
+        string ScanId)
+    {
+        Guard.NotNullOrWhiteSpace(SyncRootId, nameof(SyncRootId));
+        Guard.NotNull(LocalItems, nameof(LocalItems));
+        Guard.NotNull(RemoteChanges, nameof(RemoteChanges));
+        Guard.NotNull(Checkpoint, nameof(Checkpoint));
+
+        MetadataSyncSessionResult Result = new();
+        RemoteChangeImportResult RemoteImport = ImportRemoteChanges(SyncRootId, RemoteChanges, Checkpoint, RemoteObservedTime);
+
+        Result.CreatedTrackedItems.AddRange(RemoteImport.CreatedTrackedItems);
+        Result.UntrackedRemoteChanges.AddRange(RemoteImport.UntrackedChanges);
+
+        if (Result.UntrackedRemoteChanges.Count != 0)
+            return Result;
+
+        LocalScanImportResult LocalImport = ImportLocalScan(SyncRootId, LocalItems, LocalObservedTime, ScanId);
+        Result.CreatedTrackedItems.AddRange(LocalImport.CreatedTrackedItems);
+        AddPlanningResult(Result, AdvanceMetadataOnly(SyncRootId, CommittedTime));
 
         return Result;
     }
