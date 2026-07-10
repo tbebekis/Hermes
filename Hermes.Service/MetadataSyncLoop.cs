@@ -80,7 +80,10 @@ public class MetadataSyncLoop
     /// </summary>
     public async Task RunAsync(CancellationToken CancellationToken)
     {
-        fLogger.LogInformation("Hermes metadata sync loop started for root {SyncRootId}.", fSyncRoot.Id);
+        fLogger.LogInformation(
+            "Hermes metadata sync loop started for root {SyncRootId}. Mutations enabled: {EnableMutations}.",
+            fSyncRoot.Id,
+            fSettings.EnableMutations);
 
         try
         {
