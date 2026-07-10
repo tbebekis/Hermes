@@ -24,6 +24,8 @@
         <ProjectReference Include="..\Hermes.Common\Hermes.Common.csproj" />
         <ProjectReference Include="..\Hermes.Storage\Hermes.Storage.csproj" />
         <ProjectReference Include="..\Hermes.Core\Hermes.Core.csproj" />
+        <ProjectReference Include="..\Hermes.GoogleDrive\Hermes.GoogleDrive.csproj" />
+        <ProjectReference Include="..\Hermes.Data\Hermes.Data.csproj" />
     </ItemGroup>
 
 </Project>

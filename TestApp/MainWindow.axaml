@@ -8,72 +8,123 @@
         Width="980"
         Height="640"
         WindowStartupLocation="CenterScreen">
-    <Grid RowDefinitions="Auto,*" Margin="20">
-        <StackPanel Grid.Row="0" Spacing="12">
-            <TextBlock Text="Hermes TestApp" FontSize="24" FontWeight="SemiBold"/>
-            <WrapPanel x:Name="ButtonPanel">
-                <Button Content="Connect" Margin="0,0,8,8" Click="ConnectClick"/>
-                <Button Content="About" Margin="0,0,8,8" Click="AboutClick"/>
-                <Button Content="Get Start Page Token" Margin="0,0,8,8" Click="GetStartPageTokenClick"/>
-                <Button Content="List Root Folder" Margin="0,0,8,8" Click="ListRootFolderClick"/>
-                <TextBox x:Name="edtFolderId"
-                         Width="300"
-                         Margin="0,0,8,8"
-                         PlaceholderText="Folder id"/>
-                <Button Content="List Folder" Margin="0,0,8,8" Click="ListFolderClick"/>
-                <TextBox x:Name="edtFileId"
-                         Width="300"
-                         Margin="0,0,8,8"
-                         PlaceholderText="File id"/>
-                <Button Content="Get File" Margin="0,0,8,8" Click="GetFileClick"/>
-                <TextBox x:Name="edtNewName"
-                         Width="220"
-                         Margin="0,0,8,8"
-                         PlaceholderText="New name"/>
-                <Button Content="Rename" Margin="0,0,8,8" Click="RenameClick"/>
-                <TextBox x:Name="edtMoveParentId"
-                         Width="300"
-                         Margin="0,0,8,8"
-                         PlaceholderText="New parent id"/>
-                <Button Content="Move" Margin="0,0,8,8" Click="MoveClick"/>
-                <Button Content="Trash" Margin="0,0,8,8" Click="TrashClick"/>
-                <Button Content="Restore" Margin="0,0,8,8" Click="RestoreClick"/>
-                <Button Content="Delete Permanently" Margin="0,0,8,8" Click="DeletePermanentlyClick"/>
-                <TextBox x:Name="edtNewFolderName"
-                         Width="220"
-                         Margin="0,0,8,8"
-                         PlaceholderText="New folder name"/>
-                <TextBox x:Name="edtNewFolderParentId"
-                         Width="300"
-                         Margin="0,0,8,8"
-                         PlaceholderText="Parent id optional"/>
-                <Button Content="Create Folder" Margin="0,0,8,8" Click="CreateFolderClick"/>
-                <TextBox x:Name="edtUploadFilePath"
-                         Width="360"
-                         Margin="0,0,8,8"
-                         PlaceholderText="Local file path"/>
-                <TextBox x:Name="edtUploadParentId"
-                         Width="300"
-                         Margin="0,0,8,8"
-                         PlaceholderText="Upload parent id optional"/>
-                <Button Content="Upload File" Margin="0,0,8,8" Click="UploadFileClick"/>
-                <Button Content="Update Content" Margin="0,0,8,8" Click="UpdateFileContentClick"/>
-                <TextBox x:Name="edtDownloadFilePath"
-                         Width="360"
-                         Margin="0,0,8,8"
-                         PlaceholderText="Download path"/>
-                <Button Content="Download File" Margin="0,0,8,8" Click="DownloadFileClick"/>
-                <TextBox x:Name="edtChangesPageToken"
-                         Width="180"
-                         Margin="0,0,8,8"
-                         PlaceholderText="Changes token"/>
-                <Button Content="List Changes" Margin="0,0,8,8" Click="ListChangesClick"/>
-            </WrapPanel>
+    <Grid RowDefinitions="Auto,*" Margin="16">
+        <StackPanel Grid.Row="0" Spacing="10">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0"
+                           Text="Hermes TestApp"
+                           FontSize="24"
+                           FontWeight="SemiBold"/>
+                <Button Grid.Column="1"
+                        Content="Clear Log"
+                        VerticalAlignment="Center"
+                        Click="ClearLogClick"/>
+            </Grid>
+            <Grid x:Name="ButtonPanel" ColumnDefinitions="*,*,*" RowDefinitions="Auto">
+                <GroupBox Grid.Column="0" Header="Browse" Margin="0,0,8,0">
+                    <StackPanel Spacing="8">
+                        <WrapPanel>
+                            <Button Content="Connect" MinWidth="78" Margin="0,0,6,6" Click="ConnectClick"/>
+                            <Button Content="About" MinWidth="78" Margin="0,0,6,6" Click="AboutClick"/>
+                        </WrapPanel>
+                        <WrapPanel>
+                            <Button Content="Get Start Page Token" Margin="0,0,6,6" Click="GetStartPageTokenClick"/>
+                            <Button Content="List Root Folder" Margin="0,0,6,6" Click="ListRootFolderClick"/>
+                        </WrapPanel>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBox x:Name="edtFolderId"
+                                     Grid.Column="0"
+                                     Margin="0,0,6,0"
+                                     PlaceholderText="Folder id"/>
+                            <Button Grid.Column="1"
+                                    Content="List Folder"
+                                    Click="ListFolderClick"/>
+                        </Grid>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBox x:Name="edtFileId"
+                                     Grid.Column="0"
+                                     Margin="0,0,6,0"
+                                     PlaceholderText="File id"/>
+                            <Button Grid.Column="1"
+                                    Content="Get File"
+                                    Click="GetFileClick"/>
+                        </Grid>
+                    </StackPanel>
+                </GroupBox>
+                <GroupBox Grid.Column="1" Header="Item Operations" Margin="0,0,8,0">
+                    <StackPanel Spacing="8">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBox x:Name="edtNewName"
+                                     Grid.Column="0"
+                                     Margin="0,0,6,0"
+                                     PlaceholderText="New name"/>
+                            <Button Grid.Column="1"
+                                    Content="Rename"
+                                    Click="RenameClick"/>
+                        </Grid>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBox x:Name="edtMoveParentId"
+                                     Grid.Column="0"
+                                     Margin="0,0,6,0"
+                                     PlaceholderText="New parent id"/>
+                            <Button Grid.Column="1"
+                                    Content="Move"
+                                    Click="MoveClick"/>
+                        </Grid>
+                        <WrapPanel>
+                            <Button Content="Trash" MinWidth="76" Margin="0,0,6,6" Click="TrashClick"/>
+                            <Button Content="Restore" MinWidth="76" Margin="0,0,6,6" Click="RestoreClick"/>
+                            <Button Content="Delete Permanently" Margin="0,0,6,6" Click="DeletePermanentlyClick"/>
+                        </WrapPanel>
+                        <TextBox x:Name="edtNewFolderName"
+                                 PlaceholderText="New folder name"/>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBox x:Name="edtNewFolderParentId"
+                                     Grid.Column="0"
+                                     Margin="0,0,6,0"
+                                     PlaceholderText="Parent id optional"/>
+                            <Button Grid.Column="1"
+                                    Content="Create Folder"
+                                    Click="CreateFolderClick"/>
+                        </Grid>
+                    </StackPanel>
+                </GroupBox>
+                <GroupBox Grid.Column="2" Header="Content And Changes">
+                    <StackPanel Spacing="8">
+                        <TextBox x:Name="edtUploadFilePath"
+                                 PlaceholderText="Local file path"/>
+                        <TextBox x:Name="edtUploadParentId"
+                                 PlaceholderText="Upload parent id optional"/>
+                        <WrapPanel>
+                            <Button Content="Upload File" Margin="0,0,6,6" Click="UploadFileClick"/>
+                            <Button Content="Update Content" Margin="0,0,6,6" Click="UpdateFileContentClick"/>
+                        </WrapPanel>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBox x:Name="edtDownloadFilePath"
+                                     Grid.Column="0"
+                                     Margin="0,0,6,0"
+                                     PlaceholderText="Download path"/>
+                            <Button Grid.Column="1"
+                                    Content="Download File"
+                                    Click="DownloadFileClick"/>
+                        </Grid>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBox x:Name="edtChangesPageToken"
+                                     Grid.Column="0"
+                                     Margin="0,0,6,0"
+                                     PlaceholderText="Changes token"/>
+                            <Button Grid.Column="1"
+                                    Content="List Changes"
+                                    Click="ListChangesClick"/>
+                        </Grid>
+                    </StackPanel>
+                </GroupBox>
+            </Grid>
         </StackPanel>
 
         <TextBox x:Name="edtLog"
                  Grid.Row="1"
-                 Margin="0,16,0,0"
+                 Margin="0,12,0,0"
                  Text="Ready."
                  AcceptsReturn="True"
                  IsReadOnly="True"

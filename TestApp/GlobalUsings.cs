@@ -18,4 +18,6 @@ global using System.Threading;
 global using System.Threading.Tasks;
 global using Tripous;
 global using Tripous.Data;
+global using StorageChange = Hermes.Storage.StorageChange;
+global using StorageChangeListResult = Hermes.Storage.StorageChangeListResult;
 global using StorageItem = Hermes.Storage.StorageItem;

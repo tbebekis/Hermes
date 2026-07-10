@@ -21,15 +21,20 @@ public interface IStorageProvider
     /// <summary>
     /// Gets a remote sync cursor.
     /// </summary>
-    Task<Result<string>> GetStartPageTokenAsync(CancellationToken CancellationToken);
+    Task<StorageResult<string>> GetStartPageTokenAsync(CancellationToken CancellationToken);
 
     /// <summary>
-    /// Lists items under the specified folder.
+    /// Gets a remote item.
     /// </summary>
-    Task<Result<IReadOnlyList<StorageItem>>> ListFilesAsync(string FolderId, CancellationToken CancellationToken);
+    Task<StorageResult<StorageItem>> GetItemAsync(string ItemId, CancellationToken CancellationToken);
+
+    /// <summary>
+    /// Lists immediate child items under the specified folder.
+    /// </summary>
+    Task<StorageResult<IReadOnlyList<StorageItem>>> ListFolderAsync(string FolderId, CancellationToken CancellationToken);
 
     /// <summary>
     /// Lists remote changes after the specified page token.
     /// </summary>
-    Task<Result<IReadOnlyList<StorageChange>>> ListChangesAsync(string PageToken, CancellationToken CancellationToken);
+    Task<StorageResult<StorageChangeListResult>> ListChangesAsync(string PageToken, CancellationToken CancellationToken);
 }

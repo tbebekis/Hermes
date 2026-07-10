@@ -23,7 +23,9 @@ Each new button should explore one Google Drive API operation in isolation. The 
 
 No sync logic should be added during this exploration phase.
 
-Google Drive OAuth currently uses `DriveService.Scope.DriveFile`, not full Drive scope. This allows Hermes to create and manage files/folders it creates or the user explicitly opens with the application, while avoiding broad full-Drive access during exploration.
+Google Drive OAuth currently uses `DriveService.Scope.Drive`. Hermes targets a full read/write mirror of a selected Drive tree, so broad Drive access is the development assumption.
+
+Earlier exploration used `DriveService.Scope.DriveFile`. That scope showed that browser-side changes are reported only for app-visible files and folders, which is not enough for the full mirror product goal.
 
 ## Exploration Order
 

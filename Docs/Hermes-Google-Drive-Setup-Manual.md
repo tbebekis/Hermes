@@ -287,23 +287,24 @@ If the access token is stale, the Google client library refreshes it automatical
 
 ## 8. Current Hermes OAuth Scope
 
-For the first development phase Hermes uses only metadata read access:
+Hermes currently uses broad Drive access during development:
 
 ```csharp
-DriveService.Scope.DriveMetadataReadonly
+DriveService.Scope.Drive
 ```
 
-This is enough for:
+This is required for the product goal:
 
-- authentication
-- About API
-- listing metadata
-- getting start page token
-- listing changes
+- full read/write mirror of a selected Drive tree
+- discovery of existing Drive content
+- upload and download
+- rename and move
+- trash, restore, and delete
+- incremental changes
 
-It is not enough for upload, download, delete or full synchronization.
+Earlier exploration used `DriveService.Scope.DriveMetadataReadonly` and then `DriveService.Scope.DriveFile`. Those scopes are useful for limited tests, but they are not sufficient for full synchronization of existing Drive content.
 
-Broader scopes will be added later only when needed.
+When the configured scope changes, Hermes deletes the saved token file and requests consent again.
 
 ---
 
@@ -414,4 +415,3 @@ The next exploration steps are:
 - Get File metadata
 - List Changes
 - Study the Google Drive `File` resource in detail before writing sync logic
-

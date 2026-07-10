@@ -11,6 +11,7 @@ global using Google.Apis.Download;
 global using Google.Apis.Drive.v3;
 global using Google.Apis.Drive.v3.Data;
 global using Google.Apis.Json;
+global using Google.Apis.Requests;
 global using Google.Apis.Services;
 global using Google.Apis.Upload;
 global using Google.Apis.Util;

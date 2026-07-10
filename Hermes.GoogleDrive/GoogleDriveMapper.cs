@@ -73,19 +73,9 @@ public class GoogleDriveMapper
     {
         Guard.NotNull(Change, nameof(Change));
 
-        StorageChangeType ChangeType = Change.Removed == true ? StorageChangeType.Deleted : StorageChangeType.Updated;
-        StorageItem Item;
-
-        if (Change.File != null)
-        {
-            Item = MapFile(Change.File);
-        }
-        else
-        {
-            string FileId = Change.FileId ?? "unknown";
-            Item = new StorageItem(FileId, string.Empty, FileId, "/" + FileId, StorageItemKind.File, string.Empty, 0, string.Empty, default, default, 0, true);
-        }
-
-        return new StorageChange(Change.FileId ?? Item.Id, ChangeType, Item);
+        StorageItem Item = Change.File == null ? null : MapFile(Change.File);
+        string ItemId = Change.FileId ?? Item?.Id ?? string.Empty;
+        DateTimeOffset? Time = Change.TimeDateTimeOffset;
+        return new StorageChange(ItemId, Change.Removed == true, Time, Item);
     }
 }

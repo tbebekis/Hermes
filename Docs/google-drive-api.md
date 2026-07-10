@@ -25,14 +25,48 @@ Hermes then changed to:
 
 - `DriveService.Scope.DriveFile`
 
-When the scope changed, the saved token had to be invalidated. Hermes now checks the saved token scope and deletes the token file when it does not include the required scope.
+Hermes then changed to:
+
+- `DriveService.Scope.Drive`
+
+The product goal is a full read/write mirror of a selected Drive tree, so `DriveFile` is not sufficient as the final development scope.
+
+When the scope changes, the saved token has to be invalidated. Hermes checks the saved token scope and deletes the token file when it does not include the required scope.
 
 Observed behavior:
 
 - First authentication after the scope change opened the browser and requested consent.
 - Later authentications reused the saved token.
 - The token is stored at `{SysConfig.AppFolderPath}/Credentials/google-token.json`.
-- Full Drive scope is not used.
+- Full Drive scope is now the development assumption.
+- With `DriveService.Scope.DriveFile`, changes made in the browser were reported only for files and folders visible to the app, such as objects created by Hermes.
+- Browser-side changes to unrelated Drive objects were not reported to Hermes under the `drive.file` scope.
+
+Observed behavior after switching to `DriveService.Scope.Drive`:
+
+- The old saved token was rejected after exact scope matching was fixed.
+- Authentication opened the browser and requested new consent.
+- `files.list` for root returned existing non-Hermes Drive items.
+- `changes.list` reported browser-side rename of an existing non-Hermes root file.
+- This confirms that broad Drive scope is suitable for full mirror exploration.
+
+Observed non-Hermes browser rename under full Drive scope:
+
+- Start page token used: `37`
+- Change count: `1`
+- `ItemId`: `1mWLHUMpr7EoMm0o3nDDD_FpYcR95bTrc`
+- `Removed`: `False`
+- `HasItem`: `True`
+- `Name`: `GoogleDriveText00.txt`
+- `MimeType`: `text/plain`
+- `Size`: `3858`
+- `Md5Hash`: `6eb03272d4c7ff48756461a25c05f54e`
+- `ModifiedTime`: `2026-07-10 09:03:08 UTC`
+- `CreatedTime`: `2026-07-09 21:22:10 UTC`
+- `ParentId`: root id
+- `Trashed`: `False`
+- `Version`: `6`
+- `NewStartPageToken`: `38`
 
 ## About
 
@@ -689,6 +723,45 @@ Checkpoint verification:
 - `NewStartPageToken` remained `34`.
 - The permanent delete change was not returned again.
 
+## Changes API Under Drive File Scope
+
+Earlier exploration used:
+
+```text
+DriveService.Scope.DriveFile
+```
+
+Observed behavior:
+
+- Renaming unrelated Drive files in the browser did not appear in `changes.list`.
+- Listing changes from token `34` returned `change count = 0` and advanced the checkpoint to `35`.
+- Listing changes again from token `35` returned `change count = 0` and advanced the checkpoint to `36`.
+- Renaming an app-created file in the browser did appear in `changes.list`.
+
+Observed app-created file rename:
+
+- Start page token used: `36`
+- Change count: `1`
+- `ItemId`: `1uf1a3bc-zZOKXqDWmxyEbvNW6YE33Qfp`
+- `Removed`: `False`
+- `HasItem`: `True`
+- `Name`: `UploadByHermes001.txt`
+- `MimeType`: `text/plain`
+- `Size`: `34`
+- `Md5Hash`: `c5e1a7283d80d84387f0fef6f80e3bf0`
+- `ModifiedTime`: `2026-07-10 08:15:11 UTC`
+- `CreatedTime`: `2026-07-09 22:40:08 UTC`
+- `ParentId`: root id
+- `Trashed`: `False`
+- `Version`: `9`
+- `NewStartPageToken`: `37`
+
+Sync implication:
+
+- With `DriveService.Scope.DriveFile`, Hermes can only sync the app-visible Drive subset.
+- A full user Drive mirror would require broader Drive access or an explicit user-driven file/folder access model.
+- The sync engine must treat provider access scope as part of the provider capability and configuration model.
+
 ## Changes API
 
 Changes listing uses `changes.list`.
@@ -827,11 +900,402 @@ Observed sample folder:
 - `Md5Hash`: not available
 - `Version`: `2`
 
+## Duplicate Names
+
+Google Drive allows multiple items with the same name under the same parent.
+
+Observed root listing after creating duplicate names:
+
+- Parent id: `0AGOX4SwqGE2yUk9PVA`
+- Root item count: `7`
+- Two regular files had the same name: `DuplicateName.txt`
+- Both regular files had the same parent id.
+- Both regular files had the same MIME type, size, and MD5 hash.
+- The two regular files had different Google Drive ids.
+- A Google Docs item named `DuplicateName` also existed under the same parent.
+
+Observed duplicate regular file 1:
+
+- `Id`: `13yhgbrh0x73FxRKHE-dp2s58lMN2h8Dm`
+- `Name`: `DuplicateName.txt`
+- `MimeType`: `text/plain`
+- `Size`: `3858`
+- `Md5Hash`: `6eb03272d4c7ff48756461a25c05f54e`
+- `CreatedTime`: `2026-07-10 09:09:19 UTC`
+- `ModifiedTime`: `2026-07-10 09:09:25 UTC`
+- `ParentId`: root id
+- `Version`: `4`
+
+Observed duplicate regular file 2:
+
+- `Id`: `1H26EQ5Bdm8us8rMsvlFTRLCAul7aVT2w`
+- `Name`: `DuplicateName.txt`
+- `MimeType`: `text/plain`
+- `Size`: `3858`
+- `Md5Hash`: `6eb03272d4c7ff48756461a25c05f54e`
+- `CreatedTime`: `2026-07-10 09:08:49 UTC`
+- `ModifiedTime`: `2026-07-10 09:09:11 UTC`
+- `ParentId`: root id
+- `Version`: `4`
+
+Observed Google Docs item:
+
+- `Id`: `1srnEU8lfMr4nyvJyK0g6ykm2wYEaBm1pyvvyqGkzJ8c`
+- `Name`: `DuplicateName`
+- `MimeType`: `application/vnd.google-apps.document`
+- `Size`: `1024`
+- `Md5Hash`: not available
+- `CreatedTime`: `2026-07-10 09:07:39 UTC`
+- `ModifiedTime`: `2026-07-10 09:08:23 UTC`
+- `ParentId`: root id
+- `Version`: `7` in listing
+
+Changes API from token `38` returned three changes:
+
+- `1H26EQ5Bdm8us8rMsvlFTRLCAul7aVT2w`, `DuplicateName.txt`
+- `13yhgbrh0x73FxRKHE-dp2s58lMN2h8Dm`, `DuplicateName.txt`
+- `1srnEU8lfMr4nyvJyK0g6ykm2wYEaBm1pyvvyqGkzJ8c`, `DuplicateName`
+
+The new start page token was `57`.
+
+Sync implication:
+
+- `(ParentId, Name)` is not unique in Google Drive.
+- Remote identity must be based on `File.Id`.
+- A local filesystem mirror needs a collision policy for remote siblings with the same name, because a single local folder cannot contain two entries with the exact same filename.
+- The metadata store must allow multiple tracked remote items with the same parent id and name.
+
+## Rename Collision
+
+Google Drive allows renaming an item to the same name as existing siblings under the same parent.
+
+Observed rename collision setup:
+
+- Start page token used before rename: `58`
+- Existing duplicate name under root: `DuplicateName.txt`
+- Renamed item id: `1mWLHUMpr7EoMm0o3nDDD_FpYcR95bTrc`
+- Old name: `GoogleDriveText00.txt`
+- New name: `DuplicateName.txt`
+- Parent id: `0AGOX4SwqGE2yUk9PVA`
+
+Observed rename response:
+
+- `Id` stayed the same: `1mWLHUMpr7EoMm0o3nDDD_FpYcR95bTrc`
+- `Name` changed to `DuplicateName.txt`
+- `MimeType` stayed `text/plain`
+- `Size` stayed `3858`
+- `Md5Hash` stayed `6eb03272d4c7ff48756461a25c05f54e`
+- `CreatedTime` stayed `2026-07-09 21:22:10 UTC`
+- `ModifiedTime` changed to `2026-07-10 09:18:36 UTC`
+- `ParentId` stayed root id
+- `Trashed` stayed `False`
+- `Version` changed from `7` to `8`
+
+Observed root listing after rename:
+
+- Root contained three regular files named `DuplicateName.txt`.
+- All three had the same parent id.
+- All three had different Google Drive ids.
+
+Observed Changes API from token `58`:
+
+- Change count: `1`
+- `ItemId`: `1mWLHUMpr7EoMm0o3nDDD_FpYcR95bTrc`
+- `Removed`: `False`
+- `HasItem`: `True`
+- `Name`: `DuplicateName.txt`
+- `ModifiedTime`: `2026-07-10 09:18:36 UTC`
+- `Version`: `8`
+- `NewStartPageToken`: `59`
+
+Sync implication:
+
+- Rename collision is not rejected by Google Drive.
+- It is reported as a normal changed-object update for the existing `File.Id`.
+- The sync planner must detect local materialization collisions separately.
+- Remote duplicate-name conflicts are mirror conflicts, not provider operation errors.
+
+## Folder Rename
+
+Folder rename updates the folder item itself. It does not produce changes for immediate children in the observed test.
+
+Observed setup:
+
+- Start page token before rename: `59`
+- Folder id: `1E-6TsbK_f0k81raLcJLXxHgNCzuJJFpS`
+- Old folder name: `Folder00`
+- New folder name: `Folder00Renamed`
+- Folder parent id: root id
+
+Observed child before folder rename:
+
+- `Id`: `1QMpZhOz_O3ys3ezInhETbQha3trjJhtC`
+- `Name`: `NestedText001.txt`
+- `ParentId`: `1E-6TsbK_f0k81raLcJLXxHgNCzuJJFpS`
+- `ModifiedTime`: `2026-07-10 08:12:22 UTC`
+- `Version`: `5`
+
+Observed folder rename response:
+
+- `Id` stayed the same: `1E-6TsbK_f0k81raLcJLXxHgNCzuJJFpS`
+- `Name` changed to `Folder00Renamed`
+- `MimeType` stayed `application/vnd.google-apps.folder`
+- `CreatedTime` stayed `2026-07-09 21:24:13 UTC`
+- `ModifiedTime` changed from `2026-07-09 21:24:13 UTC` to `2026-07-10 09:23:46 UTC`
+- `ParentId` stayed root id
+- `Trashed` stayed `False`
+- `Version` changed from `4` to `5`
+
+Observed child after folder rename:
+
+- `Id` stayed the same: `1QMpZhOz_O3ys3ezInhETbQha3trjJhtC`
+- `Name` stayed `NestedText001.txt`
+- `ParentId` stayed `1E-6TsbK_f0k81raLcJLXxHgNCzuJJFpS`
+- `ModifiedTime` stayed `2026-07-10 08:12:22 UTC`
+- `Version` stayed `5`
+
+Observed Changes API from token `59`:
+
+- Change count: `1`
+- Changed item id: `1E-6TsbK_f0k81raLcJLXxHgNCzuJJFpS`
+- `Removed`: `False`
+- `HasItem`: `True`
+- `Name`: `Folder00Renamed`
+- `ModifiedTime`: `2026-07-10 09:23:46 UTC`
+- `Version`: `5`
+- `NewStartPageToken`: `60`
+- The child item was not returned as a separate change.
+
+Sync implication:
+
+- Folder rename is a change to the folder identity only.
+- Descendant remote `ParentId` values do not change.
+- Descendant metadata does not change simply because an ancestor folder was renamed.
+- Local path reconstruction must account for ancestor path changes even when descendants are not returned by the Changes API.
+- The metadata store should represent hierarchy by parent identity and derive paths when needed.
+
+## Folder Move
+
+Folder move updates the folder parent identity. It does not produce changes for immediate children in the observed test.
+
+Observed setup:
+
+- Start page token before move: `60`
+- Moved folder id: `1E-6TsbK_f0k81raLcJLXxHgNCzuJJFpS`
+- Folder name: `Folder00Renamed`
+- Old parent id: root id
+- New parent id: `1cZyUmlCUb_JDYTjssYsF6phUdYC7ex35`
+- Child id: `1QMpZhOz_O3ys3ezInhETbQha3trjJhtC`
+
+Observed folder before move:
+
+- `ParentId`: root id
+- `ModifiedTime`: `2026-07-10 09:23:46 UTC`
+- `Version`: `5`
+
+Observed folder after move:
+
+- `Id` stayed the same: `1E-6TsbK_f0k81raLcJLXxHgNCzuJJFpS`
+- `Name` stayed `Folder00Renamed`
+- `ParentId` changed to `1cZyUmlCUb_JDYTjssYsF6phUdYC7ex35`
+- `ModifiedTime` stayed `2026-07-10 09:23:46 UTC`
+- `CreatedTime` stayed `2026-07-09 21:24:13 UTC`
+- `Trashed` stayed `False`
+- `Version` changed from `5` to `6`
+
+Observed child after folder move:
+
+- `Id` stayed the same: `1QMpZhOz_O3ys3ezInhETbQha3trjJhtC`
+- `Name` stayed `NestedText001.txt`
+- `ParentId` stayed `1E-6TsbK_f0k81raLcJLXxHgNCzuJJFpS`
+- `ModifiedTime` stayed `2026-07-10 08:12:22 UTC`
+- `Version` appeared as `6`
+
+Observed Changes API from token `60`:
+
+- Change count: `1`
+- Changed item id: `1E-6TsbK_f0k81raLcJLXxHgNCzuJJFpS`
+- `Removed`: `False`
+- `HasItem`: `True`
+- `Name`: `Folder00Renamed`
+- `ParentId`: `1cZyUmlCUb_JDYTjssYsF6phUdYC7ex35`
+- `ModifiedTime`: `2026-07-10 09:23:46 UTC`
+- `Version`: `6`
+- `NewStartPageToken`: `61`
+- The child item was not returned as a separate change.
+
+Sync implication:
+
+- Folder move is a change to the folder identity only.
+- Descendant remote `ParentId` values do not change.
+- Descendant local paths change because an ancestor moved, even when descendants are not returned by the Changes API.
+- Folder move changed `Version` but did not change `ModifiedTime`.
+- `ModifiedTime` alone is not sufficient to detect hierarchy changes.
+- Descendant `Version` should not be treated as enough evidence of a direct child change unless the child is returned by listing or changes with other supporting metadata.
+
+## Folder Trash
+
+Folder trash propagates the trashed state to descendants in the observed test.
+
+Observed setup:
+
+- Start page token before trash: `61`
+- Trashed folder id: `1E-6TsbK_f0k81raLcJLXxHgNCzuJJFpS`
+- Folder name: `Folder00Renamed`
+- Folder parent id: `1cZyUmlCUb_JDYTjssYsF6phUdYC7ex35`
+- Child id: `1QMpZhOz_O3ys3ezInhETbQha3trjJhtC`
+
+Observed folder before trash:
+
+- `Trashed`: `False`
+- `ModifiedTime`: `2026-07-10 09:23:46 UTC`
+- `Version`: `6`
+
+Observed folder after trash:
+
+- `Id` stayed the same: `1E-6TsbK_f0k81raLcJLXxHgNCzuJJFpS`
+- `Name` stayed `Folder00Renamed`
+- `ParentId` stayed `1cZyUmlCUb_JDYTjssYsF6phUdYC7ex35`
+- `Trashed` changed to `True`
+- `ModifiedTime` stayed `2026-07-10 09:23:46 UTC`
+- `Version` changed from `6` to `7`
+
+Observed child after folder trash:
+
+- `Id` stayed the same: `1QMpZhOz_O3ys3ezInhETbQha3trjJhtC`
+- `Name` stayed `NestedText001.txt`
+- `ParentId` stayed `1E-6TsbK_f0k81raLcJLXxHgNCzuJJFpS`
+- `Trashed` changed to `True`
+- `ModifiedTime` stayed `2026-07-10 08:12:22 UTC`
+- `Version` changed to `7`
+
+Observed listing trashed folder:
+
+- `ListFolderAsync` uses `trashed = false`.
+- Listing the trashed folder returned `folder item count = 0`.
+- The child was still fetchable by `files.get`, but it was now `Trashed = True`.
+
+Observed Changes API from token `61`:
+
+- Change count: `2`
+- Folder change:
+  - `ItemId`: `1E-6TsbK_f0k81raLcJLXxHgNCzuJJFpS`
+  - `Removed`: `False`
+  - `HasItem`: `True`
+  - `Trashed`: `True`
+  - `Version`: `7`
+- Child change:
+  - `ItemId`: `1QMpZhOz_O3ys3ezInhETbQha3trjJhtC`
+  - `Removed`: `False`
+  - `HasItem`: `True`
+  - `Trashed`: `True`
+  - `Version`: `7`
+- `NewStartPageToken`: `63`
+
+Sync implication:
+
+- Folder trash is a soft-delete state change.
+- In this test, trash propagated to descendants and descendants appeared as separate changes.
+- Trashed descendants may still be fetchable by id.
+- Normal folder listing with `trashed = false` hides trashed descendants.
+- The planner should treat folder trash as a subtree state change, but still process explicit descendant changes when the provider returns them.
+
+## Folder Restore
+
+Folder restore propagates the restored trashed state to descendants in the observed test.
+
+Observed setup:
+
+- Start page token before restore: `63`
+- Restored folder id: `1E-6TsbK_f0k81raLcJLXxHgNCzuJJFpS`
+- Folder name: `Folder00Renamed`
+- Folder parent id: `1cZyUmlCUb_JDYTjssYsF6phUdYC7ex35`
+- Child id: `1QMpZhOz_O3ys3ezInhETbQha3trjJhtC`
+
+Observed folder before restore:
+
+- `Trashed`: `True`
+- `ModifiedTime`: `2026-07-10 09:23:46 UTC`
+- `Version`: `7`
+
+Observed folder after restore:
+
+- `Id` stayed the same: `1E-6TsbK_f0k81raLcJLXxHgNCzuJJFpS`
+- `Name` stayed `Folder00Renamed`
+- `ParentId` stayed `1cZyUmlCUb_JDYTjssYsF6phUdYC7ex35`
+- `Trashed` changed to `False`
+- `ModifiedTime` stayed `2026-07-10 09:23:46 UTC`
+- `Version` changed from `7` to `8`
+
+Observed child after folder restore:
+
+- `Id` stayed the same: `1QMpZhOz_O3ys3ezInhETbQha3trjJhtC`
+- `Name` stayed `NestedText001.txt`
+- `ParentId` stayed `1E-6TsbK_f0k81raLcJLXxHgNCzuJJFpS`
+- `Trashed` changed to `False`
+- `ModifiedTime` stayed `2026-07-10 08:12:22 UTC`
+- `Version` changed from `7` to `8`
+
+Observed listing restored folder:
+
+- `ListFolderAsync` returned the child again.
+- Child `Trashed` was `False`.
+
+Observed Changes API from token `63`:
+
+- Change count: `2`
+- Folder change:
+  - `ItemId`: `1E-6TsbK_f0k81raLcJLXxHgNCzuJJFpS`
+  - `Removed`: `False`
+  - `HasItem`: `True`
+  - `Trashed`: `False`
+  - `Version`: `8`
+- Child change:
+  - `ItemId`: `1QMpZhOz_O3ys3ezInhETbQha3trjJhtC`
+  - `Removed`: `False`
+  - `HasItem`: `True`
+  - `Trashed`: `False`
+  - `Version`: `8`
+- `NewStartPageToken`: `67`
+
+Sync implication:
+
+- Folder restore is a soft-delete state change.
+- In this test, restore propagated to descendants and descendants appeared as separate changes.
+- Restored descendants became visible again in normal folder listing with `trashed = false`.
+- The planner should treat folder restore as a subtree state change, but still process explicit descendant changes when the provider returns them.
+
+## Invalid Changes Token
+
+Calling `changes.list` with an invalid page token fails with a Google API error.
+
+Observed input:
+
+```text
+invalid-token
+```
+
+Observed result:
+
+- Exception type: `Google.GoogleApiException`
+- HTTP status code: `BadRequest`
+- Message: `Invalid Value`
+- Failure location: `GoogleDriveClient.ListChangesAsync`
+
+Sync implication:
+
+- Invalid or expired page tokens need provider-neutral handling.
+- The Google provider should eventually map this case to a checkpoint-invalid error.
+- Recovery will likely require a full remote rescan and a fresh start page token.
+- Hermes must not silently replace a bad checkpoint without deciding how to reconcile missed changes.
+
 ## Sync-Relevant Conclusions
 
 Google Drive item identity is `File.Id`.
 
 Hermes should not use path as primary identity.
+
+Hermes should also not assume that remote `(ParentId, Name)` is unique.
 
 The likely sync identity relationship is:
 

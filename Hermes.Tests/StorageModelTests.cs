@@ -41,4 +41,19 @@ public class StorageModelTests
         Assert.Equal("/Docs", Folder.Path);
         Assert.Equal(StorageItemKind.Folder, Folder.Kind);
     }
+
+    /// <summary>
+    /// Verifies that storage change list results expose the checkpoint and changes.
+    /// </summary>
+    [Fact]
+    public void StorageChangeListResultStoresCheckpoint()
+    {
+        StorageChange Change = new("id", true, default, null);
+        StorageChangeListResult Result = new("10", "12", new List<StorageChange> { Change });
+
+        Assert.Equal("10", Result.StartPageToken);
+        Assert.Equal("12", Result.NewStartPageToken);
+        Assert.Single(Result.Changes);
+        Assert.Same(Change, Result.Changes[0]);
+    }
 }

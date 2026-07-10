@@ -23,10 +23,21 @@ public partial class MainWindow : Window
     }
     void SetButtonsEnabled(bool Enabled)
     {
-        foreach (Control Control in ButtonPanel.Children)
+        SetButtonsEnabled(ButtonPanel, Enabled);
+    }
+    void SetButtonsEnabled(Control Root, bool Enabled)
+    {
+        if (Root is Button Button)
+            Button.IsEnabled = Enabled;
+
+        if (Root is Panel Panel)
         {
-            if (Control is Button Button)
-                Button.IsEnabled = Enabled;
+            foreach (Control Control in Panel.Children)
+                SetButtonsEnabled(Control, Enabled);
+        }
+        else if (Root is ContentControl ContentControl && ContentControl.Content is Control Content)
+        {
+            SetButtonsEnabled(Content, Enabled);
         }
     }
     async Task RunButtonAsync(string OperationName, Func<Task> Operation)
@@ -373,10 +384,10 @@ public partial class MainWindow : Window
         }
 
         AppendLog($"List Changes: using page token: {PageToken}");
-        GoogleDriveChangeListResult Result = await fDriveClient.ListDriveChangesAsync(PageToken, CancellationToken.None);
+        StorageChangeListResult Result = await fDriveClient.ListChangesAsync(PageToken, CancellationToken.None);
         AppendLog($"List Changes: change count: {Result.Changes.Count}");
 
-        foreach (GoogleDriveChangeItem Change in Result.Changes)
+        foreach (StorageChange Change in Result.Changes)
             LogDriveChange(Change);
 
         AppendLog($"List Changes: new start page token: {FormatTextValue(Result.NewStartPageToken)}");
@@ -450,6 +461,11 @@ public partial class MainWindow : Window
     {
         await RunButtonAsync("List Changes", ListChangesAsync);
     }
+    void ClearLogClick(object Sender, RoutedEventArgs Args)
+    {
+        edtLog.Text = "Ready.";
+        edtLog.CaretIndex = edtLog.Text.Length;
+    }
 
     // ● constructor
 
@@ -480,15 +496,15 @@ public partial class MainWindow : Window
         AppendLog($"  Trashed: {Item.Trashed}");
         AppendLog($"  Version: {FormatVersionValue(Item.Version)}");
     }
-    void LogDriveChange(GoogleDriveChangeItem Change)
+    void LogDriveChange(StorageChange Change)
     {
         AppendLog("change item");
-        AppendLog($"  FileId: {FormatTextValue(Change.FileId)}");
+        AppendLog($"  ItemId: {FormatTextValue(Change.ItemId)}");
         AppendLog($"  Removed: {Change.Removed}");
         AppendLog($"  Time: {FormatDateValue(Change.Time)}");
-        AppendLog($"  HasFile: {Change.HasFile}");
+        AppendLog($"  HasItem: {Change.Item != null}");
 
-        if (Change.HasFile)
+        if (Change.Item != null)
             LogStorageItem("  changed storage item", Change.Item);
     }
     string GetChangesPageToken()
@@ -539,6 +555,10 @@ public partial class MainWindow : Window
     string FormatDateValue(DateTimeOffset Value)
     {
         return Value == default ? "not available" : Value.ToString();
+    }
+    string FormatDateValue(DateTimeOffset? Value)
+    {
+        return Value.HasValue ? FormatDateValue(Value.Value) : "not available";
     }
     async Task<IStorageFolder> GetSuggestedMirrorFolderAsync(IStorageProvider StorageProvider)
     {

@@ -4,36 +4,48 @@
 namespace Hermes.Storage;
 
 /// <summary>
-/// Represents a remote storage change.
+/// Represents a remote storage item change.
 /// </summary>
-public class StorageChange
+public sealed class StorageChange
 {
     // ● constructor
 
     /// <summary>
     /// Initializes a new instance of the <see cref="StorageChange"/> class.
     /// </summary>
-    public StorageChange(string ChangeId, StorageChangeType ChangeType, StorageItem Item)
+    public StorageChange()
     {
-        this.ChangeId = Guard.NotNullOrWhiteSpace(ChangeId, nameof(ChangeId));
-        this.ChangeType = ChangeType;
-        this.Item = Guard.NotNull(Item, nameof(Item));
+    }
+    /// <summary>
+    /// Initializes a new instance of the <see cref="StorageChange"/> class.
+    /// </summary>
+    public StorageChange(string ItemId, bool Removed, DateTimeOffset? Time, StorageItem Item)
+    {
+        this.ItemId = Guard.NotNullOrWhiteSpace(ItemId, nameof(ItemId));
+        this.Removed = Removed;
+        this.Time = Time;
+        this.Item = Item;
     }
 
     // ● properties
 
     /// <summary>
-    /// Gets the provider-specific change id.
+    /// Gets or sets the provider-specific item id.
     /// </summary>
-    public string ChangeId { get; }
+    public string ItemId { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets the change type.
+    /// Gets or sets a value indicating whether the item was removed.
     /// </summary>
-    public StorageChangeType ChangeType { get; }
+    public bool Removed { get; set; }
 
     /// <summary>
-    /// Gets the changed item.
+    /// Gets or sets the provider change timestamp.
     /// </summary>
-    public StorageItem Item { get; }
+    public DateTimeOffset? Time { get; set; }
+
+    /// <summary>
+    /// Gets or sets the current item state when the item still exists.
+    /// </summary>
+    public StorageItem Item { get; set; }
 }

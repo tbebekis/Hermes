@@ -44,13 +44,6 @@ public class GoogleDriveClient
             _ => "application/octet-stream"
         };
     }
-    GoogleDriveChangeItem MapDriveChange(Change Change)
-    {
-        StorageItem Item = Change.File == null ? null : fMapper.MapFile(Change.File);
-        DateTimeOffset Time = Change.TimeDateTimeOffset ?? default;
-        return new GoogleDriveChangeItem(Change.FileId, Change.Removed == true, Time, Item);
-    }
-
     // ● constructor
 
     /// <summary>
@@ -98,27 +91,6 @@ public class GoogleDriveClient
         ChangesResource.GetStartPageTokenRequest Request = Service.Changes.GetStartPageToken();
         StartPageToken Token = await Request.ExecuteAsync(CancellationToken);
         return Token.StartPageTokenValue ?? string.Empty;
-    }
-
-    /// <summary>
-    /// Lists files visible to the application.
-    /// </summary>
-    public async Task<IReadOnlyList<StorageItem>> ListFilesAsync(CancellationToken CancellationToken)
-    {
-        DriveService Service = RequireDriveService();
-        FilesResource.ListRequest Request = Service.Files.List();
-        Request.PageSize = 25;
-        Request.Fields = "files(id,name,mimeType,parents,size,md5Checksum,trashed)";
-        FileList FileList = await Request.ExecuteAsync(CancellationToken);
-        List<StorageItem> Result = new();
-
-        if (FileList.Files == null)
-            return Result;
-
-        foreach (DriveFile File in FileList.Files)
-            Result.Add(fMapper.MapFile(File));
-
-        return Result;
     }
 
     /// <summary>
@@ -255,34 +227,12 @@ public class GoogleDriveClient
     /// <summary>
     /// Lists changes after a page token.
     /// </summary>
-    public async Task<IReadOnlyList<StorageChange>> ListChangesAsync(string PageToken, CancellationToken CancellationToken)
+    public async Task<StorageChangeListResult> ListChangesAsync(string PageToken, CancellationToken CancellationToken)
     {
         Guard.NotNullOrWhiteSpace(PageToken, nameof(PageToken));
 
         DriveService Service = RequireDriveService();
-        ChangesResource.ListRequest Request = Service.Changes.List(PageToken);
-        Request.PageSize = 25;
-        Request.Fields = "changes(fileId,removed,file(id,name,mimeType,parents,size,md5Checksum,trashed)),newStartPageToken,nextPageToken";
-        ChangeList ChangeList = await Request.ExecuteAsync(CancellationToken);
         List<StorageChange> Result = new();
-
-        if (ChangeList.Changes == null)
-            return Result;
-
-        foreach (Change Change in ChangeList.Changes)
-            Result.Add(fMapper.MapChange(Change));
-
-        return Result;
-    }
-    /// <summary>
-    /// Lists all Google Drive changes after a page token.
-    /// </summary>
-    public async Task<GoogleDriveChangeListResult> ListDriveChangesAsync(string PageToken, CancellationToken CancellationToken)
-    {
-        Guard.NotNullOrWhiteSpace(PageToken, nameof(PageToken));
-
-        DriveService Service = RequireDriveService();
-        List<GoogleDriveChangeItem> Result = new();
         string CurrentToken = PageToken;
         string NewStartPageToken = string.Empty;
 
@@ -291,13 +241,13 @@ public class GoogleDriveClient
             ChangesResource.ListRequest Request = Service.Changes.List(CurrentToken);
             Request.PageSize = 100;
             Request.IncludeRemoved = true;
-            Request.Fields = "nextPageToken,newStartPageToken,changes(fileId,removed,time,file(id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version))";
+            Request.Fields = "changes(fileId,removed,time,file(id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version)),newStartPageToken,nextPageToken";
             ChangeList ChangeList = await Request.ExecuteAsync(CancellationToken);
 
             if (ChangeList.Changes != null)
             {
                 foreach (Change Change in ChangeList.Changes)
-                    Result.Add(MapDriveChange(Change));
+                    Result.Add(fMapper.MapChange(Change));
             }
 
             if (!string.IsNullOrWhiteSpace(ChangeList.NewStartPageToken))
@@ -306,7 +256,7 @@ public class GoogleDriveClient
             CurrentToken = ChangeList.NextPageToken ?? string.Empty;
         }
 
-        return new GoogleDriveChangeListResult(PageToken, NewStartPageToken, Result);
+        return new StorageChangeListResult(PageToken, NewStartPageToken, Result);
     }
 
     /// <summary>

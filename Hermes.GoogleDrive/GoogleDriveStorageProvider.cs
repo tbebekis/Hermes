@@ -11,6 +11,66 @@ public class GoogleDriveStorageProvider : IStorageProvider
     // ● private
 
     readonly GoogleDriveClient fClient;
+    StorageError MapNotFound(GoogleDriveNotFoundException Ex, string OperationName)
+    {
+        return new StorageError(
+            StorageErrorKind.NotFound,
+            Ex.Message,
+            false,
+            false,
+            TimeSpan.Zero,
+            "Google Drive",
+            string.Empty,
+            HttpStatusCode.NotFound.ToString(),
+            OperationName,
+            Ex.FileId,
+            string.Empty,
+            Ex);
+    }
+    async Task<StorageResult<T>> RunAsync<T>(string OperationName, Func<Task<T>> Operation)
+    {
+        try
+        {
+            T Value = await Operation();
+            return StorageResult<T>.Success(Value);
+        }
+        catch (GoogleDriveNotFoundException Ex)
+        {
+            return StorageResult<T>.Failure(MapNotFound(Ex, OperationName));
+        }
+        catch (GoogleApiException Ex)
+        {
+            return StorageResult<T>.Failure(GoogleDriveErrorMapper.Map(Ex, OperationName));
+        }
+    }
+    async Task<StorageResult<T>> RunAsync<T>(string OperationName, string ItemId, Func<Task<T>> Operation)
+    {
+        try
+        {
+            T Value = await Operation();
+            return StorageResult<T>.Success(Value);
+        }
+        catch (GoogleDriveNotFoundException Ex)
+        {
+            return StorageResult<T>.Failure(MapNotFound(Ex, OperationName));
+        }
+        catch (GoogleApiException Ex)
+        {
+            return StorageResult<T>.Failure(GoogleDriveErrorMapper.Map(Ex, OperationName, ItemId));
+        }
+    }
+    async Task<StorageResult<T>> RunCheckpointAsync<T>(string OperationName, string Checkpoint, Func<Task<T>> Operation)
+    {
+        try
+        {
+            T Value = await Operation();
+            return StorageResult<T>.Success(Value);
+        }
+        catch (GoogleApiException Ex)
+        {
+            return StorageResult<T>.Failure(GoogleDriveErrorMapper.Map(Ex, OperationName, string.Empty, Checkpoint));
+        }
+    }
 
     // ● constructor
 
@@ -31,25 +91,40 @@ public class GoogleDriveStorageProvider : IStorageProvider
     // ● public
 
     /// <inheritdoc/>
-    public async Task<Result<string>> GetStartPageTokenAsync(CancellationToken CancellationToken)
+    public async Task<StorageResult<string>> GetStartPageTokenAsync(CancellationToken CancellationToken)
     {
-        await fClient.AuthenticateAsync(CancellationToken);
-        string Token = await fClient.GetStartPageTokenAsync(CancellationToken);
-        return Result<string>.Success(Token);
+        return await RunAsync("GetStartPageToken", async () =>
+        {
+            await fClient.AuthenticateAsync(CancellationToken);
+            return await fClient.GetStartPageTokenAsync(CancellationToken);
+        });
     }
     /// <inheritdoc/>
-    public async Task<Result<IReadOnlyList<StorageItem>>> ListFilesAsync(string FolderId, CancellationToken CancellationToken)
+    public async Task<StorageResult<StorageItem>> GetItemAsync(string ItemId, CancellationToken CancellationToken)
     {
-        await fClient.AuthenticateAsync(CancellationToken);
-        IReadOnlyList<StorageItem> Items = await fClient.ListFilesAsync(CancellationToken);
-        return Result<IReadOnlyList<StorageItem>>.Success(Items);
+        return await RunAsync("GetItem", ItemId, async () =>
+        {
+            await fClient.AuthenticateAsync(CancellationToken);
+            return await fClient.GetFileAsync(ItemId, CancellationToken);
+        });
     }
     /// <inheritdoc/>
-    public async Task<Result<IReadOnlyList<StorageChange>>> ListChangesAsync(string PageToken, CancellationToken CancellationToken)
+    public async Task<StorageResult<IReadOnlyList<StorageItem>>> ListFolderAsync(string FolderId, CancellationToken CancellationToken)
     {
-        await fClient.AuthenticateAsync(CancellationToken);
-        IReadOnlyList<StorageChange> Changes = await fClient.ListChangesAsync(PageToken, CancellationToken);
-        return Result<IReadOnlyList<StorageChange>>.Success(Changes);
+        return await RunAsync("ListFolder", FolderId, async () =>
+        {
+            await fClient.AuthenticateAsync(CancellationToken);
+            return await fClient.ListFolderAsync(FolderId, CancellationToken);
+        });
+    }
+    /// <inheritdoc/>
+    public async Task<StorageResult<StorageChangeListResult>> ListChangesAsync(string PageToken, CancellationToken CancellationToken)
+    {
+        return await RunCheckpointAsync("ListChanges", PageToken, async () =>
+        {
+            await fClient.AuthenticateAsync(CancellationToken);
+            return await fClient.ListChangesAsync(PageToken, CancellationToken);
+        });
     }
 
     // ● properties

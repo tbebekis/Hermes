@@ -14,7 +14,7 @@ public class GoogleDriveAuthManager
     const string CredentialsFolderName = "Credentials";
     const string ClientSecretFileName = "client_secret.json";
     const string TokenFileName = "google-token.json";
-    readonly string[] fScopes = [DriveService.Scope.DriveFile];
+    readonly string[] fScopes = [DriveService.Scope.Drive];
 
     // ● private
 
@@ -32,9 +32,11 @@ public class GoogleDriveAuthManager
             if (Token == null || string.IsNullOrWhiteSpace(Token.Scope))
                 return false;
 
+            string[] TokenScopes = Token.Scope.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
             foreach (string Scope in fRequiredScopes)
             {
-                if (!Token.Scope.Contains(Scope, StringComparison.Ordinal))
+                if (!TokenScopes.Contains(Scope, StringComparer.Ordinal))
                     return false;
             }
 
