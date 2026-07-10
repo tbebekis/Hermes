@@ -51,6 +51,11 @@ public class SyncExecutionIntent
     public string Name { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets the source remote item name for remote namespace operations.
+    /// </summary>
+    public string SourceName { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets the resolved remote parent id.
     /// </summary>
     public string RemoteParentId { get; set; } = string.Empty;

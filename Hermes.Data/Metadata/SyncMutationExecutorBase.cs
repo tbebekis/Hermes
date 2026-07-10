@@ -115,9 +115,26 @@ public class SyncMutationExecutorBase : SyncExecutorBase
     /// </summary>
     protected virtual async Task<SyncExecutionResult> ExecuteApplyLocalNamespaceToRemoteAsync(SyncExecutionIntent Intent, CancellationToken CancellationToken)
     {
-        StorageResult<StorageItem> Result = string.Equals(Intent.SourceRemoteParentId, Intent.RemoteParentId, StringComparison.Ordinal)
-            ? await RemoteEndpoint.RenameItemAsync(Intent.RemoteItemId, Intent.Name, CancellationToken)
-            : await RemoteEndpoint.MoveItemAsync(Intent.RemoteItemId, Intent.SourceRemoteParentId, Intent.RemoteParentId, CancellationToken);
+        StorageResult<StorageItem> Result = null;
+
+        if (!string.Equals(Intent.SourceName, Intent.Name, StringComparison.Ordinal))
+        {
+            Result = await RemoteEndpoint.RenameItemAsync(Intent.RemoteItemId, Intent.Name, CancellationToken);
+
+            if (Result.Failed)
+                return SyncExecutionResultFactory.FromStorageError(Intent.Request, Result.Error);
+        }
+
+        if (!string.Equals(Intent.SourceRemoteParentId, Intent.RemoteParentId, StringComparison.Ordinal))
+        {
+            Result = await RemoteEndpoint.MoveItemAsync(Intent.RemoteItemId, Intent.SourceRemoteParentId, Intent.RemoteParentId, CancellationToken);
+
+            if (Result.Failed)
+                return SyncExecutionResultFactory.FromStorageError(Intent.Request, Result.Error);
+        }
+
+        if (Result == null)
+            return SyncExecutionResultFactory.Completed(Intent.Request);
 
         if (Result.Succeeded)
             return SyncExecutionResultFactory.Completed(Intent.Request, Result.Value, Intent.LocalRelativePath);

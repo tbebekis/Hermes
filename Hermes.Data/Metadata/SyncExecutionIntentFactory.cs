@@ -83,10 +83,6 @@ static public class SyncExecutionIntentFactory
             ParentLocalPath(Request.LocalObservation?.RelativePath),
             StringComparison.Ordinal);
     }
-    static bool SameLocalName(SyncExecutionRequest Request)
-    {
-        return string.Equals(Request.BaseSnapshot?.Name ?? string.Empty, Request.LocalObservation?.Name ?? string.Empty, StringComparison.Ordinal);
-    }
     static bool HasLocalParent(SyncExecutionRequest Request)
     {
         return HasText(ParentLocalPath(Request.LocalObservation?.RelativePath));
@@ -147,6 +143,16 @@ static public class SyncExecutionIntentFactory
 
         if (HasText(Request.BaseSnapshot?.Name))
             return Request.BaseSnapshot.Name;
+
+        return string.Empty;
+    }
+    static string SourceName(SyncExecutionRequest Request)
+    {
+        if (HasText(Request.BaseSnapshot?.Name))
+            return Request.BaseSnapshot.Name;
+
+        if (HasText(Request.RemoteObservation?.Name))
+            return Request.RemoteObservation.Name;
 
         return string.Empty;
     }
@@ -305,6 +311,7 @@ static public class SyncExecutionIntentFactory
             LocalRelativePath = ResolvedLocalPath,
             ItemType = ItemType(Request),
             Name = Name(Request, ResolvedIntentKind),
+            SourceName = SourceName(Request),
             RemoteParentId = RemoteParentId(Request),
             SourceRemoteParentId = SourceRemoteParentId(Request),
             ContentHash = ContentHash(Request, ResolvedIntentKind),
@@ -322,11 +329,6 @@ static public class SyncExecutionIntentFactory
         {
             Result.IntentKind = SyncExecutionIntentKind.Blocked;
             Result.ValidationMessages.Add("Local folder namespace changes are not supported yet.");
-        }
-        else if (Result.IntentKind == SyncExecutionIntentKind.ApplyLocalNamespaceToRemote && !SameLocalParent(Request) && !SameLocalName(Request))
-        {
-            Result.IntentKind = SyncExecutionIntentKind.Blocked;
-            Result.ValidationMessages.Add("Combined local rename and move propagation is not supported yet.");
         }
         else if (Result.IntentKind == SyncExecutionIntentKind.ResolveConflict)
             Result.ValidationMessages.Add("Conflict resolution is required.");
