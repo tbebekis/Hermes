@@ -11,7 +11,15 @@ public class SyncDiffClassifier
     // ● private
 
     static bool IsMissing(SyncItemState State) => State == null || !State.Exists;
+    static bool IsCommittedMissing(SyncItemState State) => State != null && !State.Exists;
     static bool SameText(string A, string B) => string.Equals(A ?? string.Empty, B ?? string.Empty, StringComparison.Ordinal);
+    static bool IsReconciledRemoteRemoval(SyncItemState BaseState, SyncItemState LocalState, SyncItemState RemoteState)
+    {
+        return IsCommittedMissing(BaseState)
+            && IsMissing(LocalState)
+            && RemoteState != null
+            && (!RemoteState.Exists || RemoteState.Removed || RemoteState.Trashed);
+    }
     static bool SameState(SyncItemState A, SyncItemState B)
     {
         if (A == null || B == null)
@@ -67,6 +75,9 @@ public class SyncDiffClassifier
 
         SyncItemState LocalState = Input.LocalState;
         SyncItemState RemoteState = Input.RemoteState;
+
+        if (IsReconciledRemoteRemoval(Input.BaseState, LocalState, RemoteState))
+            return SyncDiffKind.NoChange;
 
         if (RemoteState != null && RemoteState.Removed)
             return SyncDiffKind.RemoteRemoved;

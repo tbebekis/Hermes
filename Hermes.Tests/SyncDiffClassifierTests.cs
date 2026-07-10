@@ -176,6 +176,21 @@ public class SyncDiffClassifierTests
         Assert.Equal(SyncDiffKind.RemoteTrashed, Kind);
     }
     /// <summary>
+    /// Verifies a committed missing base with missing local and trashed remote is treated as reconciled.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsNoChangeWhenCommittedMissingItemRemainsTrashedRemotely()
+    {
+        SyncItemState BaseState = State(Exists: false);
+        SyncItemState LocalState = State(Exists: false);
+        SyncItemState RemoteState = State();
+        RemoteState.Trashed = true;
+
+        SyncDiffKind Kind = Classify(BaseState, LocalState, RemoteState);
+
+        Assert.Equal(SyncDiffKind.NoChange, Kind);
+    }
+    /// <summary>
     /// Verifies remote permanent removal classification.
     /// </summary>
     [Fact]
