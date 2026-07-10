@@ -33,6 +33,26 @@ public class MetadataSyncLoop
             SessionResult?.PendingExecutionRequests.Count ?? 0,
             ApplyResult?.CommittedResults.Count ?? 0);
     }
+    async Task RunPassAsync(CancellationToken CancellationToken)
+    {
+        try
+        {
+            Result<MetadataSyncRunResult> Result = await fRunner.RunOnceAsync(fSyncRoot.Id, CancellationToken);
+
+            if (Result.Failed)
+                fLogger.LogError("Sync pass failed for root {SyncRootId}. {Message}", fSyncRoot.Id, Result.ErrorText);
+            else
+                LogSuccess(Result.Value);
+        }
+        catch (OperationCanceledException) when (CancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception Ex)
+        {
+            fLogger.LogError(Ex, "Sync pass failed unexpectedly for root {SyncRootId}.", fSyncRoot.Id);
+        }
+    }
 
     // ● constructor
 
@@ -62,13 +82,7 @@ public class MetadataSyncLoop
 
         while (!CancellationToken.IsCancellationRequested)
         {
-            Result<MetadataSyncRunResult> Result = await fRunner.RunOnceAsync(fSyncRoot.Id, CancellationToken);
-
-            if (Result.Failed)
-                fLogger.LogError("Sync pass failed for root {SyncRootId}. {Message}", fSyncRoot.Id, Result.ErrorText);
-            else
-                LogSuccess(Result.Value);
-
+            await RunPassAsync(CancellationToken);
             await Task.Delay(TimeSpan.FromSeconds(GetPollingIntervalSeconds(fSettings)), CancellationToken);
         }
     }
