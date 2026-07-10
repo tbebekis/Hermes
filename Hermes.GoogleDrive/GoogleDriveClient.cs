@@ -109,17 +109,26 @@ public class GoogleDriveClient
         Guard.NotNullOrWhiteSpace(FolderId, nameof(FolderId));
 
         DriveService Service = RequireDriveService();
-        FilesResource.ListRequest Request = Service.Files.List();
-        Request.Q = $"'{EscapeDriveQueryValue(FolderId)}' in parents and trashed = false";
-        Request.Fields = "files(id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version)";
-        FileList FileList = await Request.ExecuteAsync(CancellationToken);
         List<StorageItem> Result = new();
+        string PageToken = string.Empty;
 
-        if (FileList.Files == null)
-            return Result;
+        do
+        {
+            FilesResource.ListRequest Request = Service.Files.List();
+            Request.Q = $"'{EscapeDriveQueryValue(FolderId)}' in parents and trashed = false";
+            Request.Fields = "nextPageToken,files(id,name,mimeType,size,md5Checksum,modifiedTime,createdTime,parents,trashed,version)";
+            Request.PageToken = PageToken;
+            FileList FileList = await Request.ExecuteAsync(CancellationToken);
 
-        foreach (DriveFile File in FileList.Files)
-            Result.Add(fMapper.MapFile(File));
+            if (FileList.Files != null)
+            {
+                foreach (DriveFile File in FileList.Files)
+                    Result.Add(fMapper.MapFile(File));
+            }
+
+            PageToken = FileList.NextPageToken ?? string.Empty;
+        }
+        while (!string.IsNullOrWhiteSpace(PageToken));
 
         return Result;
     }
