@@ -43,6 +43,24 @@ public class ServiceRegistrationsTests
         Assert.DoesNotContain(Services, Item => Item.ServiceType == typeof(IHostedService));
     }
     /// <summary>
+    /// Ensures the service graph can be validated without starting the worker.
+    /// </summary>
+    [Fact]
+    public void AddHermesServiceServicesBuildsValidatedProviderWithoutWorker()
+    {
+        ServiceCollection Services = new();
+
+        Services.AddHermesServiceServices(CreateConfiguration(), false);
+
+        using ServiceProvider Provider = Services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateOnBuild = true,
+            ValidateScopes = true
+        });
+
+        Assert.NotNull(Provider.GetRequiredService<IOptions<SyncSettings>>());
+    }
+    /// <summary>
     /// Ensures the hosted worker is registered by default.
     /// </summary>
     [Fact]

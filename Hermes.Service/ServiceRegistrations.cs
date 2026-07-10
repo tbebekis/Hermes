@@ -18,6 +18,7 @@ static public class ServiceRegistrations
         Guard.NotNull(Services, nameof(Services));
         Guard.NotNull(Configuration, nameof(Configuration));
 
+        Services.AddLogging();
         Services.AddOptions<SyncSettings>()
             .Bind(Configuration.GetSection("Sync"))
             .ValidateOnStart();
