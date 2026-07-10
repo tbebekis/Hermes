@@ -369,7 +369,7 @@ public class MetadataSyncSession
     }
     void ApplyLocalPathObservation(SyncExecutionResult Result, DateTime ObservedTime)
     {
-        if (Result.Request.LocalObservation != null || string.IsNullOrWhiteSpace(Result.LocalRelativePath))
+        if (string.IsNullOrWhiteSpace(Result.LocalRelativePath))
             return;
 
         string ItemId = TrackedItemId(Result);

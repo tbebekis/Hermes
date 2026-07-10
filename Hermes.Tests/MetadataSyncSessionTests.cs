@@ -959,6 +959,17 @@ public class MetadataSyncSessionTests
 
         Store.InsertSyncRoot(CreateSyncRoot());
         Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", null));
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            ExistsFlag = true,
+            RelativePath = "RemoteOnly.txt",
+            Name = "RemoteOnly.txt",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-old-local",
+            ObservedTime = Time,
+        });
         Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
         {
             TrackedItemId = "item-1",
@@ -993,6 +1004,7 @@ public class MetadataSyncSessionTests
         Assert.Single(Result.CommittedBaseSnapshots);
         Assert.Equal("RemoteOnly.txt", Store.GetTrackedItem("item-1").LocalKey);
         Assert.Equal("RemoteOnly.txt", Store.GetLocalObservation("item-1").RelativePath);
+        Assert.Equal("hash-remote", Store.GetLocalObservation("item-1").ContentHash);
         Assert.Equal("hash-remote", Store.GetBaseSnapshot("item-1").ContentHash);
     }
     /// <summary>
