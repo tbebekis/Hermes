@@ -44,6 +44,19 @@ public class MetadataSyncRunResult
                 .OrderBy(Group => Group.Key)
                 .Select(Group => $"{Group.Key}={Group.Count()}"));
     }
+    static string FormatPendingDiffSummary(MetadataSyncSessionResult Result)
+    {
+        if (Result == null || Result.PendingExecutionRequests.Count == 0)
+            return "none";
+
+        return string.Join(
+            ", ",
+            Result.PendingExecutionRequests
+                .Where(Item => Item.Decision != null)
+                .GroupBy(Item => Item.Decision.DiffKind)
+                .OrderBy(Group => Group.Key)
+                .Select(Group => $"{Group.Key}={Group.Count()}"));
+    }
 
     // ● properties
 
@@ -101,4 +114,9 @@ public class MetadataSyncRunResult
     /// Gets a summary of pending execution request decision kinds.
     /// </summary>
     public string PendingExecutionSummary => FormatPendingExecutionSummary(SessionResult);
+
+    /// <summary>
+    /// Gets a summary of pending execution request diff kinds.
+    /// </summary>
+    public string PendingDiffSummary => FormatPendingDiffSummary(SessionResult);
 }
