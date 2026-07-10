@@ -409,6 +409,13 @@ public class MetadataSyncSession
             && !string.IsNullOrWhiteSpace(LocalPath)
             && LocalPath.StartsWith(ParentPath + "/", StringComparison.Ordinal);
     }
+    static string ExistingPath(LocalObservedSnapshotRecord LocalObservation, BaseSnapshotRecord BaseSnapshot)
+    {
+        if (LocalObservation != null && !string.IsNullOrWhiteSpace(LocalObservation.RelativePath))
+            return LocalObservation.RelativePath;
+
+        return BaseSnapshot?.LocalRelativePath;
+    }
     static string ReplacePathPrefix(string LocalPath, string OldPrefix, string NewPrefix)
     {
         return NewPrefix + LocalPath[OldPrefix.Length..];
@@ -583,6 +590,62 @@ public class MetadataSyncSession
         LocalObservedSnapshotRecord Observation = LocalObservationMapper.Missing(TrackedItemId(Result), ObservedTime, "execution");
         fStore.UpsertLocalObservation(Observation);
         Result.Request.LocalObservation = Observation;
+    }
+    RemoteObservedSnapshotRecord CreateImplicitRemoteDeleteObservation(TrackedItemRecord TrackedItem, DateTime ObservedTime, bool Removed)
+    {
+        RemoteObservedSnapshotRecord ExistingObservation = fStore.GetRemoteObservation(TrackedItem.Id);
+
+        if (!Removed && ExistingObservation != null)
+        {
+            ExistingObservation.Trashed = true;
+            ExistingObservation.ObservedTime = ObservedTime;
+            return ExistingObservation;
+        }
+
+        return new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = TrackedItem.Id,
+            RemoteItemId = TrackedItem.RemoteItemId,
+            ExistsFlag = false,
+            Removed = Removed,
+            ObservedTime = ObservedTime,
+        };
+    }
+    List<string> ApplyRemoteFolderDeleteDescendantObservations(SyncExecutionResult Result, DateTime ObservedTime)
+    {
+        List<string> AffectedTrackedItemIds = new();
+
+        if (!IsRemoteDeletePropagation(Result) || !IsFolder(Result))
+            return AffectedTrackedItemIds;
+
+        string FolderPath = Result.Request.BaseSnapshot?.LocalRelativePath ?? Result.Request.LocalObservation?.RelativePath;
+        string SyncRootId = Result.Request.TrackedItem?.SyncRootId;
+
+        if (string.IsNullOrWhiteSpace(FolderPath) || string.IsNullOrWhiteSpace(SyncRootId))
+            return AffectedTrackedItemIds;
+
+        bool Removed = Result.Request.RemoteObservation == null
+            || !Result.Request.RemoteObservation.ExistsFlag
+            || Result.Request.RemoteObservation.Removed;
+
+        foreach (TrackedItemRecord Item in fStore.GetTrackedItems(SyncRootId))
+        {
+            if (string.Equals(Item.Id, TrackedItemId(Result), StringComparison.Ordinal))
+                continue;
+
+            LocalObservedSnapshotRecord LocalObservation = fStore.GetLocalObservation(Item.Id);
+            BaseSnapshotRecord BaseSnapshot = fStore.GetBaseSnapshot(Item.Id);
+            string ItemPath = ExistingPath(LocalObservation, BaseSnapshot);
+
+            if (!IsDescendantPath(FolderPath, ItemPath))
+                continue;
+
+            fStore.UpsertLocalObservation(LocalObservationMapper.Missing(Item.Id, ObservedTime, "execution"));
+            fStore.UpsertRemoteObservation(CreateImplicitRemoteDeleteObservation(Item, ObservedTime, Removed));
+            AffectedTrackedItemIds.Add(Item.Id);
+        }
+
+        return AffectedTrackedItemIds;
     }
     static string TrackedItemId(SyncExecutionResult Result)
     {
@@ -845,6 +908,7 @@ public class MetadataSyncSession
                 ApplyRemoteItemObservation(ExecutionResult, CommittedTime);
                 TrackedItemIds.AddRange(ApplyLocalPathObservation(ExecutionResult, CommittedTime));
                 ApplyLocalMissingObservation(ExecutionResult, CommittedTime);
+                TrackedItemIds.AddRange(ApplyRemoteFolderDeleteDescendantObservations(ExecutionResult, CommittedTime));
             }
 
             if (CanCommitExecutionResult(ExecutionResult) && HasVerifiedCommitObservations(ExecutionResult))
