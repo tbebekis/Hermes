@@ -1,0 +1,75 @@
+// Copyright (c) 2026 Theodoros Bebekis
+// Licensed under the MIT License.
+
+namespace Hermes.Service;
+
+/// <summary>
+/// Runs the metadata synchronization loop used by the background service.
+/// </summary>
+public class MetadataSyncLoop
+{
+    // ● fields
+
+    readonly MetadataSyncRunner fRunner;
+    readonly SyncRootRecord fSyncRoot;
+    readonly SyncSettings fSettings;
+    readonly ILogger<MetadataSyncLoop> fLogger;
+
+    // ● private
+
+    static int GetPollingIntervalSeconds(SyncSettings Settings)
+    {
+        return Math.Max(1, Settings.PollingIntervalSeconds);
+    }
+    void LogSuccess(MetadataSyncRunResult Result)
+    {
+        MetadataSyncSessionResult SessionResult = Result.SessionResult;
+        SyncExecutionApplyResult ApplyResult = Result.ExecutionApplyResult;
+
+        fLogger.LogInformation(
+            "Sync pass completed for root {SyncRootId}. Decisions: {DecisionCount}. Pending executions: {PendingExecutionCount}. Committed executions: {CommittedExecutionCount}.",
+            fSyncRoot.Id,
+            SessionResult?.Decisions.Count ?? 0,
+            SessionResult?.PendingExecutionRequests.Count ?? 0,
+            ApplyResult?.CommittedResults.Count ?? 0);
+    }
+
+    // ● constructor
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MetadataSyncLoop"/> class.
+    /// </summary>
+    public MetadataSyncLoop(
+        MetadataSyncRunner Runner,
+        SyncRootRecord SyncRoot,
+        IOptions<SyncSettings> Settings,
+        ILogger<MetadataSyncLoop> Logger)
+    {
+        fRunner = Guard.NotNull(Runner, nameof(Runner));
+        fSyncRoot = Guard.NotNull(SyncRoot, nameof(SyncRoot));
+        fSettings = Guard.NotNull(Settings, nameof(Settings)).Value;
+        fLogger = Guard.NotNull(Logger, nameof(Logger));
+    }
+
+    // ● public
+
+    /// <summary>
+    /// Runs the synchronization loop.
+    /// </summary>
+    public async Task RunAsync(CancellationToken CancellationToken)
+    {
+        fLogger.LogInformation("Hermes metadata sync loop started for root {SyncRootId}.", fSyncRoot.Id);
+
+        while (!CancellationToken.IsCancellationRequested)
+        {
+            Result<MetadataSyncRunResult> Result = await fRunner.RunOnceAsync(fSyncRoot.Id, CancellationToken);
+
+            if (Result.Failed)
+                fLogger.LogError("Sync pass failed for root {SyncRootId}. {Message}", fSyncRoot.Id, Result.ErrorText);
+            else
+                LogSuccess(Result.Value);
+
+            await Task.Delay(TimeSpan.FromSeconds(GetPollingIntervalSeconds(fSettings)), CancellationToken);
+        }
+    }
+}

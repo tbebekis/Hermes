@@ -8,18 +8,18 @@ namespace Hermes.Service;
 /// </summary>
 public class Worker : BackgroundService
 {
-    // ● private
+    // ● fields
 
-    private readonly SyncService fSyncService;
+    readonly MetadataSyncLoop fSyncLoop;
 
     // ● constructor
 
     /// <summary>
     /// Initializes a new instance of the <see cref="Worker"/> class.
     /// </summary>
-    public Worker(SyncService SyncService)
+    public Worker(MetadataSyncLoop SyncLoop)
     {
-        fSyncService = Guard.NotNull(SyncService, nameof(SyncService));
+        fSyncLoop = Guard.NotNull(SyncLoop, nameof(SyncLoop));
     }
 
     // ● protected
@@ -27,6 +27,6 @@ public class Worker : BackgroundService
     /// <inheritdoc/>
     protected override Task ExecuteAsync(CancellationToken StoppingToken)
     {
-        return fSyncService.RunAsync(StoppingToken);
+        return fSyncLoop.RunAsync(StoppingToken);
     }
 }
