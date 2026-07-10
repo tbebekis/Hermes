@@ -34,4 +34,9 @@ public interface ILocalSyncMutationEndpoint
     /// Moves or renames a local file.
     /// </summary>
     Task<Result> MoveFileAsync(string SourceRelativePath, string TargetRelativePath, CancellationToken CancellationToken);
+
+    /// <summary>
+    /// Moves or renames a local directory.
+    /// </summary>
+    Task<Result> MoveDirectoryAsync(string SourceRelativePath, string TargetRelativePath, CancellationToken CancellationToken);
 }

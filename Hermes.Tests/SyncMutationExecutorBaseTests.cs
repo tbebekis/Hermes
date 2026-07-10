@@ -44,6 +44,12 @@ public class SyncMutationExecutorBaseTests
             MovedFiles.Add((SourceRelativePath, TargetRelativePath));
             return Task.FromResult(Result.Success());
         }
+        /// <inheritdoc/>
+        public Task<Result> MoveDirectoryAsync(string SourceRelativePath, string TargetRelativePath, CancellationToken CancellationToken)
+        {
+            MovedDirectories.Add((SourceRelativePath, TargetRelativePath));
+            return Task.FromResult(Result.Success());
+        }
 
         // ● properties
 
@@ -51,6 +57,10 @@ public class SyncMutationExecutorBaseTests
         /// Gets moved files.
         /// </summary>
         public List<(string SourceRelativePath, string TargetRelativePath)> MovedFiles { get; } = new();
+        /// <summary>
+        /// Gets moved directories.
+        /// </summary>
+        public List<(string SourceRelativePath, string TargetRelativePath)> MovedDirectories { get; } = new();
     }
 
     /// <summary>
@@ -306,6 +316,7 @@ public class SyncMutationExecutorBaseTests
     static SyncExecutionRequest FolderRequest(SyncPlanDecisionKind DecisionKind) => new()
     {
         Decision = new SyncPlanDecision("folder-1", SyncDiffKind.LocalChanged, DecisionKind),
+        SyncRoot = SyncRoot(),
         TrackedItem = new TrackedItemRecord()
         {
             Id = "folder-1",
@@ -478,6 +489,28 @@ public class SyncMutationExecutorBaseTests
         Assert.Single(Results);
         Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Results[0].ResultKind);
         Assert.Equal(SyncExecutionIntentKind.ApplyRemoteNamespaceToLocal, Executor.ExecutedIntentKind);
+    }
+
+    /// <summary>
+    /// Verifies remote folder namespace intents move local directories.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsyncAppliesRemoteFolderNamespaceToLocalDirectory()
+    {
+        TestLocalEndpoint LocalEndpoint = new();
+        SyncMutationExecutorBase Executor = new(LocalEndpoint, new TestRemoteEndpoint());
+        SyncExecutionRequest Request = FolderRequest(SyncPlanDecisionKind.ApplyRemoteNamespaceToLocal);
+        Request.RemoteObservation.Name = "RenamedFolder";
+
+        IReadOnlyList<SyncExecutionResult> Results = await Executor.ExecuteAsync(
+            [Request],
+            CancellationToken.None);
+
+        Assert.Single(Results);
+        Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Results[0].ResultKind);
+        (string SourceRelativePath, string TargetRelativePath) Move = Assert.Single(LocalEndpoint.MovedDirectories);
+        Assert.Equal("Folder", Move.SourceRelativePath);
+        Assert.Equal("RenamedFolder", Move.TargetRelativePath);
     }
 
     /// <summary>

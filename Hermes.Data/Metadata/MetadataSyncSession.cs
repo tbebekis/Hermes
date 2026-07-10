@@ -342,6 +342,27 @@ public class MetadataSyncSession
     {
         return Result.Request?.Decision?.DecisionKind == SyncPlanDecisionKind.PropagateRemoteDelete;
     }
+    static bool IsRemoteNamespaceApply(SyncExecutionResult Result)
+    {
+        return Result.Request?.Decision?.DecisionKind == SyncPlanDecisionKind.ApplyRemoteNamespaceToLocal;
+    }
+    static bool IsFolder(SyncExecutionResult Result)
+    {
+        return string.Equals(Result.Request?.TrackedItem?.ItemType, "Folder", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(Result.Request?.LocalObservation?.ItemType, "Folder", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(Result.Request?.RemoteObservation?.ItemType, "Folder", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(Result.Request?.BaseSnapshot?.ItemType, "Folder", StringComparison.OrdinalIgnoreCase);
+    }
+    static bool IsDescendantPath(string ParentPath, string LocalPath)
+    {
+        return !string.IsNullOrWhiteSpace(ParentPath)
+            && !string.IsNullOrWhiteSpace(LocalPath)
+            && LocalPath.StartsWith(ParentPath + "/", StringComparison.Ordinal);
+    }
+    static string ReplacePathPrefix(string LocalPath, string OldPrefix, string NewPrefix)
+    {
+        return NewPrefix + LocalPath[OldPrefix.Length..];
+    }
     static string LocalName(string LocalRelativePath)
     {
         if (string.IsNullOrWhiteSpace(LocalRelativePath))
@@ -405,6 +426,23 @@ public class MetadataSyncSession
             ScanId = "execution",
         };
     }
+    static LocalObservedSnapshotRecord CreateMovedLocalObservation(LocalObservedSnapshotRecord Source, string LocalRelativePath, DateTime ObservedTime)
+    {
+        return new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = Source.TrackedItemId,
+            ExistsFlag = Source.ExistsFlag,
+            RelativePath = LocalRelativePath,
+            Name = LocalName(LocalRelativePath),
+            ParentRelativePath = LocalParentRelativePath(LocalRelativePath),
+            ItemType = Source.ItemType,
+            Size = Source.Size,
+            ModifiedTime = Source.ModifiedTime,
+            ContentHash = Source.ContentHash,
+            ObservedTime = ObservedTime,
+            ScanId = "execution",
+        };
+    }
     void ApplyRemoteItemObservation(SyncExecutionResult Result, DateTime ObservedTime)
     {
         if (Result.RemoteItem == null)
@@ -424,13 +462,16 @@ public class MetadataSyncSession
         fStore.UpsertRemoteObservation(Observation);
         Result.Request.RemoteObservation = Observation;
     }
-    void ApplyLocalPathObservation(SyncExecutionResult Result, DateTime ObservedTime)
+    List<string> ApplyLocalPathObservation(SyncExecutionResult Result, DateTime ObservedTime)
     {
+        List<string> AffectedTrackedItemIds = new();
+
         if (string.IsNullOrWhiteSpace(Result.LocalRelativePath))
-            return;
+            return AffectedTrackedItemIds;
 
         string ItemId = TrackedItemId(Result);
         TrackedItemRecord TrackedItem = Result.Request.TrackedItem ?? fStore.GetTrackedItem(ItemId);
+        string OldFolderPath = Result.Request.BaseSnapshot?.LocalRelativePath ?? Result.Request.LocalObservation?.RelativePath;
 
         if (TrackedItem != null && !string.Equals(TrackedItem.LocalKey, Result.LocalRelativePath, StringComparison.Ordinal))
         {
@@ -442,6 +483,34 @@ public class MetadataSyncSession
         LocalObservedSnapshotRecord Observation = CreateLocalObservationFromExecution(Result, ObservedTime);
         fStore.UpsertLocalObservation(Observation);
         Result.Request.LocalObservation = Observation;
+
+        AffectedTrackedItemIds.Add(ItemId);
+
+        if (!IsRemoteNamespaceApply(Result) || !IsFolder(Result))
+            return AffectedTrackedItemIds;
+
+        string NewFolderPath = Result.LocalRelativePath;
+
+        if (string.IsNullOrWhiteSpace(OldFolderPath) || string.IsNullOrWhiteSpace(NewFolderPath) || string.Equals(OldFolderPath, NewFolderPath, StringComparison.Ordinal))
+            return AffectedTrackedItemIds;
+
+        foreach (TrackedItemRecord Item in fStore.GetTrackedItems(Result.Request.TrackedItem.SyncRootId))
+        {
+            if (string.Equals(Item.Id, ItemId, StringComparison.Ordinal))
+                continue;
+
+            LocalObservedSnapshotRecord LocalObservation = fStore.GetLocalObservation(Item.Id);
+            if (LocalObservation == null || !LocalObservation.ExistsFlag || !IsDescendantPath(OldFolderPath, LocalObservation.RelativePath))
+                continue;
+
+            string NewLocalPath = ReplacePathPrefix(LocalObservation.RelativePath, OldFolderPath, NewFolderPath);
+            Item.LocalKey = NewLocalPath;
+            fStore.UpdateTrackedItem(Item);
+            fStore.UpsertLocalObservation(CreateMovedLocalObservation(LocalObservation, NewLocalPath, ObservedTime));
+            AffectedTrackedItemIds.Add(Item.Id);
+        }
+
+        return AffectedTrackedItemIds;
     }
     void ApplyLocalMissingObservation(SyncExecutionResult Result, DateTime ObservedTime)
     {
@@ -687,13 +756,14 @@ public class MetadataSyncSession
             if (CanCommitExecutionResult(ExecutionResult))
             {
                 ApplyRemoteItemObservation(ExecutionResult, CommittedTime);
-                ApplyLocalPathObservation(ExecutionResult, CommittedTime);
+                TrackedItemIds.AddRange(ApplyLocalPathObservation(ExecutionResult, CommittedTime));
                 ApplyLocalMissingObservation(ExecutionResult, CommittedTime);
             }
 
             if (CanCommitExecutionResult(ExecutionResult) && HasVerifiedCommitObservations(ExecutionResult))
             {
-                TrackedItemIds.Add(TrackedItemId(ExecutionResult));
+                if (!TrackedItemIds.Contains(TrackedItemId(ExecutionResult)))
+                    TrackedItemIds.Add(TrackedItemId(ExecutionResult));
                 Result.CommittedResults.Add(ExecutionResult);
             }
             else

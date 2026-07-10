@@ -95,7 +95,9 @@ public class SyncMutationExecutorBase : SyncExecutorBase
     /// </summary>
     protected virtual async Task<SyncExecutionResult> ExecuteApplyRemoteNamespaceToLocalAsync(SyncExecutionIntent Intent, CancellationToken CancellationToken)
     {
-        Result Result = await LocalEndpoint.MoveFileAsync(Intent.SourceLocalRelativePath, Intent.LocalRelativePath, CancellationToken);
+        Result Result = string.Equals(Intent.ItemType, "Folder", StringComparison.OrdinalIgnoreCase)
+            ? await LocalEndpoint.MoveDirectoryAsync(Intent.SourceLocalRelativePath, Intent.LocalRelativePath, CancellationToken)
+            : await LocalEndpoint.MoveFileAsync(Intent.SourceLocalRelativePath, Intent.LocalRelativePath, CancellationToken);
 
         if (Result.Succeeded)
             return SyncExecutionResultFactory.Completed(Intent.Request, Intent.LocalRelativePath);

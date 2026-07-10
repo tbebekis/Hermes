@@ -208,7 +208,6 @@ static public class SyncExecutionIntentFactory
             case SyncExecutionIntentKind.ApplyRemoteNamespaceToLocal:
                 Require(Exists(Request.LocalObservation), Intent, "Existing local observation is required.");
                 Require(Exists(Request.RemoteObservation), Intent, "Existing remote observation is required.");
-                Require(!string.Equals(ItemType(Request), "Folder", StringComparison.OrdinalIgnoreCase), Intent, "Folder namespace updates are not supported yet.");
                 Require(HasText(Intent.SourceLocalRelativePath), Intent, "Source local path is required.");
                 Require(HasText(Intent.LocalRelativePath), Intent, "Target local path is required.");
                 break;
