@@ -1,0 +1,207 @@
+// Copyright (c) 2026 Theodoros Bebekis
+// Licensed under the MIT License.
+
+namespace Hermes.Data;
+
+/// <summary>
+/// Creates executor-facing intents from synchronization execution requests.
+/// </summary>
+static public class SyncExecutionIntentFactory
+{
+    // ● private
+
+    static bool Exists(LocalObservedSnapshotRecord Observation) => Observation != null && Observation.ExistsFlag;
+    static bool Exists(RemoteObservedSnapshotRecord Observation)
+    {
+        return Observation != null
+            && Observation.ExistsFlag
+            && !Observation.Removed;
+    }
+    static bool HasText(string Text) => !string.IsNullOrWhiteSpace(Text);
+    static string RemoteItemId(SyncExecutionRequest Request)
+    {
+        if (HasText(Request.TrackedItem?.RemoteItemId))
+            return Request.TrackedItem.RemoteItemId;
+
+        if (HasText(Request.RemoteObservation?.RemoteItemId))
+            return Request.RemoteObservation.RemoteItemId;
+
+        return string.Empty;
+    }
+    static string LocalPath(SyncExecutionRequest Request)
+    {
+        if (HasText(Request.LocalObservation?.RelativePath))
+            return Request.LocalObservation.RelativePath;
+
+        if (HasText(Request.BaseSnapshot?.LocalRelativePath))
+            return Request.BaseSnapshot.LocalRelativePath;
+
+        return string.Empty;
+    }
+    static string TrackedItemId(SyncExecutionRequest Request)
+    {
+        if (HasText(Request.TrackedItem?.Id))
+            return Request.TrackedItem.Id;
+
+        if (HasText(Request.Decision?.TrackedItemId))
+            return Request.Decision.TrackedItemId;
+
+        return string.Empty;
+    }
+    static string ItemType(SyncExecutionRequest Request)
+    {
+        if (HasText(Request.TrackedItem?.ItemType))
+            return Request.TrackedItem.ItemType;
+
+        if (HasText(Request.LocalObservation?.ItemType))
+            return Request.LocalObservation.ItemType;
+
+        if (HasText(Request.RemoteObservation?.ItemType))
+            return Request.RemoteObservation.ItemType;
+
+        if (HasText(Request.BaseSnapshot?.ItemType))
+            return Request.BaseSnapshot.ItemType;
+
+        return string.Empty;
+    }
+    static string Name(SyncExecutionRequest Request, SyncExecutionIntentKind IntentKind)
+    {
+        if (IntentKind == SyncExecutionIntentKind.UploadToRemote && HasText(Request.LocalObservation?.Name))
+            return Request.LocalObservation.Name;
+
+        if (HasText(Request.RemoteObservation?.Name))
+            return Request.RemoteObservation.Name;
+
+        if (HasText(Request.LocalObservation?.Name))
+            return Request.LocalObservation.Name;
+
+        if (HasText(Request.BaseSnapshot?.Name))
+            return Request.BaseSnapshot.Name;
+
+        return string.Empty;
+    }
+    static string RemoteParentId(SyncExecutionRequest Request)
+    {
+        if (HasText(Request.RemoteObservation?.RemoteParentId))
+            return Request.RemoteObservation.RemoteParentId;
+
+        if (HasText(Request.BaseSnapshot?.RemoteParentId))
+            return Request.BaseSnapshot.RemoteParentId;
+
+        return string.Empty;
+    }
+    static string ContentHash(SyncExecutionRequest Request, SyncExecutionIntentKind IntentKind)
+    {
+        if (IntentKind == SyncExecutionIntentKind.UploadToRemote && HasText(Request.LocalObservation?.ContentHash))
+            return Request.LocalObservation.ContentHash;
+
+        if (IntentKind == SyncExecutionIntentKind.DownloadToLocal && HasText(Request.RemoteObservation?.ContentHash))
+            return Request.RemoteObservation.ContentHash;
+
+        if (HasText(Request.RemoteObservation?.ContentHash))
+            return Request.RemoteObservation.ContentHash;
+
+        if (HasText(Request.LocalObservation?.ContentHash))
+            return Request.LocalObservation.ContentHash;
+
+        if (HasText(Request.BaseSnapshot?.ContentHash))
+            return Request.BaseSnapshot.ContentHash;
+
+        return string.Empty;
+    }
+    static long? Size(SyncExecutionRequest Request, SyncExecutionIntentKind IntentKind)
+    {
+        if (IntentKind == SyncExecutionIntentKind.UploadToRemote && Request.LocalObservation?.Size != null)
+            return Request.LocalObservation.Size;
+
+        if (IntentKind == SyncExecutionIntentKind.DownloadToLocal && Request.RemoteObservation?.Size != null)
+            return Request.RemoteObservation.Size;
+
+        if (Request.RemoteObservation?.Size != null)
+            return Request.RemoteObservation.Size;
+
+        if (Request.LocalObservation?.Size != null)
+            return Request.LocalObservation.Size;
+
+        return Request.BaseSnapshot?.Size;
+    }
+    static SyncExecutionIntentKind IntentKind(SyncPlanDecisionKind DecisionKind)
+    {
+        return DecisionKind switch
+        {
+            SyncPlanDecisionKind.UploadToRemote => SyncExecutionIntentKind.UploadToRemote,
+            SyncPlanDecisionKind.DownloadToLocal => SyncExecutionIntentKind.DownloadToLocal,
+            SyncPlanDecisionKind.PropagateLocalDelete => SyncExecutionIntentKind.PropagateLocalDelete,
+            SyncPlanDecisionKind.PropagateRemoteDelete => SyncExecutionIntentKind.PropagateRemoteDelete,
+            SyncPlanDecisionKind.Conflict => SyncExecutionIntentKind.ResolveConflict,
+            SyncPlanDecisionKind.Blocked => SyncExecutionIntentKind.Blocked,
+            _ => SyncExecutionIntentKind.Invalid,
+        };
+    }
+    static void Require(bool Condition, SyncExecutionIntent Intent, string Message)
+    {
+        if (!Condition)
+            Intent.ValidationMessages.Add(Message);
+    }
+    static void ValidateExecutableIntent(SyncExecutionIntent Intent)
+    {
+        SyncExecutionRequest Request = Intent.Request;
+
+        Require(Request.TrackedItem != null, Intent, "Tracked item is required.");
+
+        switch (Intent.IntentKind)
+        {
+            case SyncExecutionIntentKind.UploadToRemote:
+                Require(Exists(Request.LocalObservation), Intent, "Existing local observation is required.");
+                break;
+            case SyncExecutionIntentKind.DownloadToLocal:
+                Require(Exists(Request.RemoteObservation), Intent, "Existing remote observation is required.");
+                break;
+            case SyncExecutionIntentKind.PropagateLocalDelete:
+                Require(HasText(RemoteItemId(Request)), Intent, "Remote item id is required.");
+                break;
+            case SyncExecutionIntentKind.PropagateRemoteDelete:
+                Require(HasText(LocalPath(Request)), Intent, "Local path is required.");
+                break;
+        }
+    }
+
+    // ● public
+
+    /// <summary>
+    /// Creates an executor-facing intent from a synchronization execution request.
+    /// </summary>
+    static public SyncExecutionIntent Create(SyncExecutionRequest Request)
+    {
+        Guard.NotNull(Request, nameof(Request));
+        Guard.NotNull(Request.Decision, nameof(Request.Decision));
+
+        SyncExecutionIntentKind ResolvedIntentKind = IntentKind(Request.Decision.DecisionKind);
+        SyncExecutionIntent Result = new()
+        {
+            Request = Request,
+            IntentKind = ResolvedIntentKind,
+            TrackedItemId = TrackedItemId(Request),
+            RemoteItemId = RemoteItemId(Request),
+            LocalRelativePath = LocalPath(Request),
+            ItemType = ItemType(Request),
+            Name = Name(Request, ResolvedIntentKind),
+            RemoteParentId = RemoteParentId(Request),
+            ContentHash = ContentHash(Request, ResolvedIntentKind),
+            Size = Size(Request, ResolvedIntentKind),
+        };
+
+        if (Result.IntentKind == SyncExecutionIntentKind.Invalid)
+            Result.ValidationMessages.Add("Decision kind cannot be executed.");
+        else if (Result.IntentKind == SyncExecutionIntentKind.ResolveConflict)
+            Result.ValidationMessages.Add("Conflict resolution is required.");
+        else if (Result.IntentKind == SyncExecutionIntentKind.Blocked)
+            Result.ValidationMessages.Add("Request is blocked.");
+        else
+            ValidateExecutableIntent(Result);
+
+        Result.CanExecute = Result.ValidationMessages.Count == 0;
+
+        return Result;
+    }
+}

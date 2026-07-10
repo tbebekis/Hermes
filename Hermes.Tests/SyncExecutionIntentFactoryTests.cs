@@ -1,0 +1,197 @@
+// Copyright (c) 2026 Theodoros Bebekis
+// Licensed under the MIT License.
+
+namespace Hermes.Tests;
+
+/// <summary>
+/// Tests synchronization execution intent creation.
+/// </summary>
+public class SyncExecutionIntentFactoryTests
+{
+    // ● private
+
+    static SyncPlanDecision Decision(SyncPlanDecisionKind DecisionKind) => new("item-1", SyncDiffKind.LocalChanged, DecisionKind);
+    static TrackedItemRecord TrackedItem() => new()
+    {
+        Id = "item-1",
+        SyncRootId = "root-1",
+        RemoteItemId = "remote-1",
+        LocalKey = "File.txt",
+        ItemType = "File",
+    };
+    static BaseSnapshotRecord BaseSnapshot() => new()
+    {
+        TrackedItemId = "item-1",
+        ExistsFlag = true,
+        ItemType = "File",
+        Name = "File.txt",
+        LocalRelativePath = "File.txt",
+        RemoteParentId = "remote-root",
+        Size = 42,
+        ContentHash = "hash-base",
+        ProviderVersion = 1,
+        Trashed = false,
+        CommittedTime = new DateTime(2026, 7, 11, 9, 0, 0, DateTimeKind.Utc),
+    };
+    static LocalObservedSnapshotRecord LocalObservation(bool ExistsFlag = true) => new()
+    {
+        TrackedItemId = "item-1",
+        ExistsFlag = ExistsFlag,
+        RelativePath = "File.txt",
+        Name = "File.txt",
+        ItemType = "File",
+        Size = 42,
+        ContentHash = "hash-local",
+        ObservedTime = new DateTime(2026, 7, 11, 9, 0, 0, DateTimeKind.Utc),
+    };
+    static RemoteObservedSnapshotRecord RemoteObservation(bool ExistsFlag = true, bool Removed = false) => new()
+    {
+        TrackedItemId = "item-1",
+        RemoteItemId = "remote-1",
+        ExistsFlag = ExistsFlag,
+        Removed = Removed,
+        Name = "File.txt",
+        RemoteParentId = "remote-root",
+        ItemType = "File",
+        Size = 42,
+        ContentHash = "hash-remote",
+        ProviderVersion = 2,
+        Trashed = false,
+        ObservedTime = new DateTime(2026, 7, 11, 9, 0, 0, DateTimeKind.Utc),
+    };
+    static SyncExecutionRequest Request(SyncPlanDecisionKind DecisionKind) => new()
+    {
+        Decision = Decision(DecisionKind),
+        TrackedItem = TrackedItem(),
+        BaseSnapshot = BaseSnapshot(),
+        LocalObservation = LocalObservation(),
+        RemoteObservation = RemoteObservation(),
+    };
+
+    // ● public
+
+    /// <summary>
+    /// Verifies upload decisions create executable upload intents.
+    /// </summary>
+    [Fact]
+    public void CreateMapsUploadToExecutableIntent()
+    {
+        SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(Request(SyncPlanDecisionKind.UploadToRemote));
+
+        Assert.Equal(SyncExecutionIntentKind.UploadToRemote, Intent.IntentKind);
+        Assert.Equal("item-1", Intent.TrackedItemId);
+        Assert.Equal("remote-1", Intent.RemoteItemId);
+        Assert.Equal("File.txt", Intent.LocalRelativePath);
+        Assert.Equal("File", Intent.ItemType);
+        Assert.Equal("File.txt", Intent.Name);
+        Assert.Equal("remote-root", Intent.RemoteParentId);
+        Assert.Equal("hash-local", Intent.ContentHash);
+        Assert.Equal(42, Intent.Size);
+        Assert.True(Intent.CanExecute);
+        Assert.Empty(Intent.ValidationMessages);
+    }
+    /// <summary>
+    /// Verifies download decisions create executable download intents.
+    /// </summary>
+    [Fact]
+    public void CreateMapsDownloadToExecutableIntent()
+    {
+        SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(Request(SyncPlanDecisionKind.DownloadToLocal));
+
+        Assert.Equal(SyncExecutionIntentKind.DownloadToLocal, Intent.IntentKind);
+        Assert.Equal("hash-remote", Intent.ContentHash);
+        Assert.Equal(42, Intent.Size);
+        Assert.True(Intent.CanExecute);
+        Assert.Empty(Intent.ValidationMessages);
+    }
+    /// <summary>
+    /// Verifies local delete propagation requires a remote item id.
+    /// </summary>
+    [Fact]
+    public void CreateValidatesLocalDeletePropagation()
+    {
+        SyncExecutionRequest ExecutionRequest = Request(SyncPlanDecisionKind.PropagateLocalDelete);
+        ExecutionRequest.TrackedItem.RemoteItemId = string.Empty;
+        ExecutionRequest.RemoteObservation.RemoteItemId = string.Empty;
+
+        SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(ExecutionRequest);
+
+        Assert.Equal(SyncExecutionIntentKind.PropagateLocalDelete, Intent.IntentKind);
+        Assert.False(Intent.CanExecute);
+        Assert.Contains("Remote item id is required.", Intent.ValidationMessages);
+    }
+    /// <summary>
+    /// Verifies remote delete propagation can use the base local path.
+    /// </summary>
+    [Fact]
+    public void CreateValidatesRemoteDeletePropagationWithBasePath()
+    {
+        SyncExecutionRequest ExecutionRequest = Request(SyncPlanDecisionKind.PropagateRemoteDelete);
+        ExecutionRequest.LocalObservation = LocalObservation(false);
+        ExecutionRequest.LocalObservation.RelativePath = string.Empty;
+
+        SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(ExecutionRequest);
+
+        Assert.Equal(SyncExecutionIntentKind.PropagateRemoteDelete, Intent.IntentKind);
+        Assert.Equal("File.txt", Intent.LocalRelativePath);
+        Assert.True(Intent.CanExecute);
+        Assert.Empty(Intent.ValidationMessages);
+    }
+    /// <summary>
+    /// Verifies conflict decisions are not normal executable intents.
+    /// </summary>
+    [Fact]
+    public void CreateMapsConflictToResolutionIntent()
+    {
+        SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(Request(SyncPlanDecisionKind.Conflict));
+
+        Assert.Equal(SyncExecutionIntentKind.ResolveConflict, Intent.IntentKind);
+        Assert.False(Intent.CanExecute);
+        Assert.Contains("Conflict resolution is required.", Intent.ValidationMessages);
+    }
+    /// <summary>
+    /// Verifies blocked decisions are not normal executable intents.
+    /// </summary>
+    [Fact]
+    public void CreateMapsBlockedToBlockedIntent()
+    {
+        SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(Request(SyncPlanDecisionKind.Blocked));
+
+        Assert.Equal(SyncExecutionIntentKind.Blocked, Intent.IntentKind);
+        Assert.False(Intent.CanExecute);
+        Assert.Contains("Request is blocked.", Intent.ValidationMessages);
+    }
+    /// <summary>
+    /// Verifies metadata-only decisions cannot be executed by the executor.
+    /// </summary>
+    [Fact]
+    public void CreateMarksCommitBaseAsInvalid()
+    {
+        SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(Request(SyncPlanDecisionKind.CommitBase));
+
+        Assert.Equal(SyncExecutionIntentKind.Invalid, Intent.IntentKind);
+        Assert.False(Intent.CanExecute);
+        Assert.Contains("Decision kind cannot be executed.", Intent.ValidationMessages);
+    }
+    /// <summary>
+    /// Verifies resolved intent fields fall back to available metadata.
+    /// </summary>
+    [Fact]
+    public void CreateResolvesFieldsFromFallbackMetadata()
+    {
+        SyncExecutionRequest ExecutionRequest = Request(SyncPlanDecisionKind.DownloadToLocal);
+        ExecutionRequest.TrackedItem = null;
+        ExecutionRequest.LocalObservation = null;
+
+        SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(ExecutionRequest);
+
+        Assert.Equal("item-1", Intent.TrackedItemId);
+        Assert.Equal("remote-1", Intent.RemoteItemId);
+        Assert.Equal("File.txt", Intent.LocalRelativePath);
+        Assert.Equal("File", Intent.ItemType);
+        Assert.Equal("File.txt", Intent.Name);
+        Assert.Equal("remote-root", Intent.RemoteParentId);
+        Assert.Equal("hash-remote", Intent.ContentHash);
+        Assert.Equal(42, Intent.Size);
+    }
+}

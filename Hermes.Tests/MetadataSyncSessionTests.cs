@@ -84,7 +84,7 @@ public class MetadataSyncSessionTests
     /// <summary>
     /// Executes requests in tests by invoking a supplied callback.
     /// </summary>
-    sealed class FakeSyncExecutor : ISyncExecutor
+    sealed class FakeSyncExecutor : SyncExecutorBase
     {
         // ● fields
 
@@ -109,31 +109,30 @@ public class MetadataSyncSessionTests
             fResultKind = ResultKind;
         }
 
-        // ● public
+        // ● protected
 
         /// <summary>
-        /// Executes synchronization requests by invoking the configured callback.
+        /// Executes a synchronization intent by invoking the configured callback.
         /// </summary>
-        public Task<IReadOnlyList<SyncExecutionResult>> ExecuteAsync(IEnumerable<SyncExecutionRequest> RequestList, CancellationToken CancellationToken)
+        protected override Task<SyncExecutionResult> ExecuteIntentAsync(SyncExecutionIntent Intent, CancellationToken CancellationToken)
         {
-            List<SyncExecutionResult> Results = new();
+            Intents.Add(Intent);
+            Requests.Add(Intent.Request);
+            fExecuteRequest(Intent.Request);
 
-            foreach (SyncExecutionRequest Request in RequestList)
+            return Task.FromResult(new SyncExecutionResult()
             {
-                CancellationToken.ThrowIfCancellationRequested();
-                Requests.Add(Request);
-                fExecuteRequest(Request);
-                Results.Add(new SyncExecutionResult()
-                {
-                    Request = Request,
-                    ResultKind = fResultKind,
-                });
-            }
-
-            return Task.FromResult<IReadOnlyList<SyncExecutionResult>>(Results);
+                Request = Intent.Request,
+                ResultKind = fResultKind,
+            });
         }
 
         // ● properties
+
+        /// <summary>
+        /// Gets the intents created by the fake executor.
+        /// </summary>
+        public List<SyncExecutionIntent> Intents { get; } = new();
 
         /// <summary>
         /// Gets the requests received by the fake executor.
@@ -234,6 +233,51 @@ public class MetadataSyncSessionTests
         default,
         Version,
         false);
+    static SyncExecutionRequest CreateExecutionRequest(SyncPlanDecisionKind DecisionKind) => new()
+    {
+        Decision = new SyncPlanDecision("item-1", SyncDiffKind.LocalChanged, DecisionKind),
+        TrackedItem = CreateTrackedItem("item-1", "remote-1", "File1.txt"),
+        BaseSnapshot = new BaseSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            ExistsFlag = true,
+            ItemType = "File",
+            Name = "File1.txt",
+            LocalRelativePath = "File1.txt",
+            RemoteParentId = "remote-root",
+            Size = 42,
+            ContentHash = "hash-base",
+            ProviderVersion = 1,
+            Trashed = false,
+            CommittedTime = new DateTime(2026, 7, 11, 8, 35, 0, DateTimeKind.Utc),
+        },
+        LocalObservation = new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            ExistsFlag = true,
+            RelativePath = "File1.txt",
+            Name = "File1.txt",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-local",
+            ObservedTime = new DateTime(2026, 7, 11, 8, 35, 0, DateTimeKind.Utc),
+        },
+        RemoteObservation = new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            RemoteItemId = "remote-1",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "File1.txt",
+            RemoteParentId = "remote-root",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-remote",
+            ProviderVersion = 2,
+            Trashed = false,
+            ObservedTime = new DateTime(2026, 7, 11, 8, 35, 0, DateTimeKind.Utc),
+        },
+    };
 
     // ● public
 
@@ -1043,5 +1087,59 @@ public class MetadataSyncSessionTests
         Assert.Empty(Executor.Requests);
         Assert.Empty(Result.ExecutionApplyResult.CommittedResults);
         Assert.Null(Store.GetTrackedItemByLocalKey("root-1", "Local.txt"));
+    }
+    /// <summary>
+    /// Verifies the intent validating fake executor does not execute invalid requests.
+    /// </summary>
+    [Fact]
+    public async Task IntentValidatingFakeExecutorRejectsInvalidRequests()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 8, 35, 0, DateTimeKind.Utc);
+        SyncExecutionRequest Request = CreateExecutionRequest(SyncPlanDecisionKind.PropagateLocalDelete);
+        Request.TrackedItem.RemoteItemId = string.Empty;
+        Request.RemoteObservation.RemoteItemId = string.Empty;
+        FakeSyncExecutor Executor = new(_ => throw new InvalidOperationException("Invalid requests must not execute."));
+
+        SyncExecutionApplyResult Result = await Session.ExecutePendingRequestsAsync(
+            [Request],
+            Executor,
+            Time,
+            CancellationToken.None);
+
+        Assert.Empty(Executor.Intents);
+        Assert.Empty(Executor.Requests);
+        Assert.Empty(Result.CommittedResults);
+        Assert.Single(Result.UncommittedResults);
+        Assert.Equal(SyncExecutionResultKind.FailedPermanent, Result.UncommittedResults[0].ResultKind);
+        Assert.Contains("Remote item id is required.", Result.UncommittedResults[0].Message);
+    }
+    /// <summary>
+    /// Verifies the intent validating fake executor returns conflict results without normal execution.
+    /// </summary>
+    [Fact]
+    public async Task IntentValidatingFakeExecutorReturnsConflictResults()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 8, 40, 0, DateTimeKind.Utc);
+        SyncExecutionRequest Request = CreateExecutionRequest(SyncPlanDecisionKind.Conflict);
+        FakeSyncExecutor Executor = new(_ => throw new InvalidOperationException("Conflict requests must not execute."));
+
+        SyncExecutionApplyResult Result = await Session.ExecutePendingRequestsAsync(
+            [Request],
+            Executor,
+            Time,
+            CancellationToken.None);
+
+        Assert.Empty(Executor.Intents);
+        Assert.Empty(Executor.Requests);
+        Assert.Empty(Result.CommittedResults);
+        Assert.Single(Result.UncommittedResults);
+        Assert.Equal(SyncExecutionResultKind.Conflict, Result.UncommittedResults[0].ResultKind);
+        Assert.Contains("Conflict resolution is required.", Result.UncommittedResults[0].Message);
     }
 }
