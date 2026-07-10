@@ -26,6 +26,27 @@ public class MetadataSyncRunner : IMetadataSyncRunner
         StartPageToken = StartPageToken,
         UpdatedTime = UpdatedTime,
     };
+    async Task<Result<SyncRootRecord>> ResolveRemoteRootAsync(SyncRootRecord Root, CancellationToken CancellationToken)
+    {
+        if (!string.Equals(Root.RemoteRootItemId, "root", StringComparison.Ordinal))
+            return Result<SyncRootRecord>.Success(Root);
+
+        StorageResult<StorageItem> RootItemResult = await fStorageProvider.GetItemAsync(Root.RemoteRootItemId, CancellationToken);
+
+        if (RootItemResult.Failed)
+            return Result<SyncRootRecord>.Failure(RootItemResult.ErrorText);
+
+        if (RootItemResult.Value == null || string.IsNullOrWhiteSpace(RootItemResult.Value.Id))
+            return Result<SyncRootRecord>.Success(Root);
+
+        if (string.Equals(Root.RemoteRootItemId, RootItemResult.Value.Id, StringComparison.Ordinal))
+            return Result<SyncRootRecord>.Success(Root);
+
+        Root.RemoteRootItemId = RootItemResult.Value.Id;
+        fStore.UpdateSyncRoot(Root);
+
+        return Result<SyncRootRecord>.Success(Root);
+    }
     async Task<Result<List<StorageItem>>> ListRemoteTreeAsync(string RemoteRootItemId, CancellationToken CancellationToken)
     {
         List<StorageItem> Result = new();
@@ -160,6 +181,13 @@ public class MetadataSyncRunner : IMetadataSyncRunner
 
         if (!Root.IsEnabled)
             return Result<MetadataSyncRunResult>.Failure($"Sync root is disabled: {SyncRootId}");
+
+        Result<SyncRootRecord> ResolvedRootResult = await ResolveRemoteRootAsync(Root, CancellationToken);
+
+        if (ResolvedRootResult.Failed)
+            return Result<MetadataSyncRunResult>.Failure(ResolvedRootResult.ErrorText);
+
+        Root = ResolvedRootResult.Value;
 
         Result<IReadOnlyList<LocalScanItem>> LocalScanResult = await fLocalScanner.ScanAsync(Root.LocalRootPath, CancellationToken);
 

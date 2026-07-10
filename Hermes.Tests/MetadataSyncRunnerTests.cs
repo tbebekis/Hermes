@@ -280,6 +280,33 @@ public class MetadataSyncRunnerTests
         Assert.NotNull(Store.GetTrackedItemByRemoteId("root-1", "remote-folder"));
         Assert.NotNull(Store.GetTrackedItemByRemoteId("root-1", "remote-file"));
     }
+    /// <summary>
+    /// Verifies the runner canonicalizes the provider root alias before remote listing.
+    /// </summary>
+    [Fact]
+    public async Task RunOnceAsyncCanonicalizesRemoteRootAlias()
+    {
+        using TestDatabase Database = new();
+        using TempFolder Folder = new();
+        SqlMetadataStore Store = new(Database.Store);
+        SyncRootRecord Root = CreateSyncRoot(Folder.Path);
+        Root.RemoteRootItemId = "root";
+        Store.InsertSyncRoot(Root);
+        FakeStorageProvider Provider = new();
+        Provider.ItemsById["root"] = FolderItem("remote-root", string.Empty, "Root");
+        StorageItem RemoteFile = FileItem("remote-file", "remote-root", "File.txt");
+        Provider.FolderItems["remote-root"] = [RemoteFile];
+        Provider.ItemsById[RemoteFile.Id] = RemoteFile;
+        CompletingExecutor Executor = new();
+        MetadataSyncRunner Runner = CreateRunner(Store, Provider, Executor);
+
+        Result<MetadataSyncRunResult> Result = await Runner.RunOnceAsync("root-1", CancellationToken.None);
+
+        Assert.True(Result.Succeeded);
+        Assert.Equal(["remote-root"], Provider.ListedFolderIds);
+        Assert.Equal("remote-root", Store.GetSyncRoot("root-1").RemoteRootItemId);
+        Assert.NotNull(Store.GetTrackedItemByRemoteId("root-1", "remote-file"));
+    }
 
     /// <summary>
     /// Verifies incremental runs use the stored checkpoint and advance it from changes.
