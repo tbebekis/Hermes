@@ -17,6 +17,13 @@ public class ProgramTests
         "--Sync:RemoteRootFolderId=root",
         "--Sync:PollingIntervalSeconds=60",
     ];
+    static string[] InvalidArgs() =>
+    [
+        "--Sync:SyncRootId=",
+        "--Sync:LocalRootPath=",
+        "--Sync:RemoteRootFolderId=",
+        "--Sync:PollingIntervalSeconds=0",
+    ];
 
     // ● public
 
@@ -34,6 +41,21 @@ public class ProgramTests
         Assert.Equal("/tmp/hermes", Settings.LocalRootPath);
         Assert.Equal("root", Settings.RemoteRootFolderId);
         Assert.Equal(60, Settings.PollingIntervalSeconds);
+    }
+    /// <summary>
+    /// Verifies invalid synchronization settings fail when the host starts.
+    /// </summary>
+    [Fact]
+    public async Task CreateHostBuilderValidatesSyncSettingsOnStart()
+    {
+        using IHost Host = Program.CreateHostBuilder(InvalidArgs()).Build();
+
+        OptionsValidationException Ex = await Assert.ThrowsAsync<OptionsValidationException>(() => Host.StartAsync());
+
+        Assert.Contains("SyncRootId is required.", Ex.Failures);
+        Assert.Contains("LocalRootPath is required.", Ex.Failures);
+        Assert.Contains("RemoteRootFolderId is required.", Ex.Failures);
+        Assert.Contains("PollingIntervalSeconds must be greater than zero.", Ex.Failures);
     }
     /// <summary>
     /// Verifies the service host can start and stop with controlled synchronization dependencies.
