@@ -1045,7 +1045,7 @@ Initial persistence operations:
 
 Not included yet:
 
-- operation queue.
+- durable pending-operation storage.
 - retries.
 - conflict resolution UI.
 - planner.

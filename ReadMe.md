@@ -23,7 +23,7 @@ The solution is split into several projects with narrow responsibilities.
 
 ### Hermes.Core
 
-`Hermes.Core` is the sync engine layer. It owns the planned synchronization concepts such as sync planning, operations, operation queues, conflict resolution, local scanning, metadata access, sync settings, and the core sync service. It may depend on `Hermes.Common` and `Hermes.Storage`, but it must not reference `Hermes.GoogleDrive` or contain Google-specific code.
+`Hermes.Core` contains provider-neutral synchronization concepts such as sync planning, diff classification, conflict classification, local scanning, and sync settings. It may depend on `Hermes.Common` and `Hermes.Storage`, but it must not reference `Hermes.GoogleDrive` or contain Google-specific code.
 
 ### Hermes.GoogleDrive
 
@@ -31,11 +31,11 @@ The solution is split into several projects with narrow responsibilities.
 
 ### Hermes.Data
 
-`Hermes.Data` is the Tripous-based data and infrastructure layer for Hermes. It contains database schema registrations, registry module registrations, data modules, default database connection configuration, and database-backed logging support. It is also the likely home for application settings classes that should use Tripous settings infrastructure.
+`Hermes.Data` is the Tripous-based data and infrastructure layer for Hermes. It contains database schema registrations, registry module registrations, data modules, default database connection configuration, metadata storage, metadata synchronization sessions, and execution infrastructure.
 
 ### Hermes.Service
 
-`Hermes.Service` is the planned Linux background worker service. Its role is to host the sync engine, wire dependencies, run synchronization work, and later integrate with systemd. The service should remain thin and delegate sync behavior to `Hermes.Core`.
+`Hermes.Service` is the Linux background worker service. Its role is to host the metadata synchronization loop, wire dependencies, run synchronization work, and integrate with systemd. The service should remain thin and delegate synchronization behavior to `Hermes.Data` and provider-neutral models.
 
 ### Hermes.Desktop
 
@@ -47,7 +47,7 @@ The solution is split into several projects with narrow responsibilities.
 
 ### Hermes.Tests
 
-`Hermes.Tests` is the automated unit test project. It contains xUnit tests for shared primitives, storage models, sync-operation creation, and small core behaviors. It is separate from `TestApp`, which is for interactive/manual testing.
+`Hermes.Tests` is the automated unit test project. It contains xUnit tests for shared primitives, storage models, metadata storage, planning, execution, provider mapping, and service composition. It is separate from `TestApp`, which is for interactive/manual testing.
 
 ### Docs
 
@@ -56,8 +56,8 @@ The solution is split into several projects with narrow responsibilities.
 The main dependency direction should remain:
 
 ```text
-Hermes.Service -> Hermes.Core -> Hermes.Storage -> Hermes.Common
-Hermes.GoogleDrive -> Hermes.Storage -> Hermes.Common
+Hermes.Service -> Hermes.Data -> Hermes.Core -> Hermes.Storage -> Hermes.Common
+Hermes.GoogleDrive -> Hermes.Data and Hermes.Storage
 Hermes.Data -> Tripous infrastructure
 Hermes.Desktop -> UI and app-host infrastructure
 TestApp -> development/testing surface
