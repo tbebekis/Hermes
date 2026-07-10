@@ -1327,6 +1327,50 @@ public class MetadataSyncSessionTests
         Assert.False(Store.GetBaseSnapshot("item-1").ExistsFlag);
     }
     /// <summary>
+    /// Verifies permanent remote delete tombstones store local missing state before base commit.
+    /// </summary>
+    [Fact]
+    public void ApplyExecutionResultsStoresRemotePermanentDeleteLocalMissingBeforeBaseCommit()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 8, 4, 18, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "RemoteOnly.txt"));
+        AddBaseSnapshot(Store, "item-1", "RemoteOnly.txt", "hash-base", Time);
+        AddObservedItem(Store, "item-1", "remote-1", "RemoteOnly.txt", "hash-base", Time);
+        MetadataSyncSessionResult SessionResult = Session.AdvanceWithRemoteChanges(
+            "root-1",
+            [CreateLocalScanItem("RemoteOnly.txt", "hash-base", Time)],
+            [new StorageChange("remote-1", true, new DateTimeOffset(Time), null)],
+            CreateCheckpoint("token-permanent-delete", Time),
+            Time,
+            Time,
+            Time,
+            "scan-permanent-delete");
+
+        SyncExecutionApplyResult Result = Session.ApplyExecutionResults(
+            [
+                new SyncExecutionResult()
+                {
+                    Request = SessionResult.PendingExecutionRequests[0],
+                    ResultKind = SyncExecutionResultKind.CompletedAndVerified,
+                },
+            ],
+            Time);
+
+        Assert.Single(Result.CommittedResults);
+        Assert.Empty(Result.UncommittedResults);
+        Assert.Single(Result.CommittedBaseSnapshots);
+        Assert.Equal(SyncPlanDecisionKind.PropagateRemoteDelete, SessionResult.PendingExecutionRequests[0].Decision.DecisionKind);
+        Assert.False(Store.GetRemoteObservation("item-1").ExistsFlag);
+        Assert.True(Store.GetRemoteObservation("item-1").Removed);
+        Assert.False(Store.GetLocalObservation("item-1").ExistsFlag);
+        Assert.False(Store.GetBaseSnapshot("item-1").ExistsFlag);
+    }
+    /// <summary>
     /// Verifies remote folder namespace changes update descendant local metadata before base commit.
     /// </summary>
     [Fact]
