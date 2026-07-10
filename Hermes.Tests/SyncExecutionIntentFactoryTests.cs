@@ -181,10 +181,10 @@ public class SyncExecutionIntentFactoryTests
         Assert.Empty(Intent.ValidationMessages);
     }
     /// <summary>
-    /// Verifies local folder move decisions are blocked until subtree remote move is supported.
+    /// Verifies local folder move decisions create executable remote namespace intents.
     /// </summary>
     [Fact]
-    public void CreateBlocksLocalFolderMove()
+    public void CreateMapsLocalFolderMoveToExecutableIntent()
     {
         SyncExecutionRequest ExecutionRequest = Request(SyncPlanDecisionKind.ApplyLocalNamespaceToRemote);
         ExecutionRequest.Decision = new SyncPlanDecision("item-1", SyncDiffKind.LocalNamespaceChanged, SyncPlanDecisionKind.ApplyLocalNamespaceToRemote);
@@ -202,9 +202,39 @@ public class SyncExecutionIntentFactoryTests
 
         SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(ExecutionRequest);
 
+        Assert.Equal(SyncExecutionIntentKind.ApplyLocalNamespaceToRemote, Intent.IntentKind);
+        Assert.Equal("Folder", Intent.SourceName);
+        Assert.Equal("Folder", Intent.Name);
+        Assert.Equal("remote-root", Intent.SourceRemoteParentId);
+        Assert.Equal("remote-parent", Intent.RemoteParentId);
+        Assert.True(Intent.CanExecute);
+        Assert.Empty(Intent.ValidationMessages);
+    }
+    /// <summary>
+    /// Verifies combined local folder rename and move decisions are blocked.
+    /// </summary>
+    [Fact]
+    public void CreateBlocksCombinedLocalFolderRenameAndMove()
+    {
+        SyncExecutionRequest ExecutionRequest = Request(SyncPlanDecisionKind.ApplyLocalNamespaceToRemote);
+        ExecutionRequest.Decision = new SyncPlanDecision("item-1", SyncDiffKind.LocalNamespaceChanged, SyncPlanDecisionKind.ApplyLocalNamespaceToRemote);
+        ExecutionRequest.TrackedItem.ItemType = "Folder";
+        ExecutionRequest.BaseSnapshot.ItemType = "Folder";
+        ExecutionRequest.BaseSnapshot.Name = "Folder";
+        ExecutionRequest.BaseSnapshot.LocalRelativePath = "Folder";
+        ExecutionRequest.LocalObservation.ItemType = "Folder";
+        ExecutionRequest.LocalObservation.Name = "RenamedFolder";
+        ExecutionRequest.LocalObservation.RelativePath = "Parent/RenamedFolder";
+        ExecutionRequest.LocalObservation.ParentRelativePath = "Parent";
+        ExecutionRequest.LocalParentRemoteItemId = "remote-parent";
+        ExecutionRequest.RemoteObservation.ItemType = "Folder";
+        ExecutionRequest.RemoteObservation.Name = "Folder";
+
+        SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(ExecutionRequest);
+
         Assert.Equal(SyncExecutionIntentKind.Blocked, Intent.IntentKind);
         Assert.False(Intent.CanExecute);
-        Assert.Contains("Local folder move propagation is not supported yet.", Intent.ValidationMessages);
+        Assert.Contains("Combined local folder rename and move propagation is not supported yet.", Intent.ValidationMessages);
     }
     /// <summary>
     /// Verifies local move decisions create executable remote namespace intents.

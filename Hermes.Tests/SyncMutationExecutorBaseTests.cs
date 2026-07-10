@@ -479,6 +479,15 @@ public class SyncMutationExecutorBaseTests
         Result.LocalObservation.RelativePath = "RenamedFolder";
         return Result;
     }
+    static SyncExecutionRequest LocalFolderMoveRequest()
+    {
+        SyncExecutionRequest Result = FolderRequest(SyncPlanDecisionKind.ApplyLocalNamespaceToRemote);
+        Result.Decision = new SyncPlanDecision("folder-1", SyncDiffKind.LocalNamespaceChanged, SyncPlanDecisionKind.ApplyLocalNamespaceToRemote);
+        Result.LocalObservation.RelativePath = "Parent/Folder";
+        Result.LocalObservation.ParentRelativePath = "Parent";
+        Result.LocalParentRemoteItemId = "remote-parent";
+        return Result;
+    }
     static SyncExecutionRequest NewFileUploadRequest() => new()
     {
         Decision = Decision(SyncPlanDecisionKind.UploadToRemote),
@@ -708,6 +717,27 @@ public class SyncMutationExecutorBaseTests
         Assert.Equal("remote-folder-1", Assert.Single(RemoteEndpoint.RenamedItemIds));
         Assert.Equal("RenamedFolder", Assert.Single(RemoteEndpoint.RenamedNames));
         Assert.Empty(RemoteEndpoint.MovedItemIds);
+    }
+
+    /// <summary>
+    /// Verifies local folder move intents move remote folders.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsyncAppliesLocalFolderMoveToRemoteItem()
+    {
+        TestRemoteEndpoint RemoteEndpoint = new();
+        SyncMutationExecutorBase Executor = new(new TestLocalEndpoint(), RemoteEndpoint);
+
+        IReadOnlyList<SyncExecutionResult> Results = await Executor.ExecuteAsync(
+            [LocalFolderMoveRequest()],
+            CancellationToken.None);
+
+        Assert.Single(Results);
+        Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Results[0].ResultKind);
+        Assert.Empty(RemoteEndpoint.RenamedItemIds);
+        Assert.Equal("remote-folder-1", Assert.Single(RemoteEndpoint.MovedItemIds));
+        Assert.Equal("remote-root", Assert.Single(RemoteEndpoint.MovedOldParentIds));
+        Assert.Equal("remote-parent", Assert.Single(RemoteEndpoint.MovedNewParentIds));
     }
 
     /// <summary>
