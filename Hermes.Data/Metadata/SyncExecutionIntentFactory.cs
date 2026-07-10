@@ -96,6 +96,9 @@ static public class SyncExecutionIntentFactory
         if (HasText(Request.BaseSnapshot?.RemoteParentId))
             return Request.BaseSnapshot.RemoteParentId;
 
+        if (HasText(Request.LocalParentRemoteItemId))
+            return Request.LocalParentRemoteItemId;
+
         if (HasText(Request.SyncRoot?.RemoteRootItemId))
             return Request.SyncRoot.RemoteRootItemId;
 

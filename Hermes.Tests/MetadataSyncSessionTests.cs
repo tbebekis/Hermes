@@ -910,6 +910,43 @@ public class MetadataSyncSessionTests
         Assert.True(Intent.CanExecute);
     }
     /// <summary>
+    /// Verifies nested local upload requests resolve their remote parent id from local parent metadata.
+    /// </summary>
+    [Fact]
+    public void AdvanceMetadataOnlyAddsLocalParentRemoteIdToNestedUploadRequests()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 8, 4, 45, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("folder-item", "remote-folder", "Folder"));
+        Store.InsertTrackedItem(CreateTrackedItem("file-item", null, "Folder/Nested.txt"));
+        AddObservedItem(Store, "folder-item", "remote-folder", "Folder", string.Empty, Time);
+        AddBaseSnapshot(Store, "folder-item", "Folder", string.Empty, Time);
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "file-item",
+            ExistsFlag = true,
+            RelativePath = "Folder/Nested.txt",
+            Name = "Nested.txt",
+            ParentRelativePath = "Folder",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-local",
+            ObservedTime = Time,
+        });
+
+        MetadataSyncSessionResult Result = Session.AdvanceMetadataOnly("root-1", Time);
+        SyncExecutionRequest Request = Result.PendingExecutionRequests.Single(Item => Item.Decision.TrackedItemId == "file-item");
+        SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(Request);
+
+        Assert.Equal("remote-folder", Request.LocalParentRemoteItemId);
+        Assert.Equal("remote-folder", Intent.RemoteParentId);
+        Assert.True(Intent.CanExecute);
+    }
+    /// <summary>
     /// Verifies failed execution results do not commit base snapshots.
     /// </summary>
     [Fact]

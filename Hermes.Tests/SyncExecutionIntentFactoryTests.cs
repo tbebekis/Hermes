@@ -152,6 +152,25 @@ public class SyncExecutionIntentFactoryTests
         Assert.Empty(Intent.ValidationMessages);
     }
     /// <summary>
+    /// Verifies nested local uploads can resolve the remote parent from the local parent item.
+    /// </summary>
+    [Fact]
+    public void CreateResolvesNestedUploadParentFromLocalParentRemoteId()
+    {
+        SyncExecutionRequest ExecutionRequest = Request(SyncPlanDecisionKind.UploadToRemote);
+        ExecutionRequest.TrackedItem.RemoteItemId = string.Empty;
+        ExecutionRequest.BaseSnapshot.RemoteParentId = string.Empty;
+        ExecutionRequest.RemoteObservation = null;
+        ExecutionRequest.LocalParentRemoteItemId = "remote-folder";
+
+        SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(ExecutionRequest);
+
+        Assert.Equal(SyncExecutionIntentKind.UploadToRemote, Intent.IntentKind);
+        Assert.Equal("remote-folder", Intent.RemoteParentId);
+        Assert.True(Intent.CanExecute);
+        Assert.Empty(Intent.ValidationMessages);
+    }
+    /// <summary>
     /// Verifies local delete propagation requires a remote item id.
     /// </summary>
     [Fact]

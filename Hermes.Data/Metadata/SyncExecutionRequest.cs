@@ -44,4 +44,9 @@ public class SyncExecutionRequest
     /// Gets or sets the resolved local relative path of the remote parent item.
     /// </summary>
     public string RemoteParentLocalRelativePath { get; set; }
+
+    /// <summary>
+    /// Gets or sets the resolved remote item id of the local parent item.
+    /// </summary>
+    public string LocalParentRemoteItemId { get; set; }
 }
