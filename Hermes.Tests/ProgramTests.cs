@@ -1,0 +1,38 @@
+// Copyright (c) 2026 Theodoros Bebekis
+// Licensed under the MIT License.
+
+namespace Hermes.Tests;
+
+/// <summary>
+/// Tests the service application entry point composition.
+/// </summary>
+public class ProgramTests
+{
+    // ● private
+
+    static string[] Args() =>
+    [
+        "--Sync:SyncRootId=default",
+        "--Sync:LocalRootPath=/tmp/hermes",
+        "--Sync:RemoteRootFolderId=root",
+        "--Sync:PollingIntervalSeconds=60",
+    ];
+
+    // ● public
+
+    /// <summary>
+    /// Verifies the service host builder can bind synchronization settings.
+    /// </summary>
+    [Fact]
+    public void CreateHostBuilderBuildsConfiguredHost()
+    {
+        using IHost Host = Program.CreateHostBuilder(Args()).Build();
+
+        SyncSettings Settings = Host.Services.GetRequiredService<IOptions<SyncSettings>>().Value;
+
+        Assert.Equal("default", Settings.SyncRootId);
+        Assert.Equal("/tmp/hermes", Settings.LocalRootPath);
+        Assert.Equal("root", Settings.RemoteRootFolderId);
+        Assert.Equal(60, Settings.PollingIntervalSeconds);
+    }
+}

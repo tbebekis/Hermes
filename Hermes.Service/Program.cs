@@ -15,14 +15,21 @@ static public class Program
     /// </summary>
     static public async Task Main(string[] Args)
     {
-        IHost Host = Microsoft.Extensions.Hosting.Host.CreateDefaultBuilder(Args)
+        IHost Host = CreateHostBuilder(Args).Build();
+
+        await Host.RunAsync();
+    }
+
+    /// <summary>
+    /// Creates the Hermes service host builder.
+    /// </summary>
+    static public IHostBuilder CreateHostBuilder(string[] Args)
+    {
+        return Microsoft.Extensions.Hosting.Host.CreateDefaultBuilder(Args)
             .UseSystemd()
             .ConfigureServices((Context, Services) =>
             {
                 Services.AddHermesServiceServices(Context.Configuration);
-            })
-            .Build();
-
-        await Host.RunAsync();
+            });
     }
 }
