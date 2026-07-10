@@ -10,49 +10,6 @@ public class ProgramTests
 {
     // ● private
 
-    /// <summary>
-    /// Metadata sync runner that signals when it is called.
-    /// </summary>
-    sealed class SignalingRunner : IMetadataSyncRunner
-    {
-        // ● fields
-
-        readonly TaskCompletionSource<int> fCalled = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        // ● public
-
-        /// <inheritdoc/>
-        public Task<Result<MetadataSyncRunResult>> RunOnceAsync(string SyncRootId, CancellationToken CancellationToken)
-        {
-            Calls++;
-            fCalled.TrySetResult(Calls);
-
-            MetadataSyncRunResult RunResult = new()
-            {
-                Kind = MetadataSyncRunKind.Incremental,
-                SessionResult = new MetadataSyncSessionResult(),
-            };
-
-            return Task.FromResult(Result<MetadataSyncRunResult>.Success(RunResult));
-        }
-        /// <summary>
-        /// Waits until the runner is called.
-        /// </summary>
-        public async Task WaitUntilCalledAsync()
-        {
-            Task Completed = await Task.WhenAny(fCalled.Task, Task.Delay(TimeSpan.FromSeconds(3)));
-
-            Assert.Same(fCalled.Task, Completed);
-        }
-
-        // ● properties
-
-        /// <summary>
-        /// Gets the runner call count.
-        /// </summary>
-        public int Calls { get; private set; }
-    }
-
     static string[] Args() =>
     [
         "--Sync:SyncRootId=default",
@@ -60,16 +17,6 @@ public class ProgramTests
         "--Sync:RemoteRootFolderId=root",
         "--Sync:PollingIntervalSeconds=60",
     ];
-    static SyncRootRecord SyncRoot() => new()
-    {
-        Id = "default",
-        ProviderName = "Fake",
-        ConnectionId = "account-1",
-        LocalRootPath = "/tmp/hermes",
-        RemoteRootItemId = "root",
-        IsEnabled = true,
-        CreatedTime = new DateTime(2026, 7, 10, 10, 0, 0),
-    };
 
     // ● public
 
@@ -94,12 +41,12 @@ public class ProgramTests
     [Fact]
     public async Task CreateHostBuilderStartsAndStopsHostedWorker()
     {
-        SignalingRunner Runner = new();
+        SignalingMetadataSyncRunner Runner = new();
         using IHost Host = Program.CreateHostBuilder(Args())
             .ConfigureServices((Context, Services) =>
             {
                 Services.AddSingleton<IMetadataSyncRunner>(Runner);
-                Services.AddSingleton(SyncRoot());
+                Services.AddSingleton(MetadataSyncTestHost.CreateSyncRoot());
             })
             .Build();
 
