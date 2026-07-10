@@ -2679,6 +2679,54 @@ public class MetadataSyncSessionTests
         Assert.Contains("Remote item id is required.", Result.UncommittedResults[0].Message);
     }
     /// <summary>
+    /// Verifies local delete propagation commits the base snapshot as missing after remote trash succeeds.
+    /// </summary>
+    [Fact]
+    public void ApplyExecutionResultsCommitsLocalDeletePropagationAsMissing()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 8, 38, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        AddObservedItem(Store, "item-1", "remote-1", "File1.txt", "hash-base", Time);
+        AddBaseSnapshot(Store, "item-1", "File1.txt", "hash-base", Time);
+        Store.UpsertLocalObservation(LocalObservationMapper.Missing("item-1", Time, "scan-delete"));
+        SyncExecutionRequest Request = Session.AdvanceMetadataOnly("root-1", Time).PendingExecutionRequests.Single();
+
+        SyncExecutionApplyResult Result = Session.ApplyExecutionResults(
+            [
+                new SyncExecutionResult()
+                {
+                    Request = Request,
+                    ResultKind = SyncExecutionResultKind.CompletedAndVerified,
+                    RemoteItem = new StorageItem(
+                        "remote-1",
+                        "remote-root",
+                        "File1.txt",
+                        "/File1.txt",
+                        StorageItemKind.File,
+                        "text/plain",
+                        42,
+                        "hash-base",
+                        default,
+                        default,
+                        2,
+                        true),
+                },
+            ],
+            Time);
+
+        Assert.Single(Result.CommittedResults);
+        Assert.Single(Result.CommittedBaseSnapshots);
+        Assert.False(Store.GetBaseSnapshot("item-1").ExistsFlag);
+        Assert.False(Store.GetLocalObservation("item-1").ExistsFlag);
+        Assert.True(Store.GetRemoteObservation("item-1").Trashed);
+        Assert.Equal(SyncDiffKind.NoChange, Session.ClassifySyncRoot("root-1").Single().DiffKind);
+    }
+    /// <summary>
     /// Verifies the intent validating fake executor returns conflict results without normal execution.
     /// </summary>
     [Fact]
