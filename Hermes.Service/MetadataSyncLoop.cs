@@ -10,7 +10,7 @@ public class MetadataSyncLoop
 {
     // ● fields
 
-    readonly MetadataSyncRunner fRunner;
+    readonly IMetadataSyncRunner fRunner;
     readonly SyncRootRecord fSyncRoot;
     readonly SyncSettings fSettings;
     readonly ILogger<MetadataSyncLoop> fLogger;
@@ -60,7 +60,7 @@ public class MetadataSyncLoop
     /// Initializes a new instance of the <see cref="MetadataSyncLoop"/> class.
     /// </summary>
     public MetadataSyncLoop(
-        MetadataSyncRunner Runner,
+        IMetadataSyncRunner Runner,
         SyncRootRecord SyncRoot,
         IOptions<SyncSettings> Settings,
         ILogger<MetadataSyncLoop> Logger)

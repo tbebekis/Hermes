@@ -45,6 +45,7 @@ static public class Program
                 });
                 Services.AddSingleton<MetadataSyncSession>();
                 Services.AddSingleton<MetadataSyncRunner>();
+                Services.AddSingleton<IMetadataSyncRunner>(Provider => Provider.GetRequiredService<MetadataSyncRunner>());
                 Services.AddSingleton<MetadataSyncLoop>();
                 Services.AddSingleton<SyncPlanner>();
                 Services.AddSingleton<LocalScanner>();

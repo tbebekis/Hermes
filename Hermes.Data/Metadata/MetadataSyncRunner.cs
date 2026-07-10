@@ -6,7 +6,7 @@ namespace Hermes.Data;
 /// <summary>
 /// Runs one metadata synchronization pass for a sync root.
 /// </summary>
-public class MetadataSyncRunner
+public class MetadataSyncRunner : IMetadataSyncRunner
 {
     // ● fields
 
