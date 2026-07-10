@@ -2878,6 +2878,76 @@ public class MetadataSyncSessionTests
         Assert.All(Session.ClassifySyncRoot("root-1"), Item => Assert.Equal(SyncDiffKind.NoChange, Item.DiffKind));
     }
     /// <summary>
+    /// Verifies a remote restore of a committed missing item creates a download and recommits the base as active.
+    /// </summary>
+    [Fact]
+    public void RemoteRestoreOfCommittedMissingItemDownloadsAndCommitsActiveBase()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 8, 41, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        Store.UpsertLocalObservation(LocalObservationMapper.Missing("item-1", Time, "scan-missing"));
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            RemoteItemId = "remote-1",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "File1.txt",
+            RemoteParentId = "remote-root",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-base",
+            ProviderVersion = 1,
+            Trashed = true,
+            ObservedTime = Time,
+        });
+        Store.UpsertBaseSnapshot(new BaseSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            ExistsFlag = false,
+            CommittedTime = Time,
+        });
+        RemoteChangeImportResult ImportResult = Session.ImportRemoteChanges(
+            "root-1",
+            [
+                new StorageChange(
+                    "remote-1",
+                    false,
+                    new DateTimeOffset(Time),
+                    CreateStorageItem("remote-1", "File1.txt", "hash-base", 2)),
+            ],
+            CreateCheckpoint("token-restore", Time),
+            Time);
+
+        MetadataSyncSessionResult SessionResult = Session.AdvanceMetadataOnly("root-1", Time);
+        SyncExecutionRequest Request = SessionResult.PendingExecutionRequests.Single();
+        SyncExecutionApplyResult Result = Session.ApplyExecutionResults(
+            [
+                new SyncExecutionResult()
+                {
+                    Request = Request,
+                    ResultKind = SyncExecutionResultKind.CompletedAndVerified,
+                    RemoteItem = CreateStorageItem("remote-1", "File1.txt", "hash-base", 2),
+                    LocalRelativePath = "File1.txt",
+                },
+            ],
+            Time);
+
+        Assert.Single(ImportResult.Observations);
+        Assert.Equal(SyncPlanDecisionKind.DownloadToLocal, Request.Decision.DecisionKind);
+        Assert.Single(Result.CommittedResults);
+        Assert.True(Store.GetBaseSnapshot("item-1").ExistsFlag);
+        Assert.True(Store.GetLocalObservation("item-1").ExistsFlag);
+        Assert.False(Store.GetRemoteObservation("item-1").Trashed);
+        Assert.Equal("File1.txt", Store.GetBaseSnapshot("item-1").LocalRelativePath);
+        Assert.Equal(SyncDiffKind.NoChange, Session.ClassifySyncRoot("root-1").Single().DiffKind);
+    }
+    /// <summary>
     /// Verifies the intent validating fake executor returns conflict results without normal execution.
     /// </summary>
     [Fact]
