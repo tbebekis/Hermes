@@ -191,6 +191,20 @@ public class SyncDiffClassifierTests
         Assert.Equal(SyncDiffKind.NoChange, Kind);
     }
     /// <summary>
+    /// Verifies a remote item restored after a committed delete is treated as a remote change.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsRemoteChangedWhenCommittedMissingItemIsRestoredRemotely()
+    {
+        SyncItemState BaseState = State(Exists: false);
+        SyncItemState LocalState = State(Exists: false);
+        SyncItemState RemoteState = State();
+
+        SyncDiffKind Kind = Classify(BaseState, LocalState, RemoteState);
+
+        Assert.Equal(SyncDiffKind.RemoteChanged, Kind);
+    }
+    /// <summary>
     /// Verifies remote permanent removal classification.
     /// </summary>
     [Fact]

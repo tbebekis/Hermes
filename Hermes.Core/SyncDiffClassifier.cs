@@ -20,6 +20,15 @@ public class SyncDiffClassifier
             && RemoteState != null
             && (!RemoteState.Exists || RemoteState.Removed || RemoteState.Trashed);
     }
+    static bool IsRemoteRestore(SyncItemState BaseState, SyncItemState LocalState, SyncItemState RemoteState)
+    {
+        return IsCommittedMissing(BaseState)
+            && IsMissing(LocalState)
+            && RemoteState != null
+            && RemoteState.Exists
+            && !RemoteState.Removed
+            && !RemoteState.Trashed;
+    }
     static bool SameState(SyncItemState A, SyncItemState B)
     {
         if (A == null || B == null)
@@ -78,6 +87,9 @@ public class SyncDiffClassifier
 
         if (IsReconciledRemoteRemoval(Input.BaseState, LocalState, RemoteState))
             return SyncDiffKind.NoChange;
+
+        if (IsRemoteRestore(Input.BaseState, LocalState, RemoteState))
+            return SyncDiffKind.RemoteChanged;
 
         if (RemoteState != null && RemoteState.Removed)
             return SyncDiffKind.RemoteRemoved;
