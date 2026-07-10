@@ -49,6 +49,57 @@ public class MetadataSyncLoopTests
         public int Calls { get; private set; }
     }
 
+    /// <summary>
+    /// Captures log messages for assertions.
+    /// </summary>
+    sealed class TestLogger : ILogger<MetadataSyncLoop>
+    {
+        // ● private
+
+        /// <summary>
+        /// Empty logging scope.
+        /// </summary>
+        sealed class EmptyScope : IDisposable
+        {
+            // ● fields
+
+            static readonly EmptyScope fInstance = new();
+
+            // ● public
+
+            /// <inheritdoc/>
+            public void Dispose()
+            {
+            }
+
+            // ● properties
+
+            /// <summary>
+            /// Gets the empty scope instance.
+            /// </summary>
+            static public EmptyScope Instance => fInstance;
+        }
+
+        // ● public
+
+        /// <inheritdoc/>
+        public IDisposable BeginScope<TState>(TState State) => EmptyScope.Instance;
+        /// <inheritdoc/>
+        public bool IsEnabled(LogLevel LogLevel) => true;
+        /// <inheritdoc/>
+        public void Log<TState>(LogLevel LogLevel, EventId EventId, TState State, Exception Exception, Func<TState, Exception, string> Formatter)
+        {
+            Entries.Add(Formatter(State, Exception));
+        }
+
+        // ● properties
+
+        /// <summary>
+        /// Gets captured log entries.
+        /// </summary>
+        public List<string> Entries { get; } = new();
+    }
+
     static SyncSettings Settings() => new()
     {
         SyncRootId = "default",
@@ -66,14 +117,23 @@ public class MetadataSyncLoopTests
         IsEnabled = true,
         CreatedTime = new DateTime(2026, 7, 10, 10, 0, 0),
     };
-    static MetadataSyncLoop Loop(IMetadataSyncRunner Runner)
+    static MetadataSyncLoop Loop(IMetadataSyncRunner Runner, ILogger<MetadataSyncLoop> Logger = null)
     {
         return new MetadataSyncLoop(
             Runner,
             SyncRoot(),
             Options.Create(Settings()),
-            NullLogger<MetadataSyncLoop>.Instance);
+            Logger ?? NullLogger<MetadataSyncLoop>.Instance);
     }
+    static MetadataSyncRunResult RunResult() => new()
+    {
+        Kind = MetadataSyncRunKind.Incremental,
+        LocalObservedItemCount = 2,
+        RemoteObservedItemCount = 0,
+        RemoteObservedChangeCount = 3,
+        SessionResult = new MetadataSyncSessionResult(),
+        ExecutionApplyResult = new SyncExecutionApplyResult(),
+    };
 
     // ● public
 
@@ -103,5 +163,20 @@ public class MetadataSyncLoopTests
         await Loop(Runner).RunAsync(Cancellation.Token);
 
         Assert.Equal(1, Runner.Calls);
+    }
+
+    /// <summary>
+    /// Verifies successful sync results are logged with the run summary.
+    /// </summary>
+    [Fact]
+    public async Task RunAsyncLogsSuccessfulRunSummary()
+    {
+        using CancellationTokenSource Cancellation = new();
+        FakeRunner Runner = new(Cancellation, () => Result<MetadataSyncRunResult>.Success(RunResult()));
+        TestLogger Logger = new();
+
+        await Loop(Runner, Logger).RunAsync(Cancellation.Token);
+
+        Assert.Contains(Logger.Entries, Item => Item.Contains("Kind: Incremental.") && Item.Contains("Local items: 2.") && Item.Contains("Remote changes: 3."));
     }
 }
