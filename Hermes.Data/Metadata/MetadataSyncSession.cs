@@ -432,7 +432,7 @@ public class MetadataSyncSession
         string ItemId = TrackedItemId(Result);
         TrackedItemRecord TrackedItem = Result.Request.TrackedItem ?? fStore.GetTrackedItem(ItemId);
 
-        if (TrackedItem != null && string.IsNullOrWhiteSpace(TrackedItem.LocalKey))
+        if (TrackedItem != null && !string.Equals(TrackedItem.LocalKey, Result.LocalRelativePath, StringComparison.Ordinal))
         {
             TrackedItem.LocalKey = Result.LocalRelativePath;
             fStore.UpdateTrackedItem(TrackedItem);

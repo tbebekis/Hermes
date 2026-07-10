@@ -29,4 +29,9 @@ public interface ILocalSyncMutationEndpoint
     /// Deletes a local file or directory.
     /// </summary>
     Task<Result> DeleteItemAsync(string LocalRelativePath, CancellationToken CancellationToken);
+
+    /// <summary>
+    /// Moves or renames a local file.
+    /// </summary>
+    Task<Result> MoveFileAsync(string SourceRelativePath, string TargetRelativePath, CancellationToken CancellationToken);
 }

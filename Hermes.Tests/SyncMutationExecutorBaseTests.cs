@@ -37,6 +37,20 @@ public class SyncMutationExecutorBaseTests
         {
             return Task.FromResult(Result.Success());
         }
+
+        /// <inheritdoc/>
+        public Task<Result> MoveFileAsync(string SourceRelativePath, string TargetRelativePath, CancellationToken CancellationToken)
+        {
+            MovedFiles.Add((SourceRelativePath, TargetRelativePath));
+            return Task.FromResult(Result.Success());
+        }
+
+        // ● properties
+
+        /// <summary>
+        /// Gets moved files.
+        /// </summary>
+        public List<(string SourceRelativePath, string TargetRelativePath)> MovedFiles { get; } = new();
     }
 
     /// <summary>
@@ -191,6 +205,13 @@ public class SyncMutationExecutorBaseTests
         }
 
         /// <inheritdoc/>
+        protected override Task<SyncExecutionResult> ExecuteApplyRemoteNamespaceToLocalAsync(SyncExecutionIntent Intent, CancellationToken CancellationToken)
+        {
+            ExecutedIntentKind = Intent.IntentKind;
+            return Task.FromResult(SyncExecutionResultFactory.Completed(Intent.Request, Intent.LocalRelativePath));
+        }
+
+        /// <inheritdoc/>
         protected override Task<SyncExecutionResult> ExecutePropagateLocalDeleteAsync(SyncExecutionIntent Intent, CancellationToken CancellationToken)
         {
             ExecutedIntentKind = Intent.IntentKind;
@@ -216,6 +237,15 @@ public class SyncMutationExecutorBaseTests
     }
 
     static SyncPlanDecision Decision(SyncPlanDecisionKind DecisionKind) => new("item-1", SyncDiffKind.LocalChanged, DecisionKind);
+    static SyncRootRecord SyncRoot() => new()
+    {
+        Id = "root-1",
+        ProviderName = "GoogleDrive",
+        LocalRootPath = "/local",
+        RemoteRootItemId = "remote-root",
+        IsEnabled = true,
+        CreatedTime = new DateTime(2026, 7, 11, 10, 20, 0, DateTimeKind.Utc),
+    };
     static TrackedItemRecord TrackedItem() => new()
     {
         Id = "item-1",
@@ -267,6 +297,7 @@ public class SyncMutationExecutorBaseTests
     static SyncExecutionRequest Request(SyncPlanDecisionKind DecisionKind) => new()
     {
         Decision = Decision(DecisionKind),
+        SyncRoot = SyncRoot(),
         TrackedItem = TrackedItem(),
         BaseSnapshot = BaseSnapshot(),
         LocalObservation = LocalObservation(),
@@ -430,6 +461,23 @@ public class SyncMutationExecutorBaseTests
         Assert.Single(Results);
         Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Results[0].ResultKind);
         Assert.Equal(SyncExecutionIntentKind.DownloadToLocal, Executor.ExecutedIntentKind);
+    }
+
+    /// <summary>
+    /// Verifies remote namespace intents are dispatched to local namespace execution.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsyncDispatchesRemoteNamespaceToLocal()
+    {
+        RecordingMutationExecutor Executor = new();
+
+        IReadOnlyList<SyncExecutionResult> Results = await Executor.ExecuteAsync(
+            [Request(SyncPlanDecisionKind.ApplyRemoteNamespaceToLocal)],
+            CancellationToken.None);
+
+        Assert.Single(Results);
+        Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Results[0].ResultKind);
+        Assert.Equal(SyncExecutionIntentKind.ApplyRemoteNamespaceToLocal, Executor.ExecutedIntentKind);
     }
 
     /// <summary>

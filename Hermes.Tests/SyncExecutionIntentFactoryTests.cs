@@ -116,6 +116,23 @@ public class SyncExecutionIntentFactoryTests
         Assert.Empty(Intent.ValidationMessages);
     }
     /// <summary>
+    /// Verifies remote namespace decisions create executable local namespace intents.
+    /// </summary>
+    [Fact]
+    public void CreateMapsRemoteNamespaceToExecutableIntent()
+    {
+        SyncExecutionRequest ExecutionRequest = Request(SyncPlanDecisionKind.ApplyRemoteNamespaceToLocal);
+        ExecutionRequest.RemoteObservation.Name = "Renamed.txt";
+
+        SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(ExecutionRequest);
+
+        Assert.Equal(SyncExecutionIntentKind.ApplyRemoteNamespaceToLocal, Intent.IntentKind);
+        Assert.Equal("File.txt", Intent.SourceLocalRelativePath);
+        Assert.Equal("Renamed.txt", Intent.LocalRelativePath);
+        Assert.True(Intent.CanExecute);
+        Assert.Empty(Intent.ValidationMessages);
+    }
+    /// <summary>
     /// Verifies upload propagation requires a remote item id or remote parent id.
     /// </summary>
     [Fact]

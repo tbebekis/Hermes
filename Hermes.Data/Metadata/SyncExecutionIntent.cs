@@ -36,6 +36,11 @@ public class SyncExecutionIntent
     public string LocalRelativePath { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets the source local relative path for local namespace operations.
+    /// </summary>
+    public string SourceLocalRelativePath { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets the resolved item type.
     /// </summary>
     public string ItemType { get; set; } = string.Empty;

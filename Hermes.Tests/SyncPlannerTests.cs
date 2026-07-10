@@ -31,6 +31,7 @@ public class SyncPlannerTests
     [InlineData(SyncDiffKind.NoChange, SyncPlanDecisionKind.None)]
     [InlineData(SyncDiffKind.LocalChanged, SyncPlanDecisionKind.UploadToRemote)]
     [InlineData(SyncDiffKind.RemoteChanged, SyncPlanDecisionKind.DownloadToLocal)]
+    [InlineData(SyncDiffKind.RemoteNamespaceChanged, SyncPlanDecisionKind.ApplyRemoteNamespaceToLocal)]
     [InlineData(SyncDiffKind.BothChangedCompatible, SyncPlanDecisionKind.CommitBase)]
     [InlineData(SyncDiffKind.Conflict, SyncPlanDecisionKind.Conflict)]
     [InlineData(SyncDiffKind.LocalMissing, SyncPlanDecisionKind.PropagateLocalDelete)]

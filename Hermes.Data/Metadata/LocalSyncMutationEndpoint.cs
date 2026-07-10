@@ -107,4 +107,26 @@ public class LocalSyncMutationEndpoint : ILocalSyncMutationEndpoint
 
         return Task.FromResult(Result);
     }
+    /// <inheritdoc/>
+    public Task<Result> MoveFileAsync(string SourceRelativePath, string TargetRelativePath, CancellationToken CancellationToken)
+    {
+        CancellationToken.ThrowIfCancellationRequested();
+
+        Result Result = RunMutation(SourceRelativePath, SourcePath =>
+        {
+            string TargetPath = ResolvePath(TargetRelativePath);
+            string ParentPath = Path.GetDirectoryName(TargetPath);
+
+            if (!File.Exists(SourcePath))
+                throw new FileNotFoundException("Move source file was not found.", SourcePath);
+            if (File.Exists(TargetPath) || Directory.Exists(TargetPath))
+                throw new IOException("Move target already exists.");
+            if (!string.IsNullOrWhiteSpace(ParentPath))
+                Directory.CreateDirectory(ParentPath);
+
+            File.Move(SourcePath, TargetPath);
+        });
+
+        return Task.FromResult(Result);
+    }
 }

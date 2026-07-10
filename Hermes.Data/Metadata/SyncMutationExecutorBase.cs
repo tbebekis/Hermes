@@ -91,6 +91,24 @@ public class SyncMutationExecutorBase : SyncExecutorBase
     }
 
     /// <summary>
+    /// Executes a remote namespace change against the local filesystem.
+    /// </summary>
+    protected virtual async Task<SyncExecutionResult> ExecuteApplyRemoteNamespaceToLocalAsync(SyncExecutionIntent Intent, CancellationToken CancellationToken)
+    {
+        Result Result = await LocalEndpoint.MoveFileAsync(Intent.SourceLocalRelativePath, Intent.LocalRelativePath, CancellationToken);
+
+        if (Result.Succeeded)
+            return SyncExecutionResultFactory.Completed(Intent.Request, Intent.LocalRelativePath);
+
+        return new SyncExecutionResult()
+        {
+            Request = Intent.Request,
+            ResultKind = SyncExecutionResultKind.FailedPermanent,
+            Message = Result.ErrorText,
+        };
+    }
+
+    /// <summary>
     /// Executes local delete propagation to remote storage.
     /// </summary>
     protected virtual async Task<SyncExecutionResult> ExecutePropagateLocalDeleteAsync(SyncExecutionIntent Intent, CancellationToken CancellationToken)
@@ -132,6 +150,7 @@ public class SyncMutationExecutorBase : SyncExecutorBase
         {
             SyncExecutionIntentKind.UploadToRemote => ExecuteUploadToRemoteAsync(Intent, CancellationToken),
             SyncExecutionIntentKind.DownloadToLocal => ExecuteDownloadToLocalAsync(Intent, CancellationToken),
+            SyncExecutionIntentKind.ApplyRemoteNamespaceToLocal => ExecuteApplyRemoteNamespaceToLocalAsync(Intent, CancellationToken),
             SyncExecutionIntentKind.PropagateLocalDelete => ExecutePropagateLocalDeleteAsync(Intent, CancellationToken),
             SyncExecutionIntentKind.PropagateRemoteDelete => ExecutePropagateRemoteDeleteAsync(Intent, CancellationToken),
             _ => Task.FromResult(SyncExecutionResultFactory.Blocked(Intent.Request, "Execution intent is not supported.")),

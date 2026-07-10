@@ -46,6 +46,28 @@ static public class SyncExecutionIntentFactory
 
         return string.Empty;
     }
+    static string RemoteProjectedLocalPath(SyncExecutionRequest Request)
+    {
+        if (HasText(Request.RemoteObservation?.Name)
+            && HasText(Request.RemoteObservation.RemoteParentId)
+            && string.Equals(Request.RemoteObservation.RemoteParentId, Request.SyncRoot?.RemoteRootItemId, StringComparison.Ordinal))
+            return Request.RemoteObservation.Name;
+
+        if (HasText(Request.RemoteObservation?.Name) && HasText(Request.RemoteParentLocalRelativePath))
+            return Request.RemoteParentLocalRelativePath + "/" + Request.RemoteObservation.Name;
+
+        return string.Empty;
+    }
+    static string SourceLocalPath(SyncExecutionRequest Request)
+    {
+        if (HasText(Request.LocalObservation?.RelativePath))
+            return Request.LocalObservation.RelativePath;
+
+        if (HasText(Request.BaseSnapshot?.LocalRelativePath))
+            return Request.BaseSnapshot.LocalRelativePath;
+
+        return string.Empty;
+    }
     static string TrackedItemId(SyncExecutionRequest Request)
     {
         if (HasText(Request.TrackedItem?.Id))
@@ -145,6 +167,7 @@ static public class SyncExecutionIntentFactory
         {
             SyncPlanDecisionKind.UploadToRemote => SyncExecutionIntentKind.UploadToRemote,
             SyncPlanDecisionKind.DownloadToLocal => SyncExecutionIntentKind.DownloadToLocal,
+            SyncPlanDecisionKind.ApplyRemoteNamespaceToLocal => SyncExecutionIntentKind.ApplyRemoteNamespaceToLocal,
             SyncPlanDecisionKind.PropagateLocalDelete => SyncExecutionIntentKind.PropagateLocalDelete,
             SyncPlanDecisionKind.PropagateRemoteDelete => SyncExecutionIntentKind.PropagateRemoteDelete,
             SyncPlanDecisionKind.Conflict => SyncExecutionIntentKind.ResolveConflict,
@@ -182,6 +205,13 @@ static public class SyncExecutionIntentFactory
                 Require(Exists(Request.RemoteObservation), Intent, "Existing remote observation is required.");
                 Require(HasText(LocalPath(Request)), Intent, "Local path is required.");
                 break;
+            case SyncExecutionIntentKind.ApplyRemoteNamespaceToLocal:
+                Require(Exists(Request.LocalObservation), Intent, "Existing local observation is required.");
+                Require(Exists(Request.RemoteObservation), Intent, "Existing remote observation is required.");
+                Require(!string.Equals(ItemType(Request), "Folder", StringComparison.OrdinalIgnoreCase), Intent, "Folder namespace updates are not supported yet.");
+                Require(HasText(Intent.SourceLocalRelativePath), Intent, "Source local path is required.");
+                Require(HasText(Intent.LocalRelativePath), Intent, "Target local path is required.");
+                break;
             case SyncExecutionIntentKind.PropagateLocalDelete:
                 Require(HasText(RemoteItemId(Request)), Intent, "Remote item id is required.");
                 break;
@@ -202,13 +232,16 @@ static public class SyncExecutionIntentFactory
         Guard.NotNull(Request.Decision, nameof(Request.Decision));
 
         SyncExecutionIntentKind ResolvedIntentKind = IntentKind(Request.Decision.DecisionKind);
-        string ResolvedLocalPath = LocalPath(Request);
+        string ResolvedLocalPath = ResolvedIntentKind == SyncExecutionIntentKind.ApplyRemoteNamespaceToLocal
+            ? RemoteProjectedLocalPath(Request)
+            : LocalPath(Request);
         SyncExecutionIntent Result = new()
         {
             Request = Request,
             IntentKind = ResolvedIntentKind,
             TrackedItemId = TrackedItemId(Request),
             RemoteItemId = RemoteItemId(Request),
+            SourceLocalRelativePath = SourceLocalPath(Request),
             LocalRelativePath = ResolvedLocalPath,
             ItemType = ItemType(Request),
             Name = Name(Request, ResolvedIntentKind),

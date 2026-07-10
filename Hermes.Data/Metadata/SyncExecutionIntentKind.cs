@@ -24,6 +24,11 @@ public enum SyncExecutionIntentKind
     DownloadToLocal,
 
     /// <summary>
+    /// Applies a remote namespace change to the local filesystem.
+    /// </summary>
+    ApplyRemoteNamespaceToLocal,
+
+    /// <summary>
     /// Propagates local deletion to remote storage.
     /// </summary>
     PropagateLocalDelete,

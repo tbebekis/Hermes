@@ -13,6 +13,33 @@ public class SyncDiffClassifier
     static bool IsMissing(SyncItemState State) => State == null || !State.Exists;
     static bool IsCommittedMissing(SyncItemState State) => State != null && !State.Exists;
     static bool SameText(string A, string B) => string.Equals(A ?? string.Empty, B ?? string.Empty, StringComparison.Ordinal);
+    static bool SameContent(SyncItemState A, SyncItemState B)
+    {
+        if (A == null || B == null)
+            return A == B;
+
+        return A.Exists == B.Exists
+            && A.Removed == B.Removed
+            && A.Trashed == B.Trashed
+            && SameText(A.ItemType, B.ItemType)
+            && SameText(A.ContentHash, B.ContentHash)
+            && A.Size == B.Size;
+    }
+    static bool SameRemoteNamespace(SyncItemState A, SyncItemState B)
+    {
+        if (A == null || B == null)
+            return A == B;
+
+        return SameText(A.Name, B.Name)
+            && SameText(A.RemoteParentId, B.RemoteParentId);
+    }
+    static bool SameLocalNamespace(SyncItemState A, SyncItemState B)
+    {
+        if (A == null || B == null)
+            return A == B;
+
+        return SameText(A.LocalRelativePath, B.LocalRelativePath);
+    }
     static bool IsReconciledRemoteRemoval(SyncItemState BaseState, SyncItemState LocalState, SyncItemState RemoteState)
     {
         return IsCommittedMissing(BaseState)
@@ -50,6 +77,16 @@ public class SyncDiffClassifier
             return ObservedState != null && ObservedState.Exists;
 
         return !SameState(BaseState, ObservedState);
+    }
+    static bool HasOnlyRemoteNamespaceChanged(SyncItemState BaseState, SyncItemState LocalState, SyncItemState RemoteState)
+    {
+        return BaseState != null
+            && !IsMissing(LocalState)
+            && !IsMissing(RemoteState)
+            && SameState(BaseState, LocalState)
+            && SameContent(BaseState, RemoteState)
+            && SameLocalNamespace(BaseState, RemoteState)
+            && !SameRemoteNamespace(BaseState, RemoteState);
     }
     static SyncDiffKind ClassifyWithoutBase(SyncItemState LocalState, SyncItemState RemoteState)
     {
@@ -99,6 +136,9 @@ public class SyncDiffClassifier
 
         if (Input.BaseState == null)
             return ClassifyWithoutBase(LocalState, RemoteState);
+
+        if (HasOnlyRemoteNamespaceChanged(Input.BaseState, LocalState, RemoteState))
+            return SyncDiffKind.RemoteNamespaceChanged;
 
         bool LocalMissing = IsMissing(LocalState);
         bool RemoteMissing = IsMissing(RemoteState);
