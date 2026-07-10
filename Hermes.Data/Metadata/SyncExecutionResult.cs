@@ -31,6 +31,11 @@ public class SyncExecutionResult
     public StorageItem RemoteItem { get; set; }
 
     /// <summary>
+    /// Gets or sets the local relative path affected by a successful mutation.
+    /// </summary>
+    public string LocalRelativePath { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets a diagnostic message for the execution result.
     /// </summary>
     public string Message { get; set; } = string.Empty;

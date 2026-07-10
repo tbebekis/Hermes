@@ -46,6 +46,20 @@ static public class SyncExecutionResultFactory
         };
     }
     /// <summary>
+    /// Creates a completed and verified execution result with the affected local relative path.
+    /// </summary>
+    static public SyncExecutionResult Completed(SyncExecutionRequest Request, string LocalRelativePath)
+    {
+        Guard.NotNull(Request, nameof(Request));
+
+        return new SyncExecutionResult()
+        {
+            Request = Request,
+            ResultKind = SyncExecutionResultKind.CompletedAndVerified,
+            LocalRelativePath = LocalRelativePath ?? string.Empty,
+        };
+    }
+    /// <summary>
     /// Creates a completed and verified execution result with the resulting remote item.
     /// </summary>
     static public SyncExecutionResult Completed(SyncExecutionRequest Request, StorageItem RemoteItem)
@@ -58,6 +72,22 @@ static public class SyncExecutionResultFactory
             Request = Request,
             ResultKind = SyncExecutionResultKind.CompletedAndVerified,
             RemoteItem = RemoteItem,
+        };
+    }
+    /// <summary>
+    /// Creates a completed and verified execution result with the resulting remote item and affected local relative path.
+    /// </summary>
+    static public SyncExecutionResult Completed(SyncExecutionRequest Request, StorageItem RemoteItem, string LocalRelativePath)
+    {
+        Guard.NotNull(Request, nameof(Request));
+        Guard.NotNull(RemoteItem, nameof(RemoteItem));
+
+        return new SyncExecutionResult()
+        {
+            Request = Request,
+            ResultKind = SyncExecutionResultKind.CompletedAndVerified,
+            RemoteItem = RemoteItem,
+            LocalRelativePath = LocalRelativePath ?? string.Empty,
         };
     }
 

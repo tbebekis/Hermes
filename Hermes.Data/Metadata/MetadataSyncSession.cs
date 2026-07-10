@@ -121,6 +121,69 @@ public class MetadataSyncSession
         if (string.IsNullOrWhiteSpace(Result.Message))
             Result.Message = "Base snapshot cannot be committed until local and remote observations are both available.";
     }
+    static string LocalName(string LocalRelativePath)
+    {
+        if (string.IsNullOrWhiteSpace(LocalRelativePath))
+            return string.Empty;
+
+        int Index = LocalRelativePath.LastIndexOf('/');
+        return Index < 0 ? LocalRelativePath : LocalRelativePath[(Index + 1)..];
+    }
+    static string LocalParentRelativePath(string LocalRelativePath)
+    {
+        if (string.IsNullOrWhiteSpace(LocalRelativePath))
+            return null;
+
+        int Index = LocalRelativePath.LastIndexOf('/');
+        return Index < 0 ? null : LocalRelativePath[..Index];
+    }
+    static string RemoteItemType(StorageItem Item)
+    {
+        if (Item == null)
+            return null;
+
+        return Item.Kind == StorageItemKind.Folder ? "Folder" : "File";
+    }
+    static string RemoteItemHash(StorageItem Item, RemoteObservedSnapshotRecord Observation)
+    {
+        if (Item != null && !Item.IsFolder)
+            return Item.Md5Hash;
+
+        return Observation?.ContentHash;
+    }
+    static long? RemoteItemSize(StorageItem Item, RemoteObservedSnapshotRecord Observation)
+    {
+        if (Item != null)
+            return Item.IsFolder ? null : Item.Size;
+
+        return Observation?.Size;
+    }
+    static DateTime? RemoteItemModifiedTime(StorageItem Item, RemoteObservedSnapshotRecord Observation)
+    {
+        if (Item != null && Item.ModifiedTime != default)
+            return Item.ModifiedTime.UtcDateTime;
+
+        return Observation?.ModifiedTime;
+    }
+    static LocalObservedSnapshotRecord CreateLocalObservationFromExecution(SyncExecutionResult Result, DateTime ObservedTime)
+    {
+        RemoteObservedSnapshotRecord RemoteObservation = Result.Request.RemoteObservation;
+
+        return new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = TrackedItemId(Result),
+            ExistsFlag = true,
+            RelativePath = Result.LocalRelativePath,
+            Name = LocalName(Result.LocalRelativePath),
+            ParentRelativePath = LocalParentRelativePath(Result.LocalRelativePath),
+            ItemType = RemoteItemType(Result.RemoteItem) ?? RemoteObservation?.ItemType,
+            Size = RemoteItemSize(Result.RemoteItem, RemoteObservation),
+            ModifiedTime = RemoteItemModifiedTime(Result.RemoteItem, RemoteObservation),
+            ContentHash = RemoteItemHash(Result.RemoteItem, RemoteObservation),
+            ObservedTime = ObservedTime,
+            ScanId = "execution",
+        };
+    }
     void ApplyRemoteItemObservation(SyncExecutionResult Result, DateTime ObservedTime)
     {
         if (Result.RemoteItem == null)
@@ -139,6 +202,15 @@ public class MetadataSyncSession
         RemoteObservedSnapshotRecord Observation = RemoteObservationMapper.FromStorageItem(Result.RemoteItem, ItemId, ObservedTime);
         fStore.UpsertRemoteObservation(Observation);
         Result.Request.RemoteObservation = Observation;
+    }
+    void ApplyLocalPathObservation(SyncExecutionResult Result, DateTime ObservedTime)
+    {
+        if (Result.Request.LocalObservation != null || string.IsNullOrWhiteSpace(Result.LocalRelativePath))
+            return;
+
+        LocalObservedSnapshotRecord Observation = CreateLocalObservationFromExecution(Result, ObservedTime);
+        fStore.UpsertLocalObservation(Observation);
+        Result.Request.LocalObservation = Observation;
     }
     static string TrackedItemId(SyncExecutionResult Result)
     {
@@ -344,7 +416,10 @@ public class MetadataSyncSession
             Guard.NotNull(ExecutionResult, nameof(Results));
 
             if (CanCommitExecutionResult(ExecutionResult))
+            {
                 ApplyRemoteItemObservation(ExecutionResult, CommittedTime);
+                ApplyLocalPathObservation(ExecutionResult, CommittedTime);
+            }
 
             if (CanCommitExecutionResult(ExecutionResult) && HasVerifiedCommitObservations(ExecutionResult))
             {

@@ -42,7 +42,7 @@ public class SyncMutationExecutorBase : SyncExecutorBase
         }
 
         if (Result.Succeeded)
-            return SyncExecutionResultFactory.Completed(Intent.Request, Result.Value);
+            return SyncExecutionResultFactory.Completed(Intent.Request, Result.Value, Intent.LocalRelativePath);
 
         return SyncExecutionResultFactory.FromStorageError(Intent.Request, Result.Error);
     }
@@ -57,7 +57,7 @@ public class SyncMutationExecutorBase : SyncExecutorBase
             Result DirectoryResult = await LocalEndpoint.CreateDirectoryAsync(Intent.LocalRelativePath, CancellationToken);
 
             if (DirectoryResult.Succeeded)
-                return SyncExecutionResultFactory.Completed(Intent.Request);
+                return SyncExecutionResultFactory.Completed(Intent.Request, Intent.LocalRelativePath);
 
             return new SyncExecutionResult()
             {
@@ -85,7 +85,7 @@ public class SyncMutationExecutorBase : SyncExecutorBase
             CancellationToken);
 
         if (Result.Succeeded)
-            return SyncExecutionResultFactory.Completed(Intent.Request, Result.Value);
+            return SyncExecutionResultFactory.Completed(Intent.Request, Result.Value, Intent.LocalRelativePath);
 
         return SyncExecutionResultFactory.FromStorageError(Intent.Request, Result.Error);
     }

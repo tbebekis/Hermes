@@ -822,6 +822,54 @@ public class MetadataSyncSessionTests
         Assert.Equal("hash-local", Store.GetBaseSnapshot("item-1").ContentHash);
     }
     /// <summary>
+    /// Verifies successful downloads persist the affected local path before committing base state.
+    /// </summary>
+    [Fact]
+    public void ApplyExecutionResultsStoresDownloadedLocalObservationBeforeBaseCommit()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 8, 4, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", null));
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            RemoteItemId = "remote-1",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "RemoteOnly.txt",
+            RemoteParentId = "remote-root",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-remote",
+            ProviderVersion = 1,
+            Trashed = false,
+            ObservedTime = Time,
+        });
+        MetadataSyncSessionResult SessionResult = Session.AdvanceMetadataOnly("root-1", Time);
+
+        SyncExecutionApplyResult Result = Session.ApplyExecutionResults(
+            [
+                new SyncExecutionResult()
+                {
+                    Request = SessionResult.PendingExecutionRequests[0],
+                    ResultKind = SyncExecutionResultKind.CompletedAndVerified,
+                    RemoteItem = CreateStorageItem("remote-1", "RemoteOnly.txt", "hash-remote", 1),
+                    LocalRelativePath = "RemoteOnly.txt",
+                },
+            ],
+            Time);
+
+        Assert.Single(Result.CommittedResults);
+        Assert.Empty(Result.UncommittedResults);
+        Assert.Single(Result.CommittedBaseSnapshots);
+        Assert.Equal("RemoteOnly.txt", Store.GetLocalObservation("item-1").RelativePath);
+        Assert.Equal("hash-remote", Store.GetBaseSnapshot("item-1").ContentHash);
+    }
+    /// <summary>
     /// Verifies failed execution results do not commit base snapshots.
     /// </summary>
     [Fact]
