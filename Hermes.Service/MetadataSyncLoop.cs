@@ -23,15 +23,16 @@ public class MetadataSyncLoop
     }
     void LogSuccess(MetadataSyncRunResult Result)
     {
-        MetadataSyncSessionResult SessionResult = Result.SessionResult;
-        SyncExecutionApplyResult ApplyResult = Result.ExecutionApplyResult;
-
         fLogger.LogInformation(
-            "Sync pass completed for root {SyncRootId}. Decisions: {DecisionCount}. Pending executions: {PendingExecutionCount}. Committed executions: {CommittedExecutionCount}.",
+            "Sync pass completed for root {SyncRootId}. Kind: {Kind}. Local items: {LocalObservedItemCount}. Remote items: {RemoteObservedItemCount}. Remote changes: {RemoteObservedChangeCount}. Decisions: {DecisionCount}. Pending executions: {PendingExecutionCount}. Committed executions: {CommittedExecutionCount}.",
             fSyncRoot.Id,
-            SessionResult?.Decisions.Count ?? 0,
-            SessionResult?.PendingExecutionRequests.Count ?? 0,
-            ApplyResult?.CommittedResults.Count ?? 0);
+            Result.Kind,
+            Result.LocalObservedItemCount,
+            Result.RemoteObservedItemCount,
+            Result.RemoteObservedChangeCount,
+            Result.DecisionCount,
+            Result.PendingExecutionCount,
+            Result.CommittedExecutionCount);
     }
     async Task RunPassAsync(CancellationToken CancellationToken)
     {

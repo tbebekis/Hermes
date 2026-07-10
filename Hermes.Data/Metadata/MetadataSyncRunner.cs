@@ -82,6 +82,9 @@ public class MetadataSyncRunner : IMetadataSyncRunner
             ScanId,
             fExecutor,
             CancellationToken);
+        RunResult.Kind = MetadataSyncRunKind.Bootstrap;
+        RunResult.LocalObservedItemCount = LocalItems.Count;
+        RunResult.RemoteObservedItemCount = RemoteItemsResult.Value.Count;
 
         return Result<MetadataSyncRunResult>.Success(RunResult);
     }
@@ -115,6 +118,9 @@ public class MetadataSyncRunner : IMetadataSyncRunner
             ScanId,
             fExecutor,
             CancellationToken);
+        RunResult.Kind = MetadataSyncRunKind.Incremental;
+        RunResult.LocalObservedItemCount = LocalItems.Count;
+        RunResult.RemoteObservedChangeCount = ChangesResult.Value.Changes.Count;
 
         return Result<MetadataSyncRunResult>.Success(RunResult);
     }

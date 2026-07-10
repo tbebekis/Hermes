@@ -271,6 +271,10 @@ public class MetadataSyncRunnerTests
         Result<MetadataSyncRunResult> Result = await Runner.RunOnceAsync("root-1", CancellationToken.None);
 
         Assert.True(Result.Succeeded);
+        Assert.Equal(MetadataSyncRunKind.Bootstrap, Result.Value.Kind);
+        Assert.Equal(0, Result.Value.LocalObservedItemCount);
+        Assert.Equal(2, Result.Value.RemoteObservedItemCount);
+        Assert.Equal(0, Result.Value.RemoteObservedChangeCount);
         Assert.Equal(["remote-root", "remote-folder"], Provider.ListedFolderIds);
         Assert.Equal("token-1", Store.GetRemoteCheckpoint("root-1").StartPageToken);
         Assert.NotNull(Store.GetTrackedItemByRemoteId("root-1", "remote-folder"));
@@ -305,6 +309,10 @@ public class MetadataSyncRunnerTests
         Result<MetadataSyncRunResult> Result = await Runner.RunOnceAsync("root-1", CancellationToken.None);
 
         Assert.True(Result.Succeeded);
+        Assert.Equal(MetadataSyncRunKind.Incremental, Result.Value.Kind);
+        Assert.Equal(0, Result.Value.LocalObservedItemCount);
+        Assert.Equal(0, Result.Value.RemoteObservedItemCount);
+        Assert.Equal(0, Result.Value.RemoteObservedChangeCount);
         Assert.Equal(["token-1"], Provider.ListChangesTokens);
         Assert.Equal(0, Provider.StartPageTokenCalls);
         Assert.Equal("token-2", Store.GetRemoteCheckpoint("root-1").StartPageToken);
