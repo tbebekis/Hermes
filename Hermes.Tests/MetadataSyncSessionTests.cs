@@ -1008,6 +1008,54 @@ public class MetadataSyncSessionTests
         Assert.Equal("hash-remote", Store.GetBaseSnapshot("item-1").ContentHash);
     }
     /// <summary>
+    /// Verifies successful remote delete propagation stores local missing state before base commit.
+    /// </summary>
+    [Fact]
+    public void ApplyExecutionResultsStoresRemoteDeleteLocalMissingBeforeBaseCommit()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 8, 4, 15, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "RemoteOnly.txt"));
+        AddBaseSnapshot(Store, "item-1", "RemoteOnly.txt", "hash-base", Time);
+        AddObservedItem(Store, "item-1", "remote-1", "RemoteOnly.txt", "hash-base", Time);
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            RemoteItemId = "remote-1",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "RemoteOnly.txt",
+            RemoteParentId = "remote-root",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-base",
+            ProviderVersion = 2,
+            Trashed = true,
+            ObservedTime = Time,
+        });
+        MetadataSyncSessionResult SessionResult = Session.AdvanceMetadataOnly("root-1", Time);
+
+        SyncExecutionApplyResult Result = Session.ApplyExecutionResults(
+            [
+                new SyncExecutionResult()
+                {
+                    Request = SessionResult.PendingExecutionRequests[0],
+                    ResultKind = SyncExecutionResultKind.CompletedAndVerified,
+                },
+            ],
+            Time);
+
+        Assert.Single(Result.CommittedResults);
+        Assert.Empty(Result.UncommittedResults);
+        Assert.Single(Result.CommittedBaseSnapshots);
+        Assert.False(Store.GetLocalObservation("item-1").ExistsFlag);
+        Assert.False(Store.GetBaseSnapshot("item-1").ExistsFlag);
+    }
+    /// <summary>
     /// Verifies nested remote download requests resolve their parent local path from metadata.
     /// </summary>
     [Fact]

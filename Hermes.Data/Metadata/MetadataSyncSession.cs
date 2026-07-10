@@ -285,6 +285,10 @@ public class MetadataSyncSession
         if (string.IsNullOrWhiteSpace(Result.Message))
             Result.Message = "Base snapshot cannot be committed until local and remote observations are both available.";
     }
+    static bool IsRemoteDeletePropagation(SyncExecutionResult Result)
+    {
+        return Result.Request?.Decision?.DecisionKind == SyncPlanDecisionKind.PropagateRemoteDelete;
+    }
     static string LocalName(string LocalRelativePath)
     {
         if (string.IsNullOrWhiteSpace(LocalRelativePath))
@@ -383,6 +387,15 @@ public class MetadataSyncSession
         }
 
         LocalObservedSnapshotRecord Observation = CreateLocalObservationFromExecution(Result, ObservedTime);
+        fStore.UpsertLocalObservation(Observation);
+        Result.Request.LocalObservation = Observation;
+    }
+    void ApplyLocalMissingObservation(SyncExecutionResult Result, DateTime ObservedTime)
+    {
+        if (!IsRemoteDeletePropagation(Result))
+            return;
+
+        LocalObservedSnapshotRecord Observation = LocalObservationMapper.Missing(TrackedItemId(Result), ObservedTime, "execution");
         fStore.UpsertLocalObservation(Observation);
         Result.Request.LocalObservation = Observation;
     }
@@ -622,6 +635,7 @@ public class MetadataSyncSession
             {
                 ApplyRemoteItemObservation(ExecutionResult, CommittedTime);
                 ApplyLocalPathObservation(ExecutionResult, CommittedTime);
+                ApplyLocalMissingObservation(ExecutionResult, CommittedTime);
             }
 
             if (CanCommitExecutionResult(ExecutionResult) && HasVerifiedCommitObservations(ExecutionResult))
