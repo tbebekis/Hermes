@@ -24,7 +24,7 @@ public class MetadataSyncLoop
     void LogSuccess(MetadataSyncRunResult Result)
     {
         fLogger.LogInformation(
-            "Sync pass completed for root {SyncRootId}. Kind: {Kind}. Local items: {LocalObservedItemCount}. Remote items: {RemoteObservedItemCount}. Remote changes: {RemoteObservedChangeCount}. Decisions: {DecisionCount}. Pending executions: {PendingExecutionCount}. Committed executions: {CommittedExecutionCount}. Uncommitted executions: {UncommittedExecutionCount}.",
+            "Sync pass completed for root {SyncRootId}. Kind: {Kind}. Local items: {LocalObservedItemCount}. Remote items: {RemoteObservedItemCount}. Remote changes: {RemoteObservedChangeCount}. Decisions: {DecisionCount}. Pending executions: {PendingExecutionCount}. Pending summary: {PendingExecutionSummary}. Committed executions: {CommittedExecutionCount}. Uncommitted executions: {UncommittedExecutionCount}.",
             fSyncRoot.Id,
             Result.Kind,
             Result.LocalObservedItemCount,
@@ -32,6 +32,7 @@ public class MetadataSyncLoop
             Result.RemoteObservedChangeCount,
             Result.DecisionCount,
             Result.PendingExecutionCount,
+            Result.PendingExecutionSummary,
             Result.CommittedExecutionCount,
             Result.UncommittedExecutionCount);
     }

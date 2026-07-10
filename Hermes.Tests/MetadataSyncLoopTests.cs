@@ -127,6 +127,20 @@ public class MetadataSyncLoopTests
     }
     static MetadataSyncRunResult RunResult()
     {
+        MetadataSyncSessionResult SessionResult = new();
+        SessionResult.PendingExecutionRequests.Add(new SyncExecutionRequest()
+        {
+            Decision = new SyncPlanDecision("item-1", SyncDiffKind.LocalChanged, SyncPlanDecisionKind.UploadToRemote),
+        });
+        SessionResult.PendingExecutionRequests.Add(new SyncExecutionRequest()
+        {
+            Decision = new SyncPlanDecision("item-2", SyncDiffKind.RemoteChanged, SyncPlanDecisionKind.DownloadToLocal),
+        });
+        SessionResult.PendingExecutionRequests.Add(new SyncExecutionRequest()
+        {
+            Decision = new SyncPlanDecision("item-3", SyncDiffKind.LocalChanged, SyncPlanDecisionKind.UploadToRemote),
+        });
+
         SyncExecutionApplyResult ApplyResult = new();
         ApplyResult.UncommittedResults.Add(new SyncExecutionResult()
         {
@@ -140,7 +154,7 @@ public class MetadataSyncLoopTests
             LocalObservedItemCount = 2,
             RemoteObservedItemCount = 0,
             RemoteObservedChangeCount = 3,
-            SessionResult = new MetadataSyncSessionResult(),
+            SessionResult = SessionResult,
             ExecutionApplyResult = ApplyResult,
         };
     }
@@ -188,6 +202,6 @@ public class MetadataSyncLoopTests
         await Loop(Runner, Logger).RunAsync(Cancellation.Token);
 
         Assert.Contains(Logger.Entries, Item => Item.Contains("Mutations enabled: False."));
-        Assert.Contains(Logger.Entries, Item => Item.Contains("Kind: Incremental.") && Item.Contains("Local items: 2.") && Item.Contains("Remote changes: 3.") && Item.Contains("Uncommitted executions: 1."));
+        Assert.Contains(Logger.Entries, Item => Item.Contains("Kind: Incremental.") && Item.Contains("Local items: 2.") && Item.Contains("Remote changes: 3.") && Item.Contains("Pending summary: UploadToRemote=2, DownloadToLocal=1.") && Item.Contains("Uncommitted executions: 1."));
     }
 }

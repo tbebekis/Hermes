@@ -29,6 +29,22 @@ public enum MetadataSyncRunKind
 /// </summary>
 public class MetadataSyncRunResult
 {
+    // ● private
+
+    static string FormatPendingExecutionSummary(MetadataSyncSessionResult Result)
+    {
+        if (Result == null || Result.PendingExecutionRequests.Count == 0)
+            return "none";
+
+        return string.Join(
+            ", ",
+            Result.PendingExecutionRequests
+                .Where(Item => Item.Decision != null)
+                .GroupBy(Item => Item.Decision.DecisionKind)
+                .OrderBy(Group => Group.Key)
+                .Select(Group => $"{Group.Key}={Group.Count()}"));
+    }
+
     // ● properties
 
     /// <summary>
@@ -80,4 +96,9 @@ public class MetadataSyncRunResult
     /// Gets the number of execution results not committed by the run.
     /// </summary>
     public int UncommittedExecutionCount => ExecutionApplyResult?.UncommittedResults.Count ?? 0;
+
+    /// <summary>
+    /// Gets a summary of pending execution request decision kinds.
+    /// </summary>
+    public string PendingExecutionSummary => FormatPendingExecutionSummary(SessionResult);
 }
