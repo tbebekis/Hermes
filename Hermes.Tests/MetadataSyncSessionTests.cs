@@ -2727,6 +2727,157 @@ public class MetadataSyncSessionTests
         Assert.Equal(SyncDiffKind.NoChange, Session.ClassifySyncRoot("root-1").Single().DiffKind);
     }
     /// <summary>
+    /// Verifies local folder delete propagation commits the folder subtree as missing after remote trash succeeds.
+    /// </summary>
+    [Fact]
+    public void ApplyExecutionResultsCommitsLocalFolderDeleteSubtreeAsMissing()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 8, 39, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(new TrackedItemRecord()
+        {
+            Id = "folder-item",
+            SyncRootId = "root-1",
+            RemoteItemId = "remote-folder",
+            LocalKey = "Folder",
+            ItemType = "Folder",
+        });
+        Store.InsertTrackedItem(CreateTrackedItem("file-item", "remote-file", "Folder/File1.txt"));
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "folder-item",
+            ExistsFlag = true,
+            RelativePath = "Folder",
+            Name = "Folder",
+            ItemType = "Folder",
+            ObservedTime = Time,
+        });
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "file-item",
+            ExistsFlag = true,
+            RelativePath = "Folder/File1.txt",
+            Name = "File1.txt",
+            ParentRelativePath = "Folder",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-base",
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "folder-item",
+            RemoteItemId = "remote-folder",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "Folder",
+            RemoteParentId = "remote-root",
+            ItemType = "Folder",
+            ProviderVersion = 1,
+            Trashed = false,
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "file-item",
+            RemoteItemId = "remote-file",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "File1.txt",
+            RemoteParentId = "remote-folder",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-base",
+            ProviderVersion = 1,
+            Trashed = false,
+            ObservedTime = Time,
+        });
+        Store.UpsertBaseSnapshot(new BaseSnapshotRecord()
+        {
+            TrackedItemId = "folder-item",
+            ExistsFlag = true,
+            ItemType = "Folder",
+            Name = "Folder",
+            LocalRelativePath = "Folder",
+            RemoteParentId = "remote-root",
+            ProviderVersion = 1,
+            Trashed = false,
+            CommittedTime = Time,
+        });
+        Store.UpsertBaseSnapshot(new BaseSnapshotRecord()
+        {
+            TrackedItemId = "file-item",
+            ExistsFlag = true,
+            ItemType = "File",
+            Name = "File1.txt",
+            LocalRelativePath = "Folder/File1.txt",
+            RemoteParentId = "remote-folder",
+            Size = 42,
+            ContentHash = "hash-base",
+            ProviderVersion = 1,
+            Trashed = false,
+            CommittedTime = Time,
+        });
+        Store.UpsertLocalObservation(LocalObservationMapper.Missing("folder-item", Time, "scan-delete"));
+        Store.UpsertLocalObservation(LocalObservationMapper.Missing("file-item", Time, "scan-delete"));
+        Dictionary<string, SyncExecutionRequest> Requests = Session.AdvanceMetadataOnly("root-1", Time)
+            .PendingExecutionRequests
+            .ToDictionary(Item => Item.Decision.TrackedItemId);
+
+        SyncExecutionApplyResult Result = Session.ApplyExecutionResults(
+            [
+                new SyncExecutionResult()
+                {
+                    Request = Requests["folder-item"],
+                    ResultKind = SyncExecutionResultKind.CompletedAndVerified,
+                    RemoteItem = new StorageItem(
+                        "remote-folder",
+                        "remote-root",
+                        "Folder",
+                        "/Folder",
+                        StorageItemKind.Folder,
+                        "application/vnd.google-apps.folder",
+                        0,
+                        string.Empty,
+                        default,
+                        default,
+                        2,
+                        true),
+                },
+                new SyncExecutionResult()
+                {
+                    Request = Requests["file-item"],
+                    ResultKind = SyncExecutionResultKind.CompletedAndVerified,
+                    RemoteItem = new StorageItem(
+                        "remote-file",
+                        "remote-folder",
+                        "File1.txt",
+                        "/Folder/File1.txt",
+                        StorageItemKind.File,
+                        "text/plain",
+                        42,
+                        "hash-base",
+                        default,
+                        default,
+                        2,
+                        true),
+                },
+            ],
+            Time);
+
+        Assert.Equal(2, Result.CommittedResults.Count);
+        Assert.Equal(2, Result.CommittedBaseSnapshots.Count);
+        Assert.False(Store.GetBaseSnapshot("folder-item").ExistsFlag);
+        Assert.False(Store.GetBaseSnapshot("file-item").ExistsFlag);
+        Assert.True(Store.GetRemoteObservation("folder-item").Trashed);
+        Assert.True(Store.GetRemoteObservation("file-item").Trashed);
+        Assert.All(Session.ClassifySyncRoot("root-1"), Item => Assert.Equal(SyncDiffKind.NoChange, Item.DiffKind));
+    }
+    /// <summary>
     /// Verifies the intent validating fake executor returns conflict results without normal execution.
     /// </summary>
     [Fact]
