@@ -81,10 +81,18 @@ public class MetadataSyncLoop
     {
         fLogger.LogInformation("Hermes metadata sync loop started for root {SyncRootId}.", fSyncRoot.Id);
 
-        while (!CancellationToken.IsCancellationRequested)
+        try
         {
-            await RunPassAsync(CancellationToken);
-            await Task.Delay(TimeSpan.FromSeconds(GetPollingIntervalSeconds(fSettings)), CancellationToken);
+            while (!CancellationToken.IsCancellationRequested)
+            {
+                await RunPassAsync(CancellationToken);
+                await Task.Delay(TimeSpan.FromSeconds(GetPollingIntervalSeconds(fSettings)), CancellationToken);
+            }
         }
+        catch (OperationCanceledException) when (CancellationToken.IsCancellationRequested)
+        {
+        }
+
+        fLogger.LogInformation("Hermes metadata sync loop stopped for root {SyncRootId}.", fSyncRoot.Id);
     }
 }

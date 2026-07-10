@@ -86,7 +86,7 @@ public class MetadataSyncLoopTests
         using CancellationTokenSource Cancellation = new();
         FakeRunner Runner = new(Cancellation, () => Result<MetadataSyncRunResult>.Failure("failed"));
 
-        await Assert.ThrowsAsync<TaskCanceledException>(() => Loop(Runner).RunAsync(Cancellation.Token));
+        await Loop(Runner).RunAsync(Cancellation.Token);
 
         Assert.Equal(1, Runner.Calls);
     }
@@ -100,7 +100,7 @@ public class MetadataSyncLoopTests
         using CancellationTokenSource Cancellation = new();
         FakeRunner Runner = new(Cancellation, () => throw new InvalidOperationException("boom"));
 
-        await Assert.ThrowsAsync<TaskCanceledException>(() => Loop(Runner).RunAsync(Cancellation.Token));
+        await Loop(Runner).RunAsync(Cancellation.Token);
 
         Assert.Equal(1, Runner.Calls);
     }
