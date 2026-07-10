@@ -10,6 +10,8 @@ global using System.Data;
 global using System.Data.Common;
 global using System.IO;
 global using System.Linq;
+global using System.Threading;
+global using System.Threading.Tasks;
 global using Tripous;
 global using Tripous.Data;
 global using Tripous.Logging;

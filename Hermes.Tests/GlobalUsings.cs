@@ -10,6 +10,8 @@ global using Google;
 global using Google.Apis.Drive.v3.Data;
 global using Google.Apis.Requests;
 global using System.Net;
+global using System.Threading;
+global using System.Threading.Tasks;
 global using Tripous;
 global using Tripous.Data;
 global using Xunit;

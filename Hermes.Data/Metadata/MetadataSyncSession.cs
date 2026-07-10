@@ -334,6 +334,91 @@ public class MetadataSyncSession
         return ApplyExecutionResults(Results, CommittedTime).CommittedBaseSnapshots;
     }
     /// <summary>
+    /// Executes pending synchronization requests and applies their execution results.
+    /// </summary>
+    public async Task<SyncExecutionApplyResult> ExecutePendingRequestsAsync(
+        IEnumerable<SyncExecutionRequest> Requests,
+        ISyncExecutor Executor,
+        DateTime CommittedTime,
+        CancellationToken CancellationToken)
+    {
+        Guard.NotNull(Requests, nameof(Requests));
+        Guard.NotNull(Executor, nameof(Executor));
+
+        IReadOnlyList<SyncExecutionResult> Results = await Executor.ExecuteAsync(Requests, CancellationToken);
+
+        return ApplyExecutionResults(Results, CommittedTime);
+    }
+    /// <summary>
+    /// Executes pending synchronization requests from a session result and applies their execution results.
+    /// </summary>
+    public Task<SyncExecutionApplyResult> ExecutePendingRequestsAsync(
+        MetadataSyncSessionResult Result,
+        ISyncExecutor Executor,
+        DateTime CommittedTime,
+        CancellationToken CancellationToken)
+    {
+        Guard.NotNull(Result, nameof(Result));
+
+        return ExecutePendingRequestsAsync(Result.PendingExecutionRequests, Executor, CommittedTime, CancellationToken);
+    }
+    /// <summary>
+    /// Imports local and full remote observations, creates decisions, executes pending requests, and applies execution results.
+    /// </summary>
+    public async Task<MetadataSyncRunResult> AdvanceWithRemoteSnapshotAndExecuteAsync(
+        string SyncRootId,
+        IEnumerable<LocalScanItem> LocalItems,
+        IEnumerable<StorageItem> RemoteItems,
+        RemoteCheckpointRecord Checkpoint,
+        DateTime LocalObservedTime,
+        DateTime RemoteObservedTime,
+        DateTime CommittedTime,
+        string ScanId,
+        ISyncExecutor Executor,
+        CancellationToken CancellationToken)
+    {
+        Guard.NotNull(Executor, nameof(Executor));
+
+        MetadataSyncSessionResult SessionResult = AdvanceWithRemoteSnapshot(SyncRootId, LocalItems, RemoteItems, Checkpoint, LocalObservedTime, RemoteObservedTime, CommittedTime, ScanId);
+        MetadataSyncRunResult Result = new()
+        {
+            SessionResult = SessionResult,
+        };
+
+        if (SessionResult.PendingExecutionRequests.Count != 0)
+            Result.ExecutionApplyResult = await ExecutePendingRequestsAsync(SessionResult, Executor, CommittedTime, CancellationToken);
+
+        return Result;
+    }
+    /// <summary>
+    /// Imports local observations and remote changes, creates decisions, executes pending requests, and applies execution results.
+    /// </summary>
+    public async Task<MetadataSyncRunResult> AdvanceWithRemoteChangesAndExecuteAsync(
+        string SyncRootId,
+        IEnumerable<LocalScanItem> LocalItems,
+        IEnumerable<StorageChange> RemoteChanges,
+        RemoteCheckpointRecord Checkpoint,
+        DateTime LocalObservedTime,
+        DateTime RemoteObservedTime,
+        DateTime CommittedTime,
+        string ScanId,
+        ISyncExecutor Executor,
+        CancellationToken CancellationToken)
+    {
+        Guard.NotNull(Executor, nameof(Executor));
+
+        MetadataSyncSessionResult SessionResult = AdvanceWithRemoteChanges(SyncRootId, LocalItems, RemoteChanges, Checkpoint, LocalObservedTime, RemoteObservedTime, CommittedTime, ScanId);
+        MetadataSyncRunResult Result = new()
+        {
+            SessionResult = SessionResult,
+        };
+
+        if (SessionResult.PendingExecutionRequests.Count != 0)
+            Result.ExecutionApplyResult = await ExecutePendingRequestsAsync(SessionResult, Executor, CommittedTime, CancellationToken);
+
+        return Result;
+    }
+    /// <summary>
     /// Imports local and full remote observations, creates decisions, and commits metadata-only base advancements.
     /// </summary>
     public MetadataSyncSessionResult AdvanceWithRemoteSnapshot(
