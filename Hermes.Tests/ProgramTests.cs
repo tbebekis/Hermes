@@ -16,6 +16,7 @@ public class ProgramTests
         "--Sync:LocalRootPath=/tmp/hermes",
         "--Sync:RemoteRootFolderId=root",
         "--Sync:PollingIntervalSeconds=60",
+        "--Sync:EnableMutations=false",
     ];
     static string[] InvalidArgs() =>
     [
@@ -23,6 +24,7 @@ public class ProgramTests
         "--Sync:LocalRootPath=",
         "--Sync:RemoteRootFolderId=",
         "--Sync:PollingIntervalSeconds=0",
+        "--Sync:EnableMutations=false",
     ];
 
     // ● public
@@ -41,6 +43,7 @@ public class ProgramTests
         Assert.Equal("/tmp/hermes", Settings.LocalRootPath);
         Assert.Equal("root", Settings.RemoteRootFolderId);
         Assert.Equal(60, Settings.PollingIntervalSeconds);
+        Assert.False(Settings.EnableMutations);
     }
     /// <summary>
     /// Verifies invalid synchronization settings fail when the host starts.

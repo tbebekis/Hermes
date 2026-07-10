@@ -29,4 +29,9 @@ public class SyncSettings
     /// Gets or sets the polling interval in seconds.
     /// </summary>
     public int PollingIntervalSeconds { get; set; } = 60;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether synchronization endpoint mutations are enabled.
+    /// </summary>
+    public bool EnableMutations { get; set; }
 }

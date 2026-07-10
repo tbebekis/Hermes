@@ -34,7 +34,17 @@ static public class ServiceRegistrations
             return new LocalSyncMutationEndpoint(SyncRoot.LocalRootPath);
         });
         Services.AddSingleton<IRemoteSyncMutationEndpoint, GoogleDriveRemoteSyncMutationEndpoint>();
-        Services.AddSingleton<ISyncExecutor, SyncMutationExecutorBase>();
+        Services.AddSingleton<ISyncExecutor>(Provider =>
+        {
+            SyncSettings Settings = Provider.GetRequiredService<IOptions<SyncSettings>>().Value;
+
+            if (!Settings.EnableMutations)
+                return new UnsupportedSyncExecutor();
+
+            ILocalSyncMutationEndpoint LocalEndpoint = Provider.GetRequiredService<ILocalSyncMutationEndpoint>();
+            IRemoteSyncMutationEndpoint RemoteEndpoint = Provider.GetRequiredService<IRemoteSyncMutationEndpoint>();
+            return new SyncMutationExecutorBase(LocalEndpoint, RemoteEndpoint);
+        });
         Services.AddSingleton(_ => ServiceDataStartup.CreateDefaultStore());
         Services.AddSingleton<SqlMetadataStore>();
         Services.AddSingleton(Provider =>

@@ -23,7 +23,8 @@ public class ServiceRegistrationsTests
             ["Sync:SyncRootId"] = "default",
             ["Sync:LocalRootPath"] = "/tmp/hermes",
             ["Sync:RemoteRootFolderId"] = "root",
-            ["Sync:PollingIntervalSeconds"] = "60"
+            ["Sync:PollingIntervalSeconds"] = "60",
+            ["Sync:EnableMutations"] = "false"
         };
 
         return CreateConfiguration(Values);
@@ -35,7 +36,21 @@ public class ServiceRegistrationsTests
             ["Sync:SyncRootId"] = "",
             ["Sync:LocalRootPath"] = "",
             ["Sync:RemoteRootFolderId"] = "",
-            ["Sync:PollingIntervalSeconds"] = "0"
+            ["Sync:PollingIntervalSeconds"] = "0",
+            ["Sync:EnableMutations"] = "false"
+        };
+
+        return CreateConfiguration(Values);
+    }
+    static IConfiguration CreateMutationConfiguration(bool Enabled)
+    {
+        Dictionary<string, string> Values = new()
+        {
+            ["Sync:SyncRootId"] = "default",
+            ["Sync:LocalRootPath"] = "/tmp/hermes",
+            ["Sync:RemoteRootFolderId"] = "root",
+            ["Sync:PollingIntervalSeconds"] = "60",
+            ["Sync:EnableMutations"] = Enabled ? "true" : "false"
         };
 
         return CreateConfiguration(Values);
@@ -94,6 +109,37 @@ public class ServiceRegistrationsTests
         Assert.Contains("LocalRootPath is required.", Ex.Failures);
         Assert.Contains("RemoteRootFolderId is required.", Ex.Failures);
         Assert.Contains("PollingIntervalSeconds must be greater than zero.", Ex.Failures);
+    }
+    /// <summary>
+    /// Ensures disabled mutations use the non-mutating executor.
+    /// </summary>
+    [Fact]
+    public void AddHermesServiceServicesUsesUnsupportedExecutorWhenMutationsAreDisabled()
+    {
+        ServiceCollection Services = new();
+
+        Services.AddHermesServiceServices(CreateMutationConfiguration(false), false);
+
+        using ServiceProvider Provider = Services.BuildServiceProvider();
+        ISyncExecutor Executor = Provider.GetRequiredService<ISyncExecutor>();
+
+        Assert.IsType<UnsupportedSyncExecutor>(Executor);
+    }
+    /// <summary>
+    /// Ensures enabled mutations use the endpoint mutation executor.
+    /// </summary>
+    [Fact]
+    public void AddHermesServiceServicesUsesMutationExecutorWhenMutationsAreEnabled()
+    {
+        ServiceCollection Services = new();
+
+        Services.AddHermesServiceServices(CreateMutationConfiguration(true), false);
+        Services.AddSingleton(MetadataSyncTestHost.CreateSyncRoot());
+
+        using ServiceProvider Provider = Services.BuildServiceProvider();
+        ISyncExecutor Executor = Provider.GetRequiredService<ISyncExecutor>();
+
+        Assert.IsType<SyncMutationExecutorBase>(Executor);
     }
     /// <summary>
     /// Ensures the hosted worker is registered by default.
