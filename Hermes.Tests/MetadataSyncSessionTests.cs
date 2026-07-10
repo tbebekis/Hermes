@@ -1171,6 +1171,165 @@ public class MetadataSyncSessionTests
         Assert.Equal("RenamedFolder/Nested.txt", Store.GetBaseSnapshot("file-item").LocalRelativePath);
     }
     /// <summary>
+    /// Verifies remote folder moves update descendant local metadata before base commit.
+    /// </summary>
+    [Fact]
+    public void ApplyExecutionResultsStoresFolderMoveDescendantPathsBeforeBaseCommit()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 9, 10, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(new TrackedItemRecord()
+        {
+            Id = "parent-item",
+            SyncRootId = "root-1",
+            RemoteItemId = "remote-parent",
+            LocalKey = "Target",
+            ItemType = "Folder",
+        });
+        Store.InsertTrackedItem(new TrackedItemRecord()
+        {
+            Id = "folder-item",
+            SyncRootId = "root-1",
+            RemoteItemId = "remote-folder",
+            LocalKey = "Folder",
+            ItemType = "Folder",
+        });
+        Store.InsertTrackedItem(CreateTrackedItem("file-item", "remote-file", "Folder/Nested.txt"));
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "parent-item",
+            ExistsFlag = true,
+            RelativePath = "Target",
+            Name = "Target",
+            ItemType = "Folder",
+            ObservedTime = Time,
+        });
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "folder-item",
+            ExistsFlag = true,
+            RelativePath = "Folder",
+            Name = "Folder",
+            ItemType = "Folder",
+            ObservedTime = Time,
+        });
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "file-item",
+            ExistsFlag = true,
+            RelativePath = "Folder/Nested.txt",
+            Name = "Nested.txt",
+            ParentRelativePath = "Folder",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-nested",
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "parent-item",
+            RemoteItemId = "remote-parent",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "Target",
+            RemoteParentId = "remote-root",
+            ItemType = "Folder",
+            ProviderVersion = 1,
+            Trashed = false,
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "folder-item",
+            RemoteItemId = "remote-folder",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "Folder",
+            RemoteParentId = "remote-parent",
+            ItemType = "Folder",
+            ProviderVersion = 2,
+            Trashed = false,
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "file-item",
+            RemoteItemId = "remote-file",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "Nested.txt",
+            RemoteParentId = "remote-folder",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-nested",
+            ProviderVersion = 1,
+            Trashed = false,
+            ObservedTime = Time,
+        });
+        Store.UpsertBaseSnapshot(new BaseSnapshotRecord()
+        {
+            TrackedItemId = "parent-item",
+            ExistsFlag = true,
+            ItemType = "Folder",
+            Name = "Target",
+            LocalRelativePath = "Target",
+            RemoteParentId = "remote-root",
+            Trashed = false,
+            CommittedTime = Time,
+        });
+        Store.UpsertBaseSnapshot(new BaseSnapshotRecord()
+        {
+            TrackedItemId = "folder-item",
+            ExistsFlag = true,
+            ItemType = "Folder",
+            Name = "Folder",
+            LocalRelativePath = "Folder",
+            RemoteParentId = "remote-root",
+            Trashed = false,
+            CommittedTime = Time,
+        });
+        Store.UpsertBaseSnapshot(new BaseSnapshotRecord()
+        {
+            TrackedItemId = "file-item",
+            ExistsFlag = true,
+            ItemType = "File",
+            Name = "Nested.txt",
+            LocalRelativePath = "Folder/Nested.txt",
+            RemoteParentId = "remote-folder",
+            Size = 42,
+            ContentHash = "hash-nested",
+            ProviderVersion = 1,
+            Trashed = false,
+            CommittedTime = Time,
+        });
+        MetadataSyncSessionResult SessionResult = Session.AdvanceMetadataOnly("root-1", Time);
+        SyncExecutionRequest Request = SessionResult.PendingExecutionRequests.Single();
+
+        SyncExecutionApplyResult Result = Session.ApplyExecutionResults(
+            [
+                new SyncExecutionResult()
+                {
+                    Request = Request,
+                    ResultKind = SyncExecutionResultKind.CompletedAndVerified,
+                    LocalRelativePath = "Target/Folder",
+                },
+            ],
+            Time);
+
+        Assert.Equal(SyncPlanDecisionKind.ApplyRemoteNamespaceToLocal, Request.Decision.DecisionKind);
+        Assert.Single(Result.CommittedResults);
+        Assert.Equal(2, Result.CommittedBaseSnapshots.Count);
+        Assert.Equal("Target/Folder", Store.GetTrackedItem("folder-item").LocalKey);
+        Assert.Equal("Target/Folder/Nested.txt", Store.GetTrackedItem("file-item").LocalKey);
+        Assert.Equal("Target/Folder/Nested.txt", Store.GetLocalObservation("file-item").RelativePath);
+        Assert.Equal("Target/Folder/Nested.txt", Store.GetBaseSnapshot("file-item").LocalRelativePath);
+        Assert.Equal("remote-folder", Store.GetBaseSnapshot("file-item").RemoteParentId);
+    }
+    /// <summary>
     /// Verifies nested remote download requests resolve their parent local path from metadata.
     /// </summary>
     [Fact]
