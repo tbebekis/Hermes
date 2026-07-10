@@ -10,6 +10,12 @@ public class ServiceRegistrationsTests
 {
     // ● private
 
+    static IConfiguration CreateConfiguration(Dictionary<string, string> Values)
+    {
+        return new ConfigurationBuilder()
+            .AddInMemoryCollection(Values)
+            .Build();
+    }
     static IConfiguration CreateConfiguration()
     {
         Dictionary<string, string> Values = new()
@@ -20,9 +26,19 @@ public class ServiceRegistrationsTests
             ["Sync:PollingIntervalSeconds"] = "60"
         };
 
-        return new ConfigurationBuilder()
-            .AddInMemoryCollection(Values)
-            .Build();
+        return CreateConfiguration(Values);
+    }
+    static IConfiguration CreateInvalidConfiguration()
+    {
+        Dictionary<string, string> Values = new()
+        {
+            ["Sync:SyncRootId"] = "",
+            ["Sync:LocalRootPath"] = "",
+            ["Sync:RemoteRootFolderId"] = "",
+            ["Sync:PollingIntervalSeconds"] = "0"
+        };
+
+        return CreateConfiguration(Values);
     }
 
     // ● public
@@ -59,6 +75,25 @@ public class ServiceRegistrationsTests
         });
 
         Assert.NotNull(Provider.GetRequiredService<IOptions<SyncSettings>>());
+    }
+    /// <summary>
+    /// Ensures invalid synchronization settings fail through the registered options path.
+    /// </summary>
+    [Fact]
+    public void AddHermesServiceServicesValidatesSyncSettings()
+    {
+        ServiceCollection Services = new();
+
+        Services.AddHermesServiceServices(CreateInvalidConfiguration(), false);
+
+        using ServiceProvider Provider = Services.BuildServiceProvider();
+        OptionsValidationException Ex = Assert.Throws<OptionsValidationException>(() =>
+            Provider.GetRequiredService<IOptions<SyncSettings>>().Value);
+
+        Assert.Contains("SyncRootId is required.", Ex.Failures);
+        Assert.Contains("LocalRootPath is required.", Ex.Failures);
+        Assert.Contains("RemoteRootFolderId is required.", Ex.Failures);
+        Assert.Contains("PollingIntervalSeconds must be greater than zero.", Ex.Failures);
     }
     /// <summary>
     /// Ensures the hosted worker is registered by default.
