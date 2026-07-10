@@ -44,12 +44,7 @@ static public class Program
                 Services.AddSingleton<MetadataSyncRunner>();
                 Services.AddSingleton<MetadataSyncLoop>();
                 Services.AddSingleton<SyncPlanner>();
-                Services.AddSingleton<OperationQueue>();
-                Services.AddSingleton<ConflictResolver>();
                 Services.AddSingleton<LocalScanner>();
-                Services.AddSingleton<MetadataStore>();
-                Services.AddSingleton<SyncEngine>();
-                Services.AddSingleton<SyncService>();
                 Services.AddHostedService<Worker>();
             })
             .Build();
