@@ -242,7 +242,7 @@ public class MetadataSyncSession
         int Index = LocalRelativePath.LastIndexOf('/');
         return Index < 0 ? string.Empty : LocalRelativePath[..Index];
     }
-    static bool CanAdoptLocalRename(LocalScanItem ScanItem, TrackedItemRecord TrackedItem, BaseSnapshotRecord BaseSnapshot)
+    static bool CanAdoptLocalNamespaceChange(LocalScanItem ScanItem, TrackedItemRecord TrackedItem, BaseSnapshotRecord BaseSnapshot)
     {
         if (ScanItem == null || TrackedItem == null || BaseSnapshot == null || !BaseSnapshot.ExistsFlag)
             return false;
@@ -253,11 +253,10 @@ public class MetadataSyncSession
         if (string.IsNullOrWhiteSpace(TrackedItem.RemoteItemId) || string.IsNullOrWhiteSpace(ScanItem.ContentHash) || !ScanItem.Size.HasValue)
             return false;
 
-        return string.Equals(ParentLocalPath(BaseSnapshot.LocalRelativePath), ScanItem.ParentRelativePath ?? string.Empty, StringComparison.Ordinal)
-            && string.Equals(BaseSnapshot.ContentHash, ScanItem.ContentHash, StringComparison.Ordinal)
+        return string.Equals(BaseSnapshot.ContentHash, ScanItem.ContentHash, StringComparison.Ordinal)
             && BaseSnapshot.Size == ScanItem.Size;
     }
-    TrackedItemRecord FindLocalRenameCandidate(string SyncRootId, LocalScanItem ScanItem, HashSet<string> ObservedLocalKeys, HashSet<string> UsedTrackedItemIds)
+    TrackedItemRecord FindLocalNamespaceCandidate(string SyncRootId, LocalScanItem ScanItem, HashSet<string> ObservedLocalKeys, HashSet<string> UsedTrackedItemIds)
     {
         List<TrackedItemRecord> Candidates = new();
 
@@ -268,7 +267,7 @@ public class MetadataSyncSession
                 || UsedTrackedItemIds.Contains(TrackedItem.Id))
                 continue;
 
-            if (CanAdoptLocalRename(ScanItem, TrackedItem, fStore.GetBaseSnapshot(TrackedItem.Id)))
+            if (CanAdoptLocalNamespaceChange(ScanItem, TrackedItem, fStore.GetBaseSnapshot(TrackedItem.Id)))
                 Candidates.Add(TrackedItem);
         }
 
@@ -595,7 +594,7 @@ public class MetadataSyncSession
         Dictionary<string, TrackedItemRecord> TrackedItemsByLocalKey = GetTrackedItemsByLocalKey(SyncRootId);
         Dictionary<string, TrackedItemRecord> TrackedItemsByObservedLocalKey = GetTrackedItemsByObservedLocalKey(SyncRootId);
         HashSet<string> ObservedLocalKeys = new();
-        HashSet<string> UsedRenameTrackedItemIds = new();
+        HashSet<string> UsedNamespaceTrackedItemIds = new();
         List<LocalScanItem> UnmatchedItems = new();
 
         foreach (LocalScanItem Item in Items)
@@ -624,14 +623,14 @@ public class MetadataSyncSession
         foreach (LocalScanItem Item in UnmatchedItems)
         {
             string Key = LocalKey(Item);
-            TrackedItemRecord TrackedItem = FindLocalRenameCandidate(SyncRootId, Item, ObservedLocalKeys, UsedRenameTrackedItemIds);
+            TrackedItemRecord TrackedItem = FindLocalNamespaceCandidate(SyncRootId, Item, ObservedLocalKeys, UsedNamespaceTrackedItemIds);
 
             if (TrackedItem != null)
             {
                 TrackedItemsByLocalKey.Remove(TrackedItem.LocalKey);
                 TrackedItem.LocalKey = Key;
                 TrackedItemsByLocalKey[Key] = TrackedItem;
-                UsedRenameTrackedItemIds.Add(TrackedItem.Id);
+                UsedNamespaceTrackedItemIds.Add(TrackedItem.Id);
                 fStore.UpdateTrackedItem(TrackedItem);
             }
             else

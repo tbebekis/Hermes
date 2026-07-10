@@ -143,6 +143,15 @@ public class SyncMutationExecutorBaseTests
         }
 
         /// <inheritdoc/>
+        public Task<StorageResult<StorageItem>> MoveItemAsync(string RemoteItemId, string OldParentId, string NewParentId, CancellationToken CancellationToken)
+        {
+            MovedItemIds.Add(RemoteItemId);
+            MovedOldParentIds.Add(OldParentId);
+            MovedNewParentIds.Add(NewParentId);
+            return Task.FromResult(MoveItemResult);
+        }
+
+        /// <inheritdoc/>
         public Task<StorageResult<StorageItem>> DeleteItemAsync(string RemoteItemId, CancellationToken CancellationToken)
         {
             DeletedItemIds.Add(RemoteItemId);
@@ -192,6 +201,18 @@ public class SyncMutationExecutorBaseTests
         /// </summary>
         public List<string> RenamedNames { get; } = [];
         /// <summary>
+        /// Gets the moved item ids.
+        /// </summary>
+        public List<string> MovedItemIds { get; } = [];
+        /// <summary>
+        /// Gets the moved source parent ids.
+        /// </summary>
+        public List<string> MovedOldParentIds { get; } = [];
+        /// <summary>
+        /// Gets the moved target parent ids.
+        /// </summary>
+        public List<string> MovedNewParentIds { get; } = [];
+        /// <summary>
         /// Gets the deleted item ids.
         /// </summary>
         public List<string> DeletedItemIds { get; } = [];
@@ -211,6 +232,10 @@ public class SyncMutationExecutorBaseTests
         /// Gets or sets the rename item result.
         /// </summary>
         public StorageResult<StorageItem> RenameItemResult { get; set; } = StorageResult<StorageItem>.Success(Item());
+        /// <summary>
+        /// Gets or sets the move item result.
+        /// </summary>
+        public StorageResult<StorageItem> MoveItemResult { get; set; } = StorageResult<StorageItem>.Success(Item());
     }
 
     /// <summary>
@@ -358,6 +383,27 @@ public class SyncMutationExecutorBaseTests
             ObservedTime = new DateTime(2026, 7, 11, 10, 20, 0, DateTimeKind.Utc),
         },
         RemoteObservation = RemoteObservation(),
+    };
+    static SyncExecutionRequest LocalMoveRequest() => new()
+    {
+        Decision = new SyncPlanDecision("item-1", SyncDiffKind.LocalNamespaceChanged, SyncPlanDecisionKind.ApplyLocalNamespaceToRemote),
+        SyncRoot = SyncRoot(),
+        TrackedItem = TrackedItem(),
+        BaseSnapshot = BaseSnapshot(),
+        LocalObservation = new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            ExistsFlag = true,
+            RelativePath = "Folder/File.txt",
+            Name = "File.txt",
+            ParentRelativePath = "Folder",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-base",
+            ObservedTime = new DateTime(2026, 7, 11, 10, 20, 0, DateTimeKind.Utc),
+        },
+        RemoteObservation = RemoteObservation(),
+        LocalParentRemoteItemId = "remote-folder",
     };
     static SyncExecutionRequest FolderRequest(SyncPlanDecisionKind DecisionKind) => new()
     {
@@ -571,6 +617,26 @@ public class SyncMutationExecutorBaseTests
         Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Results[0].ResultKind);
         Assert.Equal("remote-1", Assert.Single(RemoteEndpoint.RenamedItemIds));
         Assert.Equal("Renamed.txt", Assert.Single(RemoteEndpoint.RenamedNames));
+    }
+
+    /// <summary>
+    /// Verifies local file move intents move remote items.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsyncAppliesLocalFileMoveToRemoteItem()
+    {
+        TestRemoteEndpoint RemoteEndpoint = new();
+        SyncMutationExecutorBase Executor = new(new TestLocalEndpoint(), RemoteEndpoint);
+
+        IReadOnlyList<SyncExecutionResult> Results = await Executor.ExecuteAsync(
+            [LocalMoveRequest()],
+            CancellationToken.None);
+
+        Assert.Single(Results);
+        Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Results[0].ResultKind);
+        Assert.Equal("remote-1", Assert.Single(RemoteEndpoint.MovedItemIds));
+        Assert.Equal("remote-root", Assert.Single(RemoteEndpoint.MovedOldParentIds));
+        Assert.Equal("remote-folder", Assert.Single(RemoteEndpoint.MovedNewParentIds));
     }
 
     /// <summary>

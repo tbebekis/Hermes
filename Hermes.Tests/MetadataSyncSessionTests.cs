@@ -417,12 +417,95 @@ public class MetadataSyncSessionTests
             Time,
             "scan-rename");
         MetadataSyncSessionResult SessionResult = Session.AdvanceMetadataOnly("root-1", Time);
-        SyncExecutionRequest Request = SessionResult.PendingExecutionRequests.Single();
+        SyncExecutionRequest Request = SessionResult.PendingExecutionRequests.Single(Item => Item.Decision.TrackedItemId == "item-1");
 
         Assert.Empty(ImportResult.CreatedTrackedItems);
         Assert.Single(Store.GetTrackedItems("root-1"));
         Assert.Equal("Renamed.txt", Store.GetTrackedItem("item-1").LocalKey);
         Assert.Equal("Renamed.txt", Store.GetLocalObservation("item-1").RelativePath);
+        Assert.Equal(SyncPlanDecisionKind.ApplyLocalNamespaceToRemote, Request.Decision.DecisionKind);
+    }
+    /// <summary>
+    /// Verifies local scan import keeps identity when a tracked file is moved locally.
+    /// </summary>
+    [Fact]
+    public void ImportLocalScanAdoptsTrackedFileMove()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 6, 14, 15, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(new TrackedItemRecord()
+        {
+            Id = "folder-item",
+            SyncRootId = "root-1",
+            RemoteItemId = "remote-folder",
+            LocalKey = "Folder",
+            ItemType = "Folder",
+        });
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "folder-item",
+            ExistsFlag = true,
+            RelativePath = "Folder",
+            Name = "Folder",
+            ItemType = "Folder",
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "folder-item",
+            RemoteItemId = "remote-folder",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "Folder",
+            RemoteParentId = "remote-root",
+            ItemType = "Folder",
+            Trashed = false,
+            ObservedTime = Time,
+        });
+        Store.UpsertBaseSnapshot(new BaseSnapshotRecord()
+        {
+            TrackedItemId = "folder-item",
+            ExistsFlag = true,
+            ItemType = "Folder",
+            Name = "Folder",
+            LocalRelativePath = "Folder",
+            RemoteParentId = "remote-root",
+            Trashed = false,
+            CommittedTime = Time,
+        });
+        AddObservedItem(Store, "item-1", "remote-1", "File1.txt", "hash-1", Time);
+        AddBaseSnapshot(Store, "item-1", "File1.txt", "hash-1", Time);
+
+        LocalScanImportResult ImportResult = Session.ImportLocalScan(
+            "root-1",
+            [
+                CreateLocalFolderScanItem("Folder", Time),
+                new LocalScanItem()
+                {
+                    RelativePath = "Folder/File1.txt",
+                    Name = "File1.txt",
+                    ParentRelativePath = "Folder",
+                    ItemType = "File",
+                    Size = 42,
+                    ContentHash = "hash-1",
+                    ModifiedTime = Time,
+                },
+            ],
+            Time,
+            "scan-move");
+        MetadataSyncSessionResult SessionResult = Session.AdvanceMetadataOnly("root-1", Time);
+        SyncExecutionRequest Request = SessionResult.PendingExecutionRequests.Single(Item => Item.Decision.TrackedItemId == "item-1");
+
+        Assert.Empty(ImportResult.CreatedTrackedItems);
+        Assert.Equal(2, Store.GetTrackedItems("root-1").Count);
+        Assert.Equal("Folder/File1.txt", Store.GetTrackedItem("item-1").LocalKey);
+        Assert.Equal("Folder/File1.txt", Store.GetLocalObservation("item-1").RelativePath);
+        Assert.Equal("remote-folder", Request.LocalParentRemoteItemId);
         Assert.Equal(SyncPlanDecisionKind.ApplyLocalNamespaceToRemote, Request.Decision.DecisionKind);
     }
     /// <summary>
@@ -446,12 +529,13 @@ public class MetadataSyncSessionTests
             Time,
             "scan-rename");
         MetadataSyncSessionResult SessionResult = Session.AdvanceMetadataOnly("root-1", Time);
+        SyncExecutionRequest Request = SessionResult.PendingExecutionRequests.Single(Item => Item.Decision.TrackedItemId == "item-1");
 
         SyncExecutionApplyResult Result = Session.ApplyExecutionResults(
             [
                 new SyncExecutionResult()
                 {
-                    Request = SessionResult.PendingExecutionRequests.Single(),
+                    Request = Request,
                     ResultKind = SyncExecutionResultKind.CompletedAndVerified,
                     RemoteItem = new StorageItem(
                         "remote-1",
@@ -476,6 +560,111 @@ public class MetadataSyncSessionTests
         Assert.Equal("Renamed.txt", Store.GetRemoteObservation("item-1").Name);
         Assert.Equal("Renamed.txt", Store.GetBaseSnapshot("item-1").Name);
         Assert.Equal("Renamed.txt", Store.GetBaseSnapshot("item-1").LocalRelativePath);
+    }
+    /// <summary>
+    /// Verifies local file move execution updates remote parent before base commit.
+    /// </summary>
+    [Fact]
+    public void ApplyExecutionResultsStoresLocalMoveRemoteItemBeforeBaseCommit()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 6, 14, 45, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(new TrackedItemRecord()
+        {
+            Id = "folder-item",
+            SyncRootId = "root-1",
+            RemoteItemId = "remote-folder",
+            LocalKey = "Folder",
+            ItemType = "Folder",
+        });
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "folder-item",
+            ExistsFlag = true,
+            RelativePath = "Folder",
+            Name = "Folder",
+            ItemType = "Folder",
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "folder-item",
+            RemoteItemId = "remote-folder",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "Folder",
+            RemoteParentId = "remote-root",
+            ItemType = "Folder",
+            Trashed = false,
+            ObservedTime = Time,
+        });
+        Store.UpsertBaseSnapshot(new BaseSnapshotRecord()
+        {
+            TrackedItemId = "folder-item",
+            ExistsFlag = true,
+            ItemType = "Folder",
+            Name = "Folder",
+            LocalRelativePath = "Folder",
+            RemoteParentId = "remote-root",
+            Trashed = false,
+            CommittedTime = Time,
+        });
+        AddObservedItem(Store, "item-1", "remote-1", "File1.txt", "hash-1", Time);
+        AddBaseSnapshot(Store, "item-1", "File1.txt", "hash-1", Time);
+        Session.ImportLocalScan(
+            "root-1",
+            [
+                CreateLocalFolderScanItem("Folder", Time),
+                new LocalScanItem()
+                {
+                    RelativePath = "Folder/File1.txt",
+                    Name = "File1.txt",
+                    ParentRelativePath = "Folder",
+                    ItemType = "File",
+                    Size = 42,
+                    ContentHash = "hash-1",
+                    ModifiedTime = Time,
+                },
+            ],
+            Time,
+            "scan-move");
+        MetadataSyncSessionResult SessionResult = Session.AdvanceMetadataOnly("root-1", Time);
+        SyncExecutionRequest Request = SessionResult.PendingExecutionRequests.Single(Item => Item.Decision.TrackedItemId == "item-1");
+
+        SyncExecutionApplyResult Result = Session.ApplyExecutionResults(
+            [
+                new SyncExecutionResult()
+                {
+                    Request = Request,
+                    ResultKind = SyncExecutionResultKind.CompletedAndVerified,
+                    RemoteItem = new StorageItem(
+                        "remote-1",
+                        "remote-folder",
+                        "File1.txt",
+                        "/Folder/File1.txt",
+                        StorageItemKind.File,
+                        "text/plain",
+                        42,
+                        "hash-1",
+                        default,
+                        default,
+                        2,
+                        false),
+                    LocalRelativePath = "Folder/File1.txt",
+                },
+            ],
+            Time);
+
+        Assert.Single(Result.CommittedResults);
+        Assert.Single(Result.CommittedBaseSnapshots);
+        Assert.Equal("remote-folder", Store.GetRemoteObservation("item-1").RemoteParentId);
+        Assert.Equal("remote-folder", Store.GetBaseSnapshot("item-1").RemoteParentId);
+        Assert.Equal("Folder/File1.txt", Store.GetBaseSnapshot("item-1").LocalRelativePath);
     }
     /// <summary>
     /// Verifies metadata sync session imports remote snapshots.

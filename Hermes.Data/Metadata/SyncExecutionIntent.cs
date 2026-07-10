@@ -56,6 +56,11 @@ public class SyncExecutionIntent
     public string RemoteParentId { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets the source remote parent id for remote namespace operations.
+    /// </summary>
+    public string SourceRemoteParentId { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets the resolved content hash.
     /// </summary>
     public string ContentHash { get; set; } = string.Empty;

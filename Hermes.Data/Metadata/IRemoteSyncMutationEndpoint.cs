@@ -36,6 +36,11 @@ public interface IRemoteSyncMutationEndpoint
     Task<StorageResult<StorageItem>> RenameItemAsync(string RemoteItemId, string Name, CancellationToken CancellationToken);
 
     /// <summary>
+    /// Moves a remote item to a different parent folder.
+    /// </summary>
+    Task<StorageResult<StorageItem>> MoveItemAsync(string RemoteItemId, string OldParentId, string NewParentId, CancellationToken CancellationToken);
+
+    /// <summary>
     /// Moves a remote item to trash or removes it according to provider policy.
     /// </summary>
     Task<StorageResult<StorageItem>> DeleteItemAsync(string RemoteItemId, CancellationToken CancellationToken);

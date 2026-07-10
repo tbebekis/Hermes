@@ -153,10 +153,51 @@ public class SyncExecutionIntentFactoryTests
         Assert.Empty(Intent.ValidationMessages);
     }
     /// <summary>
-    /// Verifies local move decisions are blocked until remote move propagation is supported.
+    /// Verifies local move decisions create executable remote namespace intents.
     /// </summary>
     [Fact]
-    public void CreateBlocksLocalNamespaceMove()
+    public void CreateMapsLocalMoveToExecutableIntent()
+    {
+        SyncExecutionRequest ExecutionRequest = Request(SyncPlanDecisionKind.ApplyLocalNamespaceToRemote);
+        ExecutionRequest.Decision = new SyncPlanDecision("item-1", SyncDiffKind.LocalNamespaceChanged, SyncPlanDecisionKind.ApplyLocalNamespaceToRemote);
+        ExecutionRequest.LocalObservation.Name = "File.txt";
+        ExecutionRequest.LocalObservation.RelativePath = "Folder/File.txt";
+        ExecutionRequest.LocalObservation.ParentRelativePath = "Folder";
+        ExecutionRequest.LocalParentRemoteItemId = "remote-folder";
+
+        SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(ExecutionRequest);
+
+        Assert.Equal(SyncExecutionIntentKind.ApplyLocalNamespaceToRemote, Intent.IntentKind);
+        Assert.Equal("remote-root", Intent.SourceRemoteParentId);
+        Assert.Equal("remote-folder", Intent.RemoteParentId);
+        Assert.Equal("File.txt", Intent.Name);
+        Assert.True(Intent.CanExecute);
+        Assert.Empty(Intent.ValidationMessages);
+    }
+    /// <summary>
+    /// Verifies combined local rename and move decisions are blocked until they are explicitly supported.
+    /// </summary>
+    [Fact]
+    public void CreateBlocksCombinedLocalRenameAndMove()
+    {
+        SyncExecutionRequest ExecutionRequest = Request(SyncPlanDecisionKind.ApplyLocalNamespaceToRemote);
+        ExecutionRequest.Decision = new SyncPlanDecision("item-1", SyncDiffKind.LocalNamespaceChanged, SyncPlanDecisionKind.ApplyLocalNamespaceToRemote);
+        ExecutionRequest.LocalObservation.Name = "Renamed.txt";
+        ExecutionRequest.LocalObservation.RelativePath = "Folder/Renamed.txt";
+        ExecutionRequest.LocalObservation.ParentRelativePath = "Folder";
+        ExecutionRequest.LocalParentRemoteItemId = "remote-folder";
+
+        SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(ExecutionRequest);
+
+        Assert.Equal(SyncExecutionIntentKind.Blocked, Intent.IntentKind);
+        Assert.False(Intent.CanExecute);
+        Assert.Contains("Combined local rename and move propagation is not supported yet.", Intent.ValidationMessages);
+    }
+    /// <summary>
+    /// Verifies local moves are blocked when the target remote parent cannot be resolved.
+    /// </summary>
+    [Fact]
+    public void CreateBlocksLocalMoveWithUnresolvedTargetParent()
     {
         SyncExecutionRequest ExecutionRequest = Request(SyncPlanDecisionKind.ApplyLocalNamespaceToRemote);
         ExecutionRequest.Decision = new SyncPlanDecision("item-1", SyncDiffKind.LocalNamespaceChanged, SyncPlanDecisionKind.ApplyLocalNamespaceToRemote);
@@ -166,9 +207,9 @@ public class SyncExecutionIntentFactoryTests
 
         SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(ExecutionRequest);
 
-        Assert.Equal(SyncExecutionIntentKind.Blocked, Intent.IntentKind);
+        Assert.Equal(SyncExecutionIntentKind.ApplyLocalNamespaceToRemote, Intent.IntentKind);
         Assert.False(Intent.CanExecute);
-        Assert.Contains("Local move propagation is not supported yet.", Intent.ValidationMessages);
+        Assert.Contains("Target remote parent id is required.", Intent.ValidationMessages);
     }
     /// <summary>
     /// Verifies upload propagation requires a remote item id or remote parent id.

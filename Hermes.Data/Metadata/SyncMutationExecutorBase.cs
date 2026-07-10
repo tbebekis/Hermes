@@ -115,7 +115,9 @@ public class SyncMutationExecutorBase : SyncExecutorBase
     /// </summary>
     protected virtual async Task<SyncExecutionResult> ExecuteApplyLocalNamespaceToRemoteAsync(SyncExecutionIntent Intent, CancellationToken CancellationToken)
     {
-        StorageResult<StorageItem> Result = await RemoteEndpoint.RenameItemAsync(Intent.RemoteItemId, Intent.Name, CancellationToken);
+        StorageResult<StorageItem> Result = string.Equals(Intent.SourceRemoteParentId, Intent.RemoteParentId, StringComparison.Ordinal)
+            ? await RemoteEndpoint.RenameItemAsync(Intent.RemoteItemId, Intent.Name, CancellationToken)
+            : await RemoteEndpoint.MoveItemAsync(Intent.RemoteItemId, Intent.SourceRemoteParentId, Intent.RemoteParentId, CancellationToken);
 
         if (Result.Succeeded)
             return SyncExecutionResultFactory.Completed(Intent.Request, Result.Value, Intent.LocalRelativePath);

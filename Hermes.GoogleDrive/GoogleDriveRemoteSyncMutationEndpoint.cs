@@ -77,6 +77,15 @@ public class GoogleDriveRemoteSyncMutationEndpoint : IRemoteSyncMutationEndpoint
         });
     }
     /// <inheritdoc/>
+    public async Task<StorageResult<StorageItem>> MoveItemAsync(string RemoteItemId, string OldParentId, string NewParentId, CancellationToken CancellationToken)
+    {
+        return await GoogleDriveStorageRunner.RunAsync("MoveItem", RemoteItemId, async () =>
+        {
+            await AuthenticateAsync(CancellationToken);
+            return await fClient.MoveFileAsync(RemoteItemId, OldParentId, NewParentId, CancellationToken);
+        });
+    }
+    /// <inheritdoc/>
     public async Task<StorageResult<StorageItem>> DeleteItemAsync(string RemoteItemId, CancellationToken CancellationToken)
     {
         return await GoogleDriveStorageRunner.RunAsync("DeleteItem", RemoteItemId, async () =>

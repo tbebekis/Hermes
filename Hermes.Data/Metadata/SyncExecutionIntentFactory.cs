@@ -83,9 +83,27 @@ static public class SyncExecutionIntentFactory
             ParentLocalPath(Request.LocalObservation?.RelativePath),
             StringComparison.Ordinal);
     }
+    static bool SameLocalName(SyncExecutionRequest Request)
+    {
+        return string.Equals(Request.BaseSnapshot?.Name ?? string.Empty, Request.LocalObservation?.Name ?? string.Empty, StringComparison.Ordinal);
+    }
+    static bool HasLocalParent(SyncExecutionRequest Request)
+    {
+        return HasText(ParentLocalPath(Request.LocalObservation?.RelativePath));
+    }
     static bool IsFolder(SyncExecutionRequest Request)
     {
         return string.Equals(ItemType(Request), "Folder", StringComparison.OrdinalIgnoreCase);
+    }
+    static string SourceRemoteParentId(SyncExecutionRequest Request)
+    {
+        if (HasText(Request.BaseSnapshot?.RemoteParentId))
+            return Request.BaseSnapshot.RemoteParentId;
+
+        if (HasText(Request.RemoteObservation?.RemoteParentId))
+            return Request.RemoteObservation.RemoteParentId;
+
+        return string.Empty;
     }
     static string TrackedItemId(SyncExecutionRequest Request)
     {
@@ -134,6 +152,18 @@ static public class SyncExecutionIntentFactory
     }
     static string RemoteParentId(SyncExecutionRequest Request)
     {
+        if (Request.Decision?.DecisionKind == SyncPlanDecisionKind.ApplyLocalNamespaceToRemote)
+        {
+            if (HasText(Request.LocalParentRemoteItemId))
+                return Request.LocalParentRemoteItemId;
+
+            if (HasLocalParent(Request))
+                return string.Empty;
+
+            if (HasText(Request.SyncRoot?.RemoteRootItemId))
+                return Request.SyncRoot.RemoteRootItemId;
+        }
+
         if (HasText(Request.RemoteObservation?.RemoteParentId))
             return Request.RemoteObservation.RemoteParentId;
 
@@ -239,6 +269,8 @@ static public class SyncExecutionIntentFactory
                 Require(Exists(Request.RemoteObservation), Intent, "Existing remote observation is required.");
                 Require(HasText(Intent.RemoteItemId), Intent, "Remote item id is required.");
                 Require(HasText(Intent.Name), Intent, "Remote target name is required.");
+                Require(HasText(Intent.SourceRemoteParentId), Intent, "Source remote parent id is required.");
+                Require(HasText(Intent.RemoteParentId), Intent, "Target remote parent id is required.");
                 break;
             case SyncExecutionIntentKind.PropagateLocalDelete:
                 Require(HasText(RemoteItemId(Request)), Intent, "Remote item id is required.");
@@ -274,6 +306,7 @@ static public class SyncExecutionIntentFactory
             ItemType = ItemType(Request),
             Name = Name(Request, ResolvedIntentKind),
             RemoteParentId = RemoteParentId(Request),
+            SourceRemoteParentId = SourceRemoteParentId(Request),
             ContentHash = ContentHash(Request, ResolvedIntentKind),
             Size = Size(Request, ResolvedIntentKind),
         };
@@ -290,10 +323,10 @@ static public class SyncExecutionIntentFactory
             Result.IntentKind = SyncExecutionIntentKind.Blocked;
             Result.ValidationMessages.Add("Local folder namespace changes are not supported yet.");
         }
-        else if (Result.IntentKind == SyncExecutionIntentKind.ApplyLocalNamespaceToRemote && !SameLocalParent(Request))
+        else if (Result.IntentKind == SyncExecutionIntentKind.ApplyLocalNamespaceToRemote && !SameLocalParent(Request) && !SameLocalName(Request))
         {
             Result.IntentKind = SyncExecutionIntentKind.Blocked;
-            Result.ValidationMessages.Add("Local move propagation is not supported yet.");
+            Result.ValidationMessages.Add("Combined local rename and move propagation is not supported yet.");
         }
         else if (Result.IntentKind == SyncExecutionIntentKind.ResolveConflict)
             Result.ValidationMessages.Add("Conflict resolution is required.");
