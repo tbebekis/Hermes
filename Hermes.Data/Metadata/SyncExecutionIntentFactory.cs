@@ -325,10 +325,10 @@ static public class SyncExecutionIntentFactory
             Result.IntentKind = SyncExecutionIntentKind.Blocked;
             Result.ValidationMessages.Add("Remote parent local path is unresolved.");
         }
-        else if (Result.IntentKind == SyncExecutionIntentKind.ApplyLocalNamespaceToRemote && IsFolder(Request))
+        else if (Result.IntentKind == SyncExecutionIntentKind.ApplyLocalNamespaceToRemote && IsFolder(Request) && !SameLocalParent(Request))
         {
             Result.IntentKind = SyncExecutionIntentKind.Blocked;
-            Result.ValidationMessages.Add("Local folder namespace changes are not supported yet.");
+            Result.ValidationMessages.Add("Local folder move propagation is not supported yet.");
         }
         else if (Result.IntentKind == SyncExecutionIntentKind.ResolveConflict)
             Result.ValidationMessages.Add("Conflict resolution is required.");

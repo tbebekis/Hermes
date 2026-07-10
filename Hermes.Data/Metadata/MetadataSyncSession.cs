@@ -247,13 +247,23 @@ public class MetadataSyncSession
         if (ScanItem == null || TrackedItem == null || BaseSnapshot == null || !BaseSnapshot.ExistsFlag)
             return false;
 
-        if (!string.Equals(TrackedItem.ItemType, "File", StringComparison.Ordinal) || !string.Equals(ScanItem.ItemType, "File", StringComparison.Ordinal))
+        if (!string.Equals(TrackedItem.ItemType, ScanItem.ItemType, StringComparison.Ordinal))
             return false;
 
-        if (string.IsNullOrWhiteSpace(TrackedItem.RemoteItemId) || string.IsNullOrWhiteSpace(ScanItem.ContentHash) || !ScanItem.Size.HasValue)
+        if (string.IsNullOrWhiteSpace(TrackedItem.RemoteItemId))
             return false;
 
-        return string.Equals(BaseSnapshot.ContentHash, ScanItem.ContentHash, StringComparison.Ordinal)
+        if (string.Equals(ScanItem.ItemType, "Folder", StringComparison.Ordinal))
+        {
+            return string.Equals(BaseSnapshot.ItemType, "Folder", StringComparison.Ordinal)
+                && string.Equals(ParentLocalPath(BaseSnapshot.LocalRelativePath), ScanItem.ParentRelativePath ?? string.Empty, StringComparison.Ordinal);
+        }
+
+        if (string.IsNullOrWhiteSpace(ScanItem.ContentHash) || !ScanItem.Size.HasValue)
+            return false;
+
+        return string.Equals(BaseSnapshot.ItemType, "File", StringComparison.Ordinal)
+            && string.Equals(BaseSnapshot.ContentHash, ScanItem.ContentHash, StringComparison.Ordinal)
             && BaseSnapshot.Size == ScanItem.Size;
     }
     TrackedItemRecord FindLocalNamespaceCandidate(string SyncRootId, LocalScanItem ScanItem, HashSet<string> ObservedLocalKeys, HashSet<string> UsedTrackedItemIds)
@@ -384,6 +394,10 @@ public class MetadataSyncSession
     static bool IsRemoteNamespaceApply(SyncExecutionResult Result)
     {
         return Result.Request?.Decision?.DecisionKind == SyncPlanDecisionKind.ApplyRemoteNamespaceToLocal;
+    }
+    static bool IsLocalNamespaceApply(SyncExecutionResult Result)
+    {
+        return Result.Request?.Decision?.DecisionKind == SyncPlanDecisionKind.ApplyLocalNamespaceToRemote;
     }
     static bool IsFolder(SyncExecutionResult Result)
     {
@@ -525,7 +539,7 @@ public class MetadataSyncSession
 
         AffectedTrackedItemIds.Add(ItemId);
 
-        if (!IsRemoteNamespaceApply(Result) || !IsFolder(Result))
+        if ((!IsRemoteNamespaceApply(Result) && !IsLocalNamespaceApply(Result)) || !IsFolder(Result))
             return AffectedTrackedItemIds;
 
         string NewFolderPath = Result.LocalRelativePath;
@@ -539,10 +553,23 @@ public class MetadataSyncSession
                 continue;
 
             LocalObservedSnapshotRecord LocalObservation = fStore.GetLocalObservation(Item.Id);
-            if (LocalObservation == null || !LocalObservation.ExistsFlag || !IsDescendantPath(OldFolderPath, LocalObservation.RelativePath))
+            BaseSnapshotRecord BaseSnapshot = fStore.GetBaseSnapshot(Item.Id);
+            string ExistingPath = LocalObservation?.RelativePath;
+            string CommittedPath = BaseSnapshot?.LocalRelativePath;
+
+            if (LocalObservation == null || !LocalObservation.ExistsFlag)
                 continue;
 
-            string NewLocalPath = ReplacePathPrefix(LocalObservation.RelativePath, OldFolderPath, NewFolderPath);
+            string NewLocalPath;
+            if (IsDescendantPath(OldFolderPath, ExistingPath))
+                NewLocalPath = ReplacePathPrefix(ExistingPath, OldFolderPath, NewFolderPath);
+            else if (IsDescendantPath(OldFolderPath, CommittedPath))
+                NewLocalPath = IsDescendantPath(NewFolderPath, ExistingPath)
+                    ? ExistingPath
+                    : ReplacePathPrefix(CommittedPath, OldFolderPath, NewFolderPath);
+            else
+                continue;
+
             Item.LocalKey = NewLocalPath;
             fStore.UpdateTrackedItem(Item);
             fStore.UpsertLocalObservation(CreateMovedLocalObservation(LocalObservation, NewLocalPath, ObservedTime));

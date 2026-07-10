@@ -471,6 +471,14 @@ public class SyncMutationExecutorBaseTests
             ObservedTime = new DateTime(2026, 7, 11, 10, 20, 0, DateTimeKind.Utc),
         },
     };
+    static SyncExecutionRequest LocalFolderRenameRequest()
+    {
+        SyncExecutionRequest Result = FolderRequest(SyncPlanDecisionKind.ApplyLocalNamespaceToRemote);
+        Result.Decision = new SyncPlanDecision("folder-1", SyncDiffKind.LocalNamespaceChanged, SyncPlanDecisionKind.ApplyLocalNamespaceToRemote);
+        Result.LocalObservation.Name = "RenamedFolder";
+        Result.LocalObservation.RelativePath = "RenamedFolder";
+        return Result;
+    }
     static SyncExecutionRequest NewFileUploadRequest() => new()
     {
         Decision = Decision(SyncPlanDecisionKind.UploadToRemote),
@@ -680,6 +688,26 @@ public class SyncMutationExecutorBaseTests
         Assert.Equal("remote-1", Assert.Single(RemoteEndpoint.MovedItemIds));
         Assert.Equal("remote-root", Assert.Single(RemoteEndpoint.MovedOldParentIds));
         Assert.Equal("remote-folder", Assert.Single(RemoteEndpoint.MovedNewParentIds));
+    }
+
+    /// <summary>
+    /// Verifies local folder rename intents rename remote folders.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsyncAppliesLocalFolderRenameToRemoteItem()
+    {
+        TestRemoteEndpoint RemoteEndpoint = new();
+        SyncMutationExecutorBase Executor = new(new TestLocalEndpoint(), RemoteEndpoint);
+
+        IReadOnlyList<SyncExecutionResult> Results = await Executor.ExecuteAsync(
+            [LocalFolderRenameRequest()],
+            CancellationToken.None);
+
+        Assert.Single(Results);
+        Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Results[0].ResultKind);
+        Assert.Equal("remote-folder-1", Assert.Single(RemoteEndpoint.RenamedItemIds));
+        Assert.Equal("RenamedFolder", Assert.Single(RemoteEndpoint.RenamedNames));
+        Assert.Empty(RemoteEndpoint.MovedItemIds);
     }
 
     /// <summary>
