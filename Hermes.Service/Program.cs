@@ -25,6 +25,13 @@ static public class Program
                 Services.AddSingleton<GoogleDriveClient>();
                 Services.AddSingleton<GoogleDriveMapper>();
                 Services.AddSingleton<IStorageProvider, GoogleDriveStorageProvider>();
+                Services.AddSingleton<ILocalSyncMutationEndpoint>(Provider =>
+                {
+                    SyncSettings Settings = Provider.GetRequiredService<IOptions<SyncSettings>>().Value;
+                    return new LocalSyncMutationEndpoint(Settings.LocalRootPath);
+                });
+                Services.AddSingleton<IRemoteSyncMutationEndpoint, GoogleDriveRemoteSyncMutationEndpoint>();
+                Services.AddSingleton<ISyncExecutor, SyncMutationExecutorBase>();
                 Services.AddSingleton<SyncPlanner>();
                 Services.AddSingleton<OperationQueue>();
                 Services.AddSingleton<ConflictResolver>();

@@ -11,9 +11,10 @@
     <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.5" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\Hermes.Core\Hermes.Core.csproj" />
-    <ProjectReference Include="..\Hermes.GoogleDrive\Hermes.GoogleDrive.csproj" />
-    <ProjectReference Include="..\Hermes.Storage\Hermes.Storage.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Hermes.Core\Hermes.Core.csproj" />
+        <ProjectReference Include="..\Hermes.Data\Hermes.Data.csproj" />
+        <ProjectReference Include="..\Hermes.GoogleDrive\Hermes.GoogleDrive.csproj" />
+        <ProjectReference Include="..\Hermes.Storage\Hermes.Storage.csproj" />
+    </ItemGroup>
 </Project>

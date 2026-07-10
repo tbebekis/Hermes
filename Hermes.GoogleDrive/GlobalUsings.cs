@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 global using Hermes.Common;
+global using Hermes.Data;
 global using Hermes.Storage;
 global using Google;
 global using Google.Apis.Auth.OAuth2;

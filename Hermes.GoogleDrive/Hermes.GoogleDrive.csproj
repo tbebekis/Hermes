@@ -7,6 +7,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\Hermes.Common\Hermes.Common.csproj" />
+        <ProjectReference Include="..\Hermes.Data\Hermes.Data.csproj" />
         <ProjectReference Include="..\Hermes.Storage\Hermes.Storage.csproj" />
         <ProjectReference Include="..\..\Tripous.Avalon\Tripous\Tripous.csproj" />
     </ItemGroup>
