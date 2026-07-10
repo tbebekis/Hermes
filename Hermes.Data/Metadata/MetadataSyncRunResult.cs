@@ -99,6 +99,27 @@ public class MetadataSyncRunResult
 
         return Items.Count == 0 ? "none" : string.Join(", ", Items);
     }
+    static string FormatNamespaceCollisionSummary(MetadataSyncSessionResult Result)
+    {
+        if (Result == null || Result.PendingExecutionRequests.Count == 0)
+            return "none";
+
+        List<string> Items = Result.PendingExecutionRequests
+            .Where(Item => Item.Decision?.DiffKind == SyncDiffKind.NamespaceCollision)
+            .Where(Item => !string.IsNullOrWhiteSpace(Item.RemoteObservation?.Name))
+            .GroupBy(Item => $"{Item.RemoteObservation.RemoteParentId ?? string.Empty}\u001F{Item.RemoteObservation.Name}")
+            .OrderByDescending(Group => Group.Count())
+            .ThenBy(Group => Group.First().RemoteObservation.Name)
+            .Take(5)
+            .Select(Group =>
+            {
+                RemoteObservedSnapshotRecord Observation = Group.First().RemoteObservation;
+                return $"{Observation.Name}@{Observation.RemoteParentId ?? string.Empty}={Group.Count()}";
+            })
+            .ToList();
+
+        return Items.Count == 0 ? "none" : string.Join(", ", Items);
+    }
     static string FormatUncommittedExecutionSummary(SyncExecutionApplyResult Result)
     {
         if (Result == null || Result.UncommittedResults.Count == 0)
@@ -191,6 +212,11 @@ public class MetadataSyncRunResult
     /// Gets a bounded summary of blocked pending execution requests.
     /// </summary>
     public string BlockedExecutionSummary => FormatBlockedExecutionSummary(SessionResult);
+
+    /// <summary>
+    /// Gets a bounded summary of namespace collision groups.
+    /// </summary>
+    public string NamespaceCollisionSummary => FormatNamespaceCollisionSummary(SessionResult);
 
     /// <summary>
     /// Gets a summary of uncommitted execution result kinds.
