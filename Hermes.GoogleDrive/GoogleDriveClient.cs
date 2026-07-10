@@ -350,6 +350,8 @@ public class GoogleDriveClient
 
         if (Item.IsFolder)
             throw new HermesException("Cannot download a Google Drive folder as a regular file.");
+        if (Item.MimeType.StartsWith("application/vnd.google-apps.", StringComparison.Ordinal))
+            throw new HermesException("Google Drive Docs Editors files cannot be downloaded as binary content. Export is not supported yet.");
 
         string FolderPath = Path.GetDirectoryName(LocalFilePath);
         if (!string.IsNullOrWhiteSpace(FolderPath))

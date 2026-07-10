@@ -16,6 +16,11 @@ public class SyncExecutionRequest
     public SyncPlanDecision Decision { get; set; }
 
     /// <summary>
+    /// Gets or sets the synchronization root.
+    /// </summary>
+    public SyncRootRecord SyncRoot { get; set; }
+
+    /// <summary>
     /// Gets or sets the tracked item identity.
     /// </summary>
     public TrackedItemRecord TrackedItem { get; set; }

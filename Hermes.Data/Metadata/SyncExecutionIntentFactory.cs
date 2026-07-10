@@ -36,6 +36,11 @@ static public class SyncExecutionIntentFactory
         if (HasText(Request.BaseSnapshot?.LocalRelativePath))
             return Request.BaseSnapshot.LocalRelativePath;
 
+        if (HasText(Request.RemoteObservation?.Name)
+            && HasText(Request.RemoteObservation.RemoteParentId)
+            && string.Equals(Request.RemoteObservation.RemoteParentId, Request.SyncRoot?.RemoteRootItemId, StringComparison.Ordinal))
+            return Request.RemoteObservation.Name;
+
         return string.Empty;
     }
     static string TrackedItemId(SyncExecutionRequest Request)
@@ -87,6 +92,9 @@ static public class SyncExecutionIntentFactory
 
         if (HasText(Request.BaseSnapshot?.RemoteParentId))
             return Request.BaseSnapshot.RemoteParentId;
+
+        if (HasText(Request.SyncRoot?.RemoteRootItemId))
+            return Request.SyncRoot.RemoteRootItemId;
 
         return string.Empty;
     }

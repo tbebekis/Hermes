@@ -26,6 +26,11 @@ public class SyncExecutionResult
     public StorageError Error { get; set; }
 
     /// <summary>
+    /// Gets or sets the remote item observed as the result of a successful mutation.
+    /// </summary>
+    public StorageItem RemoteItem { get; set; }
+
+    /// <summary>
     /// Gets or sets a diagnostic message for the execution result.
     /// </summary>
     public string Message { get; set; } = string.Empty;

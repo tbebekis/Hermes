@@ -327,6 +327,13 @@ where Id = :Id";
         fStore.ExecSql(Sql.InsertTrackedItem, ToParams(Record));
     }
     /// <summary>
+    /// Updates an existing tracked item.
+    /// </summary>
+    public void UpdateTrackedItem(TrackedItemRecord Record)
+    {
+        fStore.ExecSql(Sql.UpdateTrackedItem, ToParams(Record));
+    }
+    /// <summary>
     /// Returns a tracked item by id.
     /// </summary>
     public TrackedItemRecord GetTrackedItem(string Id)
@@ -628,6 +635,13 @@ insert into TRACKED_ITEM
     (Id, SyncRootId, RemoteItemId, LocalKey, ItemType)
 values
     (:Id, :SyncRootId, :RemoteItemId, :LocalKey, :ItemType)";
+        public const string UpdateTrackedItem = @"
+update TRACKED_ITEM set
+    SyncRootId = :SyncRootId,
+    RemoteItemId = :RemoteItemId,
+    LocalKey = :LocalKey,
+    ItemType = :ItemType
+where Id = :Id";
         public const string UpdateBaseSnapshot = @"
 update BASE_SNAPSHOT set
     ExistsFlag = :ExistsFlag,

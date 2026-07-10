@@ -211,6 +211,6 @@ public class MetadataSyncLoopTests
         await Loop(Runner, Logger).RunAsync(Cancellation.Token);
 
         Assert.Contains(Logger.Entries, Item => Item.Contains("Mutations enabled: False."));
-        Assert.Contains(Logger.Entries, Item => Item.Contains("Kind: Incremental.") && Item.Contains("Local items: 2.") && Item.Contains("Remote changes: 3.") && Item.Contains("Pending summary: UploadToRemote=2, DownloadToLocal=1, Blocked=1.") && Item.Contains("Pending diffs: LocalChanged=2, RemoteChanged=1, NamespaceCollision=1.") && Item.Contains("Blocked items: NamespaceCollision:DuplicateName.txt#remote-4.") && Item.Contains("Uncommitted executions: 1."));
+        Assert.Contains(Logger.Entries, Item => Item.Contains("Kind: Incremental.") && Item.Contains("Local items: 2.") && Item.Contains("Remote changes: 3.") && Item.Contains("Pending summary: UploadToRemote=2, DownloadToLocal=1, Blocked=1.") && Item.Contains("Pending diffs: LocalChanged=2, RemoteChanged=1, NamespaceCollision=1.") && Item.Contains("Blocked items: NamespaceCollision:DuplicateName.txt#remote-4.") && Item.Contains("Uncommitted executions: 1.") && Item.Contains("Uncommitted summary: Blocked=1.") && Item.Contains("Uncommitted messages: Blocked:blocked."));
     }
 }

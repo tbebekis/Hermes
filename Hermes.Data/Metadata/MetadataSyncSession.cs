@@ -95,10 +95,13 @@ public class MetadataSyncSession
     {
         Guard.NotNull(Decision, nameof(Decision));
 
+        TrackedItemRecord TrackedItem = fStore.GetTrackedItem(Decision.TrackedItemId);
+
         return new SyncExecutionRequest()
         {
             Decision = Decision,
-            TrackedItem = fStore.GetTrackedItem(Decision.TrackedItemId),
+            SyncRoot = TrackedItem == null ? null : fStore.GetSyncRoot(TrackedItem.SyncRootId),
+            TrackedItem = TrackedItem,
             BaseSnapshot = fStore.GetBaseSnapshot(Decision.TrackedItemId),
             LocalObservation = fStore.GetLocalObservation(Decision.TrackedItemId),
             RemoteObservation = fStore.GetRemoteObservation(Decision.TrackedItemId),
@@ -107,6 +110,35 @@ public class MetadataSyncSession
     static bool CanCommitExecutionResult(SyncExecutionResult Result)
     {
         return Result.ResultKind == SyncExecutionResultKind.CompletedAndVerified;
+    }
+    static bool HasVerifiedCommitObservations(SyncExecutionResult Result)
+    {
+        return Result.Request?.LocalObservation != null
+            && Result.Request.RemoteObservation != null;
+    }
+    static void MarkMissingCommitObservations(SyncExecutionResult Result)
+    {
+        if (string.IsNullOrWhiteSpace(Result.Message))
+            Result.Message = "Base snapshot cannot be committed until local and remote observations are both available.";
+    }
+    void ApplyRemoteItemObservation(SyncExecutionResult Result, DateTime ObservedTime)
+    {
+        if (Result.RemoteItem == null)
+            return;
+
+        string ItemId = TrackedItemId(Result);
+        TrackedItemRecord TrackedItem = Result.Request.TrackedItem ?? fStore.GetTrackedItem(ItemId);
+
+        if (TrackedItem != null && string.IsNullOrWhiteSpace(TrackedItem.RemoteItemId))
+        {
+            TrackedItem.RemoteItemId = Result.RemoteItem.Id;
+            fStore.UpdateTrackedItem(TrackedItem);
+            Result.Request.TrackedItem = TrackedItem;
+        }
+
+        RemoteObservedSnapshotRecord Observation = RemoteObservationMapper.FromStorageItem(Result.RemoteItem, ItemId, ObservedTime);
+        fStore.UpsertRemoteObservation(Observation);
+        Result.Request.RemoteObservation = Observation;
     }
     static string TrackedItemId(SyncExecutionResult Result)
     {
@@ -312,12 +344,18 @@ public class MetadataSyncSession
             Guard.NotNull(ExecutionResult, nameof(Results));
 
             if (CanCommitExecutionResult(ExecutionResult))
+                ApplyRemoteItemObservation(ExecutionResult, CommittedTime);
+
+            if (CanCommitExecutionResult(ExecutionResult) && HasVerifiedCommitObservations(ExecutionResult))
             {
                 TrackedItemIds.Add(TrackedItemId(ExecutionResult));
                 Result.CommittedResults.Add(ExecutionResult);
             }
             else
             {
+                if (CanCommitExecutionResult(ExecutionResult))
+                    MarkMissingCommitObservations(ExecutionResult);
+
                 Result.UncommittedResults.Add(ExecutionResult);
             }
         }

@@ -11,6 +11,16 @@ public class SyncExecutionIntentFactoryTests
     // ● private
 
     static SyncPlanDecision Decision(SyncPlanDecisionKind DecisionKind) => new("item-1", SyncDiffKind.LocalChanged, DecisionKind);
+    static SyncRootRecord SyncRoot() => new()
+    {
+        Id = "root-1",
+        ProviderName = "Fake",
+        ConnectionId = "account-1",
+        LocalRootPath = "/local",
+        RemoteRootItemId = "remote-root",
+        IsEnabled = true,
+        CreatedTime = new DateTime(2026, 7, 11, 9, 0, 0, DateTimeKind.Utc),
+    };
     static TrackedItemRecord TrackedItem() => new()
     {
         Id = "item-1",
@@ -62,6 +72,7 @@ public class SyncExecutionIntentFactoryTests
     static SyncExecutionRequest Request(SyncPlanDecisionKind DecisionKind) => new()
     {
         Decision = Decision(DecisionKind),
+        SyncRoot = SyncRoot(),
         TrackedItem = TrackedItem(),
         BaseSnapshot = BaseSnapshot(),
         LocalObservation = LocalObservation(),
@@ -114,12 +125,31 @@ public class SyncExecutionIntentFactoryTests
         ExecutionRequest.TrackedItem.RemoteItemId = string.Empty;
         ExecutionRequest.BaseSnapshot.RemoteParentId = string.Empty;
         ExecutionRequest.RemoteObservation = null;
+        ExecutionRequest.SyncRoot.RemoteRootItemId = string.Empty;
 
         SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(ExecutionRequest);
 
         Assert.Equal(SyncExecutionIntentKind.UploadToRemote, Intent.IntentKind);
         Assert.False(Intent.CanExecute);
         Assert.Contains("Remote item id or remote parent id is required.", Intent.ValidationMessages);
+    }
+    /// <summary>
+    /// Verifies local root uploads can resolve the remote parent from the sync root.
+    /// </summary>
+    [Fact]
+    public void CreateResolvesRootUploadParentFromSyncRoot()
+    {
+        SyncExecutionRequest ExecutionRequest = Request(SyncPlanDecisionKind.UploadToRemote);
+        ExecutionRequest.TrackedItem.RemoteItemId = string.Empty;
+        ExecutionRequest.BaseSnapshot.RemoteParentId = string.Empty;
+        ExecutionRequest.RemoteObservation = null;
+
+        SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(ExecutionRequest);
+
+        Assert.Equal(SyncExecutionIntentKind.UploadToRemote, Intent.IntentKind);
+        Assert.Equal("remote-root", Intent.RemoteParentId);
+        Assert.True(Intent.CanExecute);
+        Assert.Empty(Intent.ValidationMessages);
     }
     /// <summary>
     /// Verifies local delete propagation requires a remote item id.
@@ -146,12 +176,30 @@ public class SyncExecutionIntentFactoryTests
         SyncExecutionRequest ExecutionRequest = Request(SyncPlanDecisionKind.DownloadToLocal);
         ExecutionRequest.BaseSnapshot.LocalRelativePath = string.Empty;
         ExecutionRequest.LocalObservation = null;
+        ExecutionRequest.RemoteObservation.RemoteParentId = "remote-folder";
 
         SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(ExecutionRequest);
 
         Assert.Equal(SyncExecutionIntentKind.DownloadToLocal, Intent.IntentKind);
         Assert.False(Intent.CanExecute);
         Assert.Contains("Local path is required.", Intent.ValidationMessages);
+    }
+    /// <summary>
+    /// Verifies root remote downloads can resolve the local path from the remote name.
+    /// </summary>
+    [Fact]
+    public void CreateResolvesRootRemoteDownloadPathFromRemoteName()
+    {
+        SyncExecutionRequest ExecutionRequest = Request(SyncPlanDecisionKind.DownloadToLocal);
+        ExecutionRequest.BaseSnapshot.LocalRelativePath = string.Empty;
+        ExecutionRequest.LocalObservation = null;
+
+        SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(ExecutionRequest);
+
+        Assert.Equal(SyncExecutionIntentKind.DownloadToLocal, Intent.IntentKind);
+        Assert.Equal("File.txt", Intent.LocalRelativePath);
+        Assert.True(Intent.CanExecute);
+        Assert.Empty(Intent.ValidationMessages);
     }
     /// <summary>
     /// Verifies remote delete propagation can use the base local path.

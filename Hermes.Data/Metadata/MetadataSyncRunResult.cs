@@ -93,6 +93,31 @@ public class MetadataSyncRunResult
 
         return Items.Count == 0 ? "none" : string.Join(", ", Items);
     }
+    static string FormatUncommittedExecutionSummary(SyncExecutionApplyResult Result)
+    {
+        if (Result == null || Result.UncommittedResults.Count == 0)
+            return "none";
+
+        return string.Join(
+            ", ",
+            Result.UncommittedResults
+                .GroupBy(Item => Item.ResultKind)
+                .OrderBy(Group => Group.Key)
+                .Select(Group => $"{Group.Key}={Group.Count()}"));
+    }
+    static string FormatUncommittedExecutionMessages(SyncExecutionApplyResult Result)
+    {
+        if (Result == null || Result.UncommittedResults.Count == 0)
+            return "none";
+
+        List<string> Items = Result.UncommittedResults
+            .Where(Item => !string.IsNullOrWhiteSpace(Item.Message))
+            .Take(5)
+            .Select(Item => $"{Item.ResultKind}:{Item.Message}")
+            .ToList();
+
+        return Items.Count == 0 ? "none" : string.Join(", ", Items);
+    }
 
     // ● properties
 
@@ -160,4 +185,14 @@ public class MetadataSyncRunResult
     /// Gets a bounded summary of blocked pending execution requests.
     /// </summary>
     public string BlockedExecutionSummary => FormatBlockedExecutionSummary(SessionResult);
+
+    /// <summary>
+    /// Gets a summary of uncommitted execution result kinds.
+    /// </summary>
+    public string UncommittedExecutionSummary => FormatUncommittedExecutionSummary(ExecutionApplyResult);
+
+    /// <summary>
+    /// Gets a bounded summary of uncommitted execution messages.
+    /// </summary>
+    public string UncommittedExecutionMessages => FormatUncommittedExecutionMessages(ExecutionApplyResult);
 }

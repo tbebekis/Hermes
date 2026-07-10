@@ -778,6 +778,50 @@ public class MetadataSyncSessionTests
         Assert.Equal("hash-remote", Store.GetBaseSnapshot("item-1").ContentHash);
     }
     /// <summary>
+    /// Verifies successful uploads persist the returned remote item before committing base state.
+    /// </summary>
+    [Fact]
+    public void ApplyExecutionResultsStoresUploadedRemoteItemBeforeBaseCommit()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 8, 3, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", null, "LocalOnly.txt"));
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            ExistsFlag = true,
+            RelativePath = "LocalOnly.txt",
+            Name = "LocalOnly.txt",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-local",
+            ObservedTime = Time,
+        });
+        MetadataSyncSessionResult SessionResult = Session.AdvanceMetadataOnly("root-1", Time);
+
+        SyncExecutionApplyResult Result = Session.ApplyExecutionResults(
+            [
+                new SyncExecutionResult()
+                {
+                    Request = SessionResult.PendingExecutionRequests[0],
+                    ResultKind = SyncExecutionResultKind.CompletedAndVerified,
+                    RemoteItem = CreateStorageItem("remote-uploaded", "LocalOnly.txt", "hash-local", 1),
+                },
+            ],
+            Time);
+
+        Assert.Single(Result.CommittedResults);
+        Assert.Empty(Result.UncommittedResults);
+        Assert.Single(Result.CommittedBaseSnapshots);
+        Assert.Equal("remote-uploaded", Store.GetTrackedItem("item-1").RemoteItemId);
+        Assert.Equal("remote-uploaded", Store.GetRemoteObservation("item-1").RemoteItemId);
+        Assert.Equal("hash-local", Store.GetBaseSnapshot("item-1").ContentHash);
+    }
+    /// <summary>
     /// Verifies failed execution results do not commit base snapshots.
     /// </summary>
     [Fact]

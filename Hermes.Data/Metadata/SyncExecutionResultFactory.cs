@@ -45,6 +45,21 @@ static public class SyncExecutionResultFactory
             ResultKind = SyncExecutionResultKind.CompletedAndVerified,
         };
     }
+    /// <summary>
+    /// Creates a completed and verified execution result with the resulting remote item.
+    /// </summary>
+    static public SyncExecutionResult Completed(SyncExecutionRequest Request, StorageItem RemoteItem)
+    {
+        Guard.NotNull(Request, nameof(Request));
+        Guard.NotNull(RemoteItem, nameof(RemoteItem));
+
+        return new SyncExecutionResult()
+        {
+            Request = Request,
+            ResultKind = SyncExecutionResultKind.CompletedAndVerified,
+            RemoteItem = RemoteItem,
+        };
+    }
 
     /// <summary>
     /// Creates a blocked execution result.

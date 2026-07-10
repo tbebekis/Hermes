@@ -42,7 +42,7 @@ public class SyncMutationExecutorBase : SyncExecutorBase
         }
 
         if (Result.Succeeded)
-            return SyncExecutionResultFactory.Completed(Intent.Request);
+            return SyncExecutionResultFactory.Completed(Intent.Request, Result.Value);
 
         return SyncExecutionResultFactory.FromStorageError(Intent.Request, Result.Error);
     }
@@ -85,7 +85,7 @@ public class SyncMutationExecutorBase : SyncExecutorBase
             CancellationToken);
 
         if (Result.Succeeded)
-            return SyncExecutionResultFactory.Completed(Intent.Request);
+            return SyncExecutionResultFactory.Completed(Intent.Request, Result.Value);
 
         return SyncExecutionResultFactory.FromStorageError(Intent.Request, Result.Error);
     }
@@ -98,7 +98,7 @@ public class SyncMutationExecutorBase : SyncExecutorBase
         StorageResult<StorageItem> Result = await RemoteEndpoint.DeleteItemAsync(Intent.RemoteItemId, CancellationToken);
 
         if (Result.Succeeded)
-            return SyncExecutionResultFactory.Completed(Intent.Request);
+            return SyncExecutionResultFactory.Completed(Intent.Request, Result.Value);
 
         return SyncExecutionResultFactory.FromStorageError(Intent.Request, Result.Error);
     }

@@ -24,7 +24,7 @@ public class MetadataSyncLoop
     void LogSuccess(MetadataSyncRunResult Result)
     {
         fLogger.LogInformation(
-            "Sync pass completed for root {SyncRootId}. Kind: {Kind}. Local items: {LocalObservedItemCount}. Remote items: {RemoteObservedItemCount}. Remote changes: {RemoteObservedChangeCount}. Decisions: {DecisionCount}. Pending executions: {PendingExecutionCount}. Pending summary: {PendingExecutionSummary}. Pending diffs: {PendingDiffSummary}. Blocked items: {BlockedExecutionSummary}. Committed executions: {CommittedExecutionCount}. Uncommitted executions: {UncommittedExecutionCount}.",
+            "Sync pass completed for root {SyncRootId}. Kind: {Kind}. Local items: {LocalObservedItemCount}. Remote items: {RemoteObservedItemCount}. Remote changes: {RemoteObservedChangeCount}. Decisions: {DecisionCount}. Pending executions: {PendingExecutionCount}. Pending summary: {PendingExecutionSummary}. Pending diffs: {PendingDiffSummary}. Blocked items: {BlockedExecutionSummary}. Committed executions: {CommittedExecutionCount}. Uncommitted executions: {UncommittedExecutionCount}. Uncommitted summary: {UncommittedExecutionSummary}. Uncommitted messages: {UncommittedExecutionMessages}.",
             fSyncRoot.Id,
             Result.Kind,
             Result.LocalObservedItemCount,
@@ -36,7 +36,9 @@ public class MetadataSyncLoop
             Result.PendingDiffSummary,
             Result.BlockedExecutionSummary,
             Result.CommittedExecutionCount,
-            Result.UncommittedExecutionCount);
+            Result.UncommittedExecutionCount,
+            Result.UncommittedExecutionSummary,
+            Result.UncommittedExecutionMessages);
     }
     async Task RunPassAsync(CancellationToken CancellationToken)
     {

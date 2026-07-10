@@ -26,6 +26,22 @@ static class GoogleDriveStorageRunner
             string.Empty,
             Ex);
     }
+    static StorageError MapHermesException(HermesException Ex, string OperationName, string ItemId)
+    {
+        return new StorageError(
+            StorageErrorKind.InvalidRequest,
+            Ex.Message,
+            false,
+            false,
+            TimeSpan.Zero,
+            "Google Drive",
+            string.Empty,
+            string.Empty,
+            OperationName,
+            ItemId,
+            string.Empty,
+            Ex);
+    }
 
     // ● public
 
@@ -47,6 +63,10 @@ static class GoogleDriveStorageRunner
         {
             return StorageResult<T>.Failure(GoogleDriveErrorMapper.Map(Ex, OperationName));
         }
+        catch (HermesException Ex)
+        {
+            return StorageResult<T>.Failure(MapHermesException(Ex, OperationName, string.Empty));
+        }
     }
     /// <summary>
     /// Runs a Google Drive operation for a specific item id.
@@ -65,6 +85,10 @@ static class GoogleDriveStorageRunner
         catch (GoogleApiException Ex)
         {
             return StorageResult<T>.Failure(GoogleDriveErrorMapper.Map(Ex, OperationName, ItemId));
+        }
+        catch (HermesException Ex)
+        {
+            return StorageResult<T>.Failure(MapHermesException(Ex, OperationName, ItemId));
         }
     }
     /// <summary>
