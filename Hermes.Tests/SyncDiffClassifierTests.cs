@@ -48,6 +48,19 @@ public class SyncDiffClassifierTests
         Assert.Equal(SyncDiffKind.NoChange, Kind);
     }
     /// <summary>
+    /// Verifies provider version drift alone does not require endpoint mutation.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsNoChangeWhenOnlyProviderVersionChanged()
+    {
+        SyncItemState RemoteState = State();
+        RemoteState.ProviderVersion = 2;
+
+        SyncDiffKind Kind = Classify(State(), State(), RemoteState);
+
+        Assert.Equal(SyncDiffKind.NoChange, Kind);
+    }
+    /// <summary>
     /// Verifies local-only change classification.
     /// </summary>
     [Fact]

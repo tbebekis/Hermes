@@ -233,6 +233,36 @@ public class MetadataSyncSessionTests
         default,
         Version,
         false);
+    static LocalScanItem CreateLocalFolderScanItem(string Name, DateTime Time) => new()
+    {
+        RelativePath = Name,
+        Name = Name,
+        ItemType = "Folder",
+        ModifiedTime = Time,
+    };
+    static LocalScanItem CreateNestedLocalScanItem(string RelativePath, string Name, string ParentRelativePath, string Hash, DateTime Time) => new()
+    {
+        RelativePath = RelativePath,
+        Name = Name,
+        ParentRelativePath = ParentRelativePath,
+        ItemType = "File",
+        Size = 5,
+        ContentHash = Hash,
+        ModifiedTime = Time,
+    };
+    static StorageItem CreateStorageFolder(string RemoteItemId, string Name, long Version) => new(
+        RemoteItemId,
+        "remote-root",
+        Name,
+        "/" + Name,
+        StorageItemKind.Folder,
+        "application/vnd.google-apps.folder",
+        0,
+        string.Empty,
+        default,
+        default,
+        Version,
+        false);
     static SyncExecutionRequest CreateExecutionRequest(SyncPlanDecisionKind DecisionKind) => new()
     {
         Decision = new SyncPlanDecision("item-1", SyncDiffKind.LocalChanged, DecisionKind),
@@ -644,6 +674,51 @@ public class MetadataSyncSessionTests
         Assert.Equal(SyncPlanDecisionKind.CommitBase, Result.Decisions[0].DecisionKind);
         Assert.Equal("hash-1", Store.GetBaseSnapshot("item-1").ContentHash);
         Assert.Equal("token-1", Store.GetRemoteCheckpoint("root-1").StartPageToken);
+    }
+    /// <summary>
+    /// Verifies bootstrap adopts matching local and remote root items into the same tracked identities.
+    /// </summary>
+    [Fact]
+    public void AdvanceWithRemoteSnapshotAdoptsMatchingBootstrapItems()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 7, 42, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+
+        MetadataSyncSessionResult Result = Session.AdvanceWithRemoteSnapshot(
+            "root-1",
+            [
+                CreateLocalScanItem("LocalFile01.txt", "hash-file", Time),
+                CreateLocalFolderScanItem("LocalFolder01", Time),
+                CreateNestedLocalScanItem("LocalFolder01/NestedLocal01.txt", "NestedLocal01.txt", "LocalFolder01", "hash-nested", Time),
+            ],
+            [
+                CreateStorageItem("remote-file", "LocalFile01.txt", "hash-file", 1),
+                CreateStorageFolder("remote-folder", "LocalFolder01", 1),
+            ],
+            CreateCheckpoint("token-bootstrap", Time),
+            Time,
+            Time,
+            Time,
+            "scan-bootstrap");
+        TrackedItemRecord File = Store.GetTrackedItemByLocalKey("root-1", "LocalFile01.txt");
+        TrackedItemRecord Folder = Store.GetTrackedItemByLocalKey("root-1", "LocalFolder01");
+        TrackedItemRecord Nested = Store.GetTrackedItemByLocalKey("root-1", "LocalFolder01/NestedLocal01.txt");
+        SyncExecutionRequest NestedRequest = Result.PendingExecutionRequests.Single();
+
+        Assert.Equal(3, Store.GetTrackedItems("root-1").Count);
+        Assert.Equal("remote-file", File.RemoteItemId);
+        Assert.Equal("remote-folder", Folder.RemoteItemId);
+        Assert.Null(Nested.RemoteItemId);
+        Assert.NotNull(Store.GetBaseSnapshot(File.Id));
+        Assert.NotNull(Store.GetBaseSnapshot(Folder.Id));
+        Assert.Null(Store.GetBaseSnapshot(Nested.Id));
+        Assert.Single(Result.PendingExecutorDecisions);
+        Assert.Equal(SyncPlanDecisionKind.UploadToRemote, NestedRequest.Decision.DecisionKind);
+        Assert.Equal("remote-folder", NestedRequest.LocalParentRemoteItemId);
     }
     /// <summary>
     /// Verifies an incremental changes session returns executor work after importing changes.

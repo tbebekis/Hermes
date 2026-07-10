@@ -94,7 +94,13 @@ public class SqlMetadataStore
         foreach (TrackedItemRecord TrackedItem in Result.CreatedTrackedItems)
             ExecuteInsertTrackedItem(Transaction, TrackedItem);
 
+        foreach (TrackedItemRecord TrackedItem in Result.AdoptedTrackedItems)
+            fStore.ExecSql(Transaction, Sql.UpdateTrackedItem, ToParams(TrackedItem));
+
         StoreRemoteObservations(Transaction, Result.Observations);
+
+        foreach (BaseSnapshotRecord BaseSnapshot in Result.CommittedBaseSnapshots)
+            StoreBaseSnapshot(Transaction, BaseSnapshot);
     }
 
     // ● parameter mapping

@@ -25,8 +25,7 @@ public class SyncDiffClassifier
             && SameText(A.LocalRelativePath, B.LocalRelativePath)
             && SameText(A.RemoteParentId, B.RemoteParentId)
             && SameText(A.ContentHash, B.ContentHash)
-            && A.Size == B.Size
-            && A.ProviderVersion == B.ProviderVersion;
+            && A.Size == B.Size;
     }
     static bool HasChanged(SyncItemState BaseState, SyncItemState ObservedState)
     {

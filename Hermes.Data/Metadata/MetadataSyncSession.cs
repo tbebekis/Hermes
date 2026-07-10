@@ -86,6 +86,112 @@ public class MetadataSyncSession
             .Where(Item => !string.IsNullOrWhiteSpace(Item.RemoteItemId))
             .ToDictionary(Item => Item.RemoteItemId);
     }
+    Dictionary<string, string> GetKnownRemoteLocalKeys(string SyncRootId)
+    {
+        return fStore.GetTrackedItems(SyncRootId)
+            .Where(Item => !string.IsNullOrWhiteSpace(Item.RemoteItemId) && !string.IsNullOrWhiteSpace(Item.LocalKey))
+            .ToDictionary(Item => Item.RemoteItemId, Item => Item.LocalKey);
+    }
+    static string ProjectedRemoteLocalKey(SyncRootRecord SyncRoot, StorageItem Item, Dictionary<string, string> KnownRemoteLocalKeys)
+    {
+        if (SyncRoot == null || Item == null || string.IsNullOrWhiteSpace(Item.Name))
+            return null;
+
+        if (string.Equals(Item.ParentId, SyncRoot.RemoteRootItemId, StringComparison.Ordinal))
+            return Item.Name;
+
+        if (!KnownRemoteLocalKeys.TryGetValue(Item.ParentId, out string ParentLocalKey))
+            return null;
+
+        return string.IsNullOrWhiteSpace(ParentLocalKey)
+            ? Item.Name
+            : ParentLocalKey + "/" + Item.Name;
+    }
+    static Dictionary<string, int> CountProjectedRemoteLocalKeys(SyncRootRecord SyncRoot, IEnumerable<StorageItem> Items, Dictionary<string, string> KnownRemoteLocalKeys)
+    {
+        Dictionary<string, int> Result = new();
+
+        foreach (StorageItem Item in Items)
+        {
+            string Key = ProjectedRemoteLocalKey(SyncRoot, Item, KnownRemoteLocalKeys);
+            if (string.IsNullOrWhiteSpace(Key))
+                continue;
+
+            Result.TryGetValue(Key, out int Count);
+            Result[Key] = Count + 1;
+        }
+
+        return Result;
+    }
+    static bool SameOptionalText(string A, string B)
+    {
+        if (string.IsNullOrWhiteSpace(A) || string.IsNullOrWhiteSpace(B))
+            return true;
+
+        return string.Equals(A, B, StringComparison.Ordinal);
+    }
+    static bool SameOptionalSize(long? LocalSize, long RemoteSize)
+    {
+        if (!LocalSize.HasValue)
+            return true;
+
+        return LocalSize.Value == RemoteSize;
+    }
+    static bool CanAdoptBootstrapItem(StorageItem RemoteItem, LocalObservedSnapshotRecord LocalObservation)
+    {
+        if (RemoteItem == null || LocalObservation == null || !LocalObservation.ExistsFlag || RemoteItem.Trashed)
+            return false;
+
+        string RemoteType = ItemType(RemoteItem);
+        if (!string.Equals(LocalObservation.ItemType, RemoteType, StringComparison.Ordinal))
+            return false;
+
+        if (RemoteItem.IsFolder)
+            return true;
+
+        return SameOptionalSize(LocalObservation.Size, RemoteItem.Size)
+            && SameOptionalText(LocalObservation.ContentHash, RemoteItem.Md5Hash);
+    }
+    bool TryAdoptBootstrapItem(
+        RemoteBootstrapResult Result,
+        Dictionary<string, TrackedItemRecord> TrackedItemsByRemoteId,
+        Dictionary<string, TrackedItemRecord> TrackedItemsByLocalKey,
+        Dictionary<string, string> KnownRemoteLocalKeys,
+        Dictionary<string, int> ProjectedLocalKeyCounts,
+        StorageItem Item,
+        string ProjectedLocalKey,
+        DateTime ObservedTime,
+        out TrackedItemRecord TrackedItem)
+    {
+        TrackedItem = null;
+
+        if (string.IsNullOrWhiteSpace(ProjectedLocalKey))
+            return false;
+
+        if (!ProjectedLocalKeyCounts.TryGetValue(ProjectedLocalKey, out int Count) || Count != 1)
+            return false;
+
+        if (!TrackedItemsByLocalKey.TryGetValue(ProjectedLocalKey, out TrackedItem))
+            return false;
+
+        if (!string.IsNullOrWhiteSpace(TrackedItem.RemoteItemId))
+            return false;
+
+        LocalObservedSnapshotRecord LocalObservation = fStore.GetLocalObservation(TrackedItem.Id);
+        if (!CanAdoptBootstrapItem(Item, LocalObservation))
+            return false;
+
+        TrackedItem.RemoteItemId = Item.Id;
+        TrackedItemsByRemoteId[Item.Id] = TrackedItem;
+        KnownRemoteLocalKeys[Item.Id] = ProjectedLocalKey;
+        Result.AdoptedTrackedItems.Add(TrackedItem);
+
+        RemoteObservedSnapshotRecord RemoteObservation = RemoteObservationMapper.FromStorageItem(Item, TrackedItem.Id, ObservedTime);
+        Result.Observations.Add(RemoteObservation);
+        Result.CommittedBaseSnapshots.Add(BaseSnapshotMapper.FromVerifiedObservations(LocalObservation, RemoteObservation, ObservedTime));
+
+        return true;
+    }
     static void CheckCheckpointSyncRoot(string SyncRootId, RemoteCheckpointRecord Checkpoint)
     {
         if (!string.Equals(SyncRootId, Checkpoint.SyncRootId, StringComparison.Ordinal))
@@ -318,19 +424,38 @@ public class MetadataSyncSession
         Guard.NotNull(Checkpoint, nameof(Checkpoint));
         CheckCheckpointSyncRoot(SyncRootId, Checkpoint);
 
+        SyncRootRecord SyncRoot = fStore.GetSyncRoot(SyncRootId);
+        List<StorageItem> ItemList = Items.ToList();
         RemoteBootstrapResult Result = new();
         Dictionary<string, TrackedItemRecord> TrackedItemsByRemoteId = GetTrackedItemsByRemoteId(SyncRootId);
+        Dictionary<string, TrackedItemRecord> TrackedItemsByLocalKey = GetTrackedItemsByLocalKey(SyncRootId);
+        Dictionary<string, string> KnownRemoteLocalKeys = GetKnownRemoteLocalKeys(SyncRootId);
+        Dictionary<string, int> ProjectedLocalKeyCounts = CountProjectedRemoteLocalKeys(SyncRoot, ItemList, KnownRemoteLocalKeys);
 
-        foreach (StorageItem Item in Items)
+        foreach (StorageItem Item in ItemList)
         {
             if (!TrackedItemsByRemoteId.TryGetValue(Item.Id, out TrackedItemRecord TrackedItem))
             {
-                TrackedItem = CreateRemoteTrackedItem(SyncRootId, Item);
-                TrackedItemsByRemoteId[Item.Id] = TrackedItem;
-                Result.CreatedTrackedItems.Add(TrackedItem);
+                string ProjectedLocalKey = ProjectedRemoteLocalKey(SyncRoot, Item, KnownRemoteLocalKeys);
+                if (!TryAdoptBootstrapItem(
+                    Result,
+                    TrackedItemsByRemoteId,
+                    TrackedItemsByLocalKey,
+                    KnownRemoteLocalKeys,
+                    ProjectedLocalKeyCounts,
+                    Item,
+                    ProjectedLocalKey,
+                    ObservedTime,
+                    out TrackedItem))
+                {
+                    TrackedItem = CreateRemoteTrackedItem(SyncRootId, Item);
+                    TrackedItemsByRemoteId[Item.Id] = TrackedItem;
+                    Result.CreatedTrackedItems.Add(TrackedItem);
+                }
             }
 
-            Result.Observations.Add(RemoteObservationMapper.FromStorageItem(Item, TrackedItem.Id, ObservedTime));
+            if (!Result.AdoptedTrackedItems.Contains(TrackedItem))
+                Result.Observations.Add(RemoteObservationMapper.FromStorageItem(Item, TrackedItem.Id, ObservedTime));
         }
 
         fStore.SaveRemoteBootstrapResultWithCheckpoint(Result, Checkpoint);
@@ -593,6 +718,7 @@ public class MetadataSyncSession
 
         Result.CreatedTrackedItems.AddRange(LocalImport.CreatedTrackedItems);
         Result.CreatedTrackedItems.AddRange(RemoteImport.CreatedTrackedItems);
+        Result.CommittedBaseSnapshots.AddRange(RemoteImport.CommittedBaseSnapshots);
         AddPlanningResult(Result, AdvanceResult);
 
         return Result;
