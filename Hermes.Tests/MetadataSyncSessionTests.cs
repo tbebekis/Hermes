@@ -1089,6 +1089,46 @@ public class MetadataSyncSessionTests
         Assert.Null(Store.GetTrackedItemByLocalKey("root-1", "Local.txt"));
     }
     /// <summary>
+    /// Verifies the unsupported executor blocks pending work without committing base snapshots.
+    /// </summary>
+    [Fact]
+    public async Task AdvanceWithRemoteChangesAndExecuteAsyncBlocksUnsupportedExecution()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 8, 32, 0, DateTimeKind.Utc);
+        UnsupportedSyncExecutor Executor = new();
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        AddBaseSnapshot(Store, "item-1", "File1.txt", "hash-base", Time);
+
+        MetadataSyncRunResult Result = await Session.AdvanceWithRemoteChangesAndExecuteAsync(
+            "root-1",
+            [CreateLocalScanItem("File1.txt", "hash-base", Time)],
+            [
+                new StorageChange(
+                    "remote-1",
+                    false,
+                    new DateTimeOffset(Time),
+                    CreateStorageItem("remote-1", "File1.txt", "hash-remote", 2)),
+            ],
+            CreateCheckpoint("token-9", Time),
+            Time,
+            Time,
+            Time,
+            "scan-9",
+            Executor,
+            CancellationToken.None);
+
+        Assert.Single(Result.SessionResult.PendingExecutionRequests);
+        Assert.Empty(Result.ExecutionApplyResult.CommittedResults);
+        Assert.Single(Result.ExecutionApplyResult.UncommittedResults);
+        Assert.Equal(SyncExecutionResultKind.Blocked, Result.ExecutionApplyResult.UncommittedResults[0].ResultKind);
+        Assert.Equal("hash-base", Store.GetBaseSnapshot("item-1").ContentHash);
+    }
+    /// <summary>
     /// Verifies the intent validating fake executor does not execute invalid requests.
     /// </summary>
     [Fact]
