@@ -133,6 +133,44 @@ public class SyncExecutionIntentFactoryTests
         Assert.Empty(Intent.ValidationMessages);
     }
     /// <summary>
+    /// Verifies local namespace decisions create executable remote namespace intents.
+    /// </summary>
+    [Fact]
+    public void CreateMapsLocalNamespaceToExecutableIntent()
+    {
+        SyncExecutionRequest ExecutionRequest = Request(SyncPlanDecisionKind.ApplyLocalNamespaceToRemote);
+        ExecutionRequest.Decision = new SyncPlanDecision("item-1", SyncDiffKind.LocalNamespaceChanged, SyncPlanDecisionKind.ApplyLocalNamespaceToRemote);
+        ExecutionRequest.LocalObservation.Name = "Renamed.txt";
+        ExecutionRequest.LocalObservation.RelativePath = "Renamed.txt";
+
+        SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(ExecutionRequest);
+
+        Assert.Equal(SyncExecutionIntentKind.ApplyLocalNamespaceToRemote, Intent.IntentKind);
+        Assert.Equal("remote-1", Intent.RemoteItemId);
+        Assert.Equal("Renamed.txt", Intent.LocalRelativePath);
+        Assert.Equal("Renamed.txt", Intent.Name);
+        Assert.True(Intent.CanExecute);
+        Assert.Empty(Intent.ValidationMessages);
+    }
+    /// <summary>
+    /// Verifies local move decisions are blocked until remote move propagation is supported.
+    /// </summary>
+    [Fact]
+    public void CreateBlocksLocalNamespaceMove()
+    {
+        SyncExecutionRequest ExecutionRequest = Request(SyncPlanDecisionKind.ApplyLocalNamespaceToRemote);
+        ExecutionRequest.Decision = new SyncPlanDecision("item-1", SyncDiffKind.LocalNamespaceChanged, SyncPlanDecisionKind.ApplyLocalNamespaceToRemote);
+        ExecutionRequest.LocalObservation.Name = "File.txt";
+        ExecutionRequest.LocalObservation.RelativePath = "Folder/File.txt";
+        ExecutionRequest.LocalObservation.ParentRelativePath = "Folder";
+
+        SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(ExecutionRequest);
+
+        Assert.Equal(SyncExecutionIntentKind.Blocked, Intent.IntentKind);
+        Assert.False(Intent.CanExecute);
+        Assert.Contains("Local move propagation is not supported yet.", Intent.ValidationMessages);
+    }
+    /// <summary>
     /// Verifies upload propagation requires a remote item id or remote parent id.
     /// </summary>
     [Fact]

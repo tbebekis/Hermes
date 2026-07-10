@@ -23,6 +23,7 @@ public class SyncPlanner
             SyncDiffKind.LocalChanged => SyncPlanDecisionKind.UploadToRemote,
             SyncDiffKind.RemoteChanged => SyncPlanDecisionKind.DownloadToLocal,
             SyncDiffKind.RemoteNamespaceChanged => SyncPlanDecisionKind.ApplyRemoteNamespaceToLocal,
+            SyncDiffKind.LocalNamespaceChanged => SyncPlanDecisionKind.ApplyLocalNamespaceToRemote,
             SyncDiffKind.BothChangedCompatible => SyncPlanDecisionKind.CommitBase,
             SyncDiffKind.Conflict => SyncPlanDecisionKind.Conflict,
             SyncDiffKind.LocalMissing => SyncPlanDecisionKind.PropagateLocalDelete,

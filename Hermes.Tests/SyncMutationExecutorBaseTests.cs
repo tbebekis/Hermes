@@ -135,6 +135,14 @@ public class SyncMutationExecutorBaseTests
         }
 
         /// <inheritdoc/>
+        public Task<StorageResult<StorageItem>> RenameItemAsync(string RemoteItemId, string Name, CancellationToken CancellationToken)
+        {
+            RenamedItemIds.Add(RemoteItemId);
+            RenamedNames.Add(Name);
+            return Task.FromResult(RenameItemResult);
+        }
+
+        /// <inheritdoc/>
         public Task<StorageResult<StorageItem>> DeleteItemAsync(string RemoteItemId, CancellationToken CancellationToken)
         {
             DeletedItemIds.Add(RemoteItemId);
@@ -176,6 +184,14 @@ public class SyncMutationExecutorBaseTests
         /// </summary>
         public List<string> DownloadedLocalFilePaths { get; } = [];
         /// <summary>
+        /// Gets the renamed item ids.
+        /// </summary>
+        public List<string> RenamedItemIds { get; } = [];
+        /// <summary>
+        /// Gets the renamed item names.
+        /// </summary>
+        public List<string> RenamedNames { get; } = [];
+        /// <summary>
         /// Gets the deleted item ids.
         /// </summary>
         public List<string> DeletedItemIds { get; } = [];
@@ -191,6 +207,10 @@ public class SyncMutationExecutorBaseTests
         /// Gets or sets the update file content result.
         /// </summary>
         public StorageResult<StorageItem> UpdateFileContentResult { get; set; } = StorageResult<StorageItem>.Success(Item());
+        /// <summary>
+        /// Gets or sets the rename item result.
+        /// </summary>
+        public StorageResult<StorageItem> RenameItemResult { get; set; } = StorageResult<StorageItem>.Success(Item());
     }
 
     /// <summary>
@@ -216,6 +236,13 @@ public class SyncMutationExecutorBaseTests
 
         /// <inheritdoc/>
         protected override Task<SyncExecutionResult> ExecuteApplyRemoteNamespaceToLocalAsync(SyncExecutionIntent Intent, CancellationToken CancellationToken)
+        {
+            ExecutedIntentKind = Intent.IntentKind;
+            return Task.FromResult(SyncExecutionResultFactory.Completed(Intent.Request, Intent.LocalRelativePath));
+        }
+
+        /// <inheritdoc/>
+        protected override Task<SyncExecutionResult> ExecuteApplyLocalNamespaceToRemoteAsync(SyncExecutionIntent Intent, CancellationToken CancellationToken)
         {
             ExecutedIntentKind = Intent.IntentKind;
             return Task.FromResult(SyncExecutionResultFactory.Completed(Intent.Request, Intent.LocalRelativePath));
@@ -311,6 +338,25 @@ public class SyncMutationExecutorBaseTests
         TrackedItem = TrackedItem(),
         BaseSnapshot = BaseSnapshot(),
         LocalObservation = LocalObservation(),
+        RemoteObservation = RemoteObservation(),
+    };
+    static SyncExecutionRequest LocalRenameRequest() => new()
+    {
+        Decision = new SyncPlanDecision("item-1", SyncDiffKind.LocalNamespaceChanged, SyncPlanDecisionKind.ApplyLocalNamespaceToRemote),
+        SyncRoot = SyncRoot(),
+        TrackedItem = TrackedItem(),
+        BaseSnapshot = BaseSnapshot(),
+        LocalObservation = new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            ExistsFlag = true,
+            RelativePath = "Renamed.txt",
+            Name = "Renamed.txt",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-base",
+            ObservedTime = new DateTime(2026, 7, 11, 10, 20, 0, DateTimeKind.Utc),
+        },
         RemoteObservation = RemoteObservation(),
     };
     static SyncExecutionRequest FolderRequest(SyncPlanDecisionKind DecisionKind) => new()
@@ -489,6 +535,42 @@ public class SyncMutationExecutorBaseTests
         Assert.Single(Results);
         Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Results[0].ResultKind);
         Assert.Equal(SyncExecutionIntentKind.ApplyRemoteNamespaceToLocal, Executor.ExecutedIntentKind);
+    }
+
+    /// <summary>
+    /// Verifies local namespace intents are dispatched to remote namespace execution.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsyncDispatchesLocalNamespaceToRemote()
+    {
+        RecordingMutationExecutor Executor = new();
+
+        IReadOnlyList<SyncExecutionResult> Results = await Executor.ExecuteAsync(
+            [LocalRenameRequest()],
+            CancellationToken.None);
+
+        Assert.Single(Results);
+        Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Results[0].ResultKind);
+        Assert.Equal(SyncExecutionIntentKind.ApplyLocalNamespaceToRemote, Executor.ExecutedIntentKind);
+    }
+
+    /// <summary>
+    /// Verifies local file rename intents rename remote items.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsyncAppliesLocalFileRenameToRemoteItem()
+    {
+        TestRemoteEndpoint RemoteEndpoint = new();
+        SyncMutationExecutorBase Executor = new(new TestLocalEndpoint(), RemoteEndpoint);
+
+        IReadOnlyList<SyncExecutionResult> Results = await Executor.ExecuteAsync(
+            [LocalRenameRequest()],
+            CancellationToken.None);
+
+        Assert.Single(Results);
+        Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Results[0].ResultKind);
+        Assert.Equal("remote-1", Assert.Single(RemoteEndpoint.RenamedItemIds));
+        Assert.Equal("Renamed.txt", Assert.Single(RemoteEndpoint.RenamedNames));
     }
 
     /// <summary>

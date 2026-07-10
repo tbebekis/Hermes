@@ -68,6 +68,25 @@ static public class SyncExecutionIntentFactory
 
         return string.Empty;
     }
+    static string ParentLocalPath(string LocalRelativePath)
+    {
+        if (!HasText(LocalRelativePath))
+            return string.Empty;
+
+        int Index = LocalRelativePath.LastIndexOf('/');
+        return Index < 0 ? string.Empty : LocalRelativePath[..Index];
+    }
+    static bool SameLocalParent(SyncExecutionRequest Request)
+    {
+        return string.Equals(
+            ParentLocalPath(Request.BaseSnapshot?.LocalRelativePath),
+            ParentLocalPath(Request.LocalObservation?.RelativePath),
+            StringComparison.Ordinal);
+    }
+    static bool IsFolder(SyncExecutionRequest Request)
+    {
+        return string.Equals(ItemType(Request), "Folder", StringComparison.OrdinalIgnoreCase);
+    }
     static string TrackedItemId(SyncExecutionRequest Request)
     {
         if (HasText(Request.TrackedItem?.Id))
@@ -97,6 +116,9 @@ static public class SyncExecutionIntentFactory
     static string Name(SyncExecutionRequest Request, SyncExecutionIntentKind IntentKind)
     {
         if (IntentKind == SyncExecutionIntentKind.UploadToRemote && HasText(Request.LocalObservation?.Name))
+            return Request.LocalObservation.Name;
+
+        if (IntentKind == SyncExecutionIntentKind.ApplyLocalNamespaceToRemote && HasText(Request.LocalObservation?.Name))
             return Request.LocalObservation.Name;
 
         if (HasText(Request.RemoteObservation?.Name))
@@ -168,6 +190,7 @@ static public class SyncExecutionIntentFactory
             SyncPlanDecisionKind.UploadToRemote => SyncExecutionIntentKind.UploadToRemote,
             SyncPlanDecisionKind.DownloadToLocal => SyncExecutionIntentKind.DownloadToLocal,
             SyncPlanDecisionKind.ApplyRemoteNamespaceToLocal => SyncExecutionIntentKind.ApplyRemoteNamespaceToLocal,
+            SyncPlanDecisionKind.ApplyLocalNamespaceToRemote => SyncExecutionIntentKind.ApplyLocalNamespaceToRemote,
             SyncPlanDecisionKind.PropagateLocalDelete => SyncExecutionIntentKind.PropagateLocalDelete,
             SyncPlanDecisionKind.PropagateRemoteDelete => SyncExecutionIntentKind.PropagateRemoteDelete,
             SyncPlanDecisionKind.Conflict => SyncExecutionIntentKind.ResolveConflict,
@@ -210,6 +233,12 @@ static public class SyncExecutionIntentFactory
                 Require(Exists(Request.RemoteObservation), Intent, "Existing remote observation is required.");
                 Require(HasText(Intent.SourceLocalRelativePath), Intent, "Source local path is required.");
                 Require(HasText(Intent.LocalRelativePath), Intent, "Target local path is required.");
+                break;
+            case SyncExecutionIntentKind.ApplyLocalNamespaceToRemote:
+                Require(Exists(Request.LocalObservation), Intent, "Existing local observation is required.");
+                Require(Exists(Request.RemoteObservation), Intent, "Existing remote observation is required.");
+                Require(HasText(Intent.RemoteItemId), Intent, "Remote item id is required.");
+                Require(HasText(Intent.Name), Intent, "Remote target name is required.");
                 break;
             case SyncExecutionIntentKind.PropagateLocalDelete:
                 Require(HasText(RemoteItemId(Request)), Intent, "Remote item id is required.");
@@ -255,6 +284,16 @@ static public class SyncExecutionIntentFactory
         {
             Result.IntentKind = SyncExecutionIntentKind.Blocked;
             Result.ValidationMessages.Add("Remote parent local path is unresolved.");
+        }
+        else if (Result.IntentKind == SyncExecutionIntentKind.ApplyLocalNamespaceToRemote && IsFolder(Request))
+        {
+            Result.IntentKind = SyncExecutionIntentKind.Blocked;
+            Result.ValidationMessages.Add("Local folder namespace changes are not supported yet.");
+        }
+        else if (Result.IntentKind == SyncExecutionIntentKind.ApplyLocalNamespaceToRemote && !SameLocalParent(Request))
+        {
+            Result.IntentKind = SyncExecutionIntentKind.Blocked;
+            Result.ValidationMessages.Add("Local move propagation is not supported yet.");
         }
         else if (Result.IntentKind == SyncExecutionIntentKind.ResolveConflict)
             Result.ValidationMessages.Add("Conflict resolution is required.");

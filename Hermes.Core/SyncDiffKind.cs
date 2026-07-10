@@ -29,6 +29,11 @@ public enum SyncDiffKind
     RemoteNamespaceChanged,
 
     /// <summary>
+    /// Only the local namespace changed.
+    /// </summary>
+    LocalNamespaceChanged,
+
+    /// <summary>
     /// Both sides changed to compatible state.
     /// </summary>
     BothChangedCompatible,

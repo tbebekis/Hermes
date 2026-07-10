@@ -396,6 +396,88 @@ public class MetadataSyncSessionTests
         Assert.Equal("scan-repair", Store.GetLocalObservation("item-1").ScanId);
     }
     /// <summary>
+    /// Verifies local scan import keeps identity when a tracked file is renamed locally.
+    /// </summary>
+    [Fact]
+    public void ImportLocalScanAdoptsTrackedFileRename()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 6, 14, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        AddObservedItem(Store, "item-1", "remote-1", "File1.txt", "hash-1", Time);
+        AddBaseSnapshot(Store, "item-1", "File1.txt", "hash-1", Time);
+
+        LocalScanImportResult ImportResult = Session.ImportLocalScan(
+            "root-1",
+            [CreateLocalScanItem("Renamed.txt", "hash-1", Time)],
+            Time,
+            "scan-rename");
+        MetadataSyncSessionResult SessionResult = Session.AdvanceMetadataOnly("root-1", Time);
+        SyncExecutionRequest Request = SessionResult.PendingExecutionRequests.Single();
+
+        Assert.Empty(ImportResult.CreatedTrackedItems);
+        Assert.Single(Store.GetTrackedItems("root-1"));
+        Assert.Equal("Renamed.txt", Store.GetTrackedItem("item-1").LocalKey);
+        Assert.Equal("Renamed.txt", Store.GetLocalObservation("item-1").RelativePath);
+        Assert.Equal(SyncPlanDecisionKind.ApplyLocalNamespaceToRemote, Request.Decision.DecisionKind);
+    }
+    /// <summary>
+    /// Verifies local file rename execution updates remote observation before base commit.
+    /// </summary>
+    [Fact]
+    public void ApplyExecutionResultsStoresLocalRenameRemoteItemBeforeBaseCommit()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 6, 14, 30, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        AddObservedItem(Store, "item-1", "remote-1", "File1.txt", "hash-1", Time);
+        AddBaseSnapshot(Store, "item-1", "File1.txt", "hash-1", Time);
+        Session.ImportLocalScan(
+            "root-1",
+            [CreateLocalScanItem("Renamed.txt", "hash-1", Time)],
+            Time,
+            "scan-rename");
+        MetadataSyncSessionResult SessionResult = Session.AdvanceMetadataOnly("root-1", Time);
+
+        SyncExecutionApplyResult Result = Session.ApplyExecutionResults(
+            [
+                new SyncExecutionResult()
+                {
+                    Request = SessionResult.PendingExecutionRequests.Single(),
+                    ResultKind = SyncExecutionResultKind.CompletedAndVerified,
+                    RemoteItem = new StorageItem(
+                        "remote-1",
+                        "remote-root",
+                        "Renamed.txt",
+                        "/Renamed.txt",
+                        StorageItemKind.File,
+                        "text/plain",
+                        42,
+                        "hash-1",
+                        default,
+                        default,
+                        2,
+                        false),
+                    LocalRelativePath = "Renamed.txt",
+                },
+            ],
+            Time);
+
+        Assert.Single(Result.CommittedResults);
+        Assert.Single(Result.CommittedBaseSnapshots);
+        Assert.Equal("Renamed.txt", Store.GetRemoteObservation("item-1").Name);
+        Assert.Equal("Renamed.txt", Store.GetBaseSnapshot("item-1").Name);
+        Assert.Equal("Renamed.txt", Store.GetBaseSnapshot("item-1").LocalRelativePath);
+    }
+    /// <summary>
     /// Verifies metadata sync session imports remote snapshots.
     /// </summary>
     [Fact]

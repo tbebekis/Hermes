@@ -234,6 +234,46 @@ public class MetadataSyncSession
 
         return null;
     }
+    static string ParentLocalPath(string LocalRelativePath)
+    {
+        if (string.IsNullOrWhiteSpace(LocalRelativePath))
+            return string.Empty;
+
+        int Index = LocalRelativePath.LastIndexOf('/');
+        return Index < 0 ? string.Empty : LocalRelativePath[..Index];
+    }
+    static bool CanAdoptLocalRename(LocalScanItem ScanItem, TrackedItemRecord TrackedItem, BaseSnapshotRecord BaseSnapshot)
+    {
+        if (ScanItem == null || TrackedItem == null || BaseSnapshot == null || !BaseSnapshot.ExistsFlag)
+            return false;
+
+        if (!string.Equals(TrackedItem.ItemType, "File", StringComparison.Ordinal) || !string.Equals(ScanItem.ItemType, "File", StringComparison.Ordinal))
+            return false;
+
+        if (string.IsNullOrWhiteSpace(TrackedItem.RemoteItemId) || string.IsNullOrWhiteSpace(ScanItem.ContentHash) || !ScanItem.Size.HasValue)
+            return false;
+
+        return string.Equals(ParentLocalPath(BaseSnapshot.LocalRelativePath), ScanItem.ParentRelativePath ?? string.Empty, StringComparison.Ordinal)
+            && string.Equals(BaseSnapshot.ContentHash, ScanItem.ContentHash, StringComparison.Ordinal)
+            && BaseSnapshot.Size == ScanItem.Size;
+    }
+    TrackedItemRecord FindLocalRenameCandidate(string SyncRootId, LocalScanItem ScanItem, HashSet<string> ObservedLocalKeys, HashSet<string> UsedTrackedItemIds)
+    {
+        List<TrackedItemRecord> Candidates = new();
+
+        foreach (TrackedItemRecord TrackedItem in fStore.GetTrackedItems(SyncRootId))
+        {
+            if (string.IsNullOrWhiteSpace(TrackedItem.LocalKey)
+                || ObservedLocalKeys.Contains(TrackedItem.LocalKey)
+                || UsedTrackedItemIds.Contains(TrackedItem.Id))
+                continue;
+
+            if (CanAdoptLocalRename(ScanItem, TrackedItem, fStore.GetBaseSnapshot(TrackedItem.Id)))
+                Candidates.Add(TrackedItem);
+        }
+
+        return Candidates.Count == 1 ? Candidates[0] : null;
+    }
     string ResolveRemoteParentLocalPath(SyncRootRecord SyncRoot, RemoteObservedSnapshotRecord RemoteObservation)
     {
         if (SyncRoot == null || RemoteObservation == null || string.IsNullOrWhiteSpace(RemoteObservation.RemoteParentId))
@@ -555,6 +595,8 @@ public class MetadataSyncSession
         Dictionary<string, TrackedItemRecord> TrackedItemsByLocalKey = GetTrackedItemsByLocalKey(SyncRootId);
         Dictionary<string, TrackedItemRecord> TrackedItemsByObservedLocalKey = GetTrackedItemsByObservedLocalKey(SyncRootId);
         HashSet<string> ObservedLocalKeys = new();
+        HashSet<string> UsedRenameTrackedItemIds = new();
+        List<LocalScanItem> UnmatchedItems = new();
 
         foreach (LocalScanItem Item in Items)
         {
@@ -571,10 +613,32 @@ public class MetadataSyncSession
                 }
                 else
                 {
-                    TrackedItem = CreateLocalTrackedItem(SyncRootId, Item);
-                    TrackedItemsByLocalKey[Key] = TrackedItem;
-                    Result.CreatedTrackedItems.Add(TrackedItem);
+                    UnmatchedItems.Add(Item);
+                    continue;
                 }
+            }
+
+            Result.Observations.Add(LocalObservationMapper.FromScanItem(Item, TrackedItem.Id, ObservedTime, ScanId));
+        }
+
+        foreach (LocalScanItem Item in UnmatchedItems)
+        {
+            string Key = LocalKey(Item);
+            TrackedItemRecord TrackedItem = FindLocalRenameCandidate(SyncRootId, Item, ObservedLocalKeys, UsedRenameTrackedItemIds);
+
+            if (TrackedItem != null)
+            {
+                TrackedItemsByLocalKey.Remove(TrackedItem.LocalKey);
+                TrackedItem.LocalKey = Key;
+                TrackedItemsByLocalKey[Key] = TrackedItem;
+                UsedRenameTrackedItemIds.Add(TrackedItem.Id);
+                fStore.UpdateTrackedItem(TrackedItem);
+            }
+            else
+            {
+                TrackedItem = CreateLocalTrackedItem(SyncRootId, Item);
+                TrackedItemsByLocalKey[Key] = TrackedItem;
+                Result.CreatedTrackedItems.Add(TrackedItem);
             }
 
             Result.Observations.Add(LocalObservationMapper.FromScanItem(Item, TrackedItem.Id, ObservedTime, ScanId));

@@ -98,6 +98,19 @@ public class SyncDiffClassifierTests
         Assert.Equal(SyncDiffKind.RemoteNamespaceChanged, Kind);
     }
     /// <summary>
+    /// Verifies local-only namespace changes are classified separately from content changes.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsLocalNamespaceChangedWhenOnlyLocalNameChanged()
+    {
+        SyncItemState LocalState = State(Name: "Renamed.txt");
+        LocalState.LocalRelativePath = "Renamed.txt";
+
+        SyncDiffKind Kind = Classify(State(), LocalState, State());
+
+        Assert.Equal(SyncDiffKind.LocalNamespaceChanged, Kind);
+    }
+    /// <summary>
     /// Verifies local-only new item classification.
     /// </summary>
     [Fact]

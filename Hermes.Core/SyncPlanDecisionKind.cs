@@ -29,6 +29,11 @@ public enum SyncPlanDecisionKind
     ApplyRemoteNamespaceToLocal,
 
     /// <summary>
+    /// The local namespace change should be applied to remote storage.
+    /// </summary>
+    ApplyLocalNamespaceToRemote,
+
+    /// <summary>
     /// The local deletion should be propagated to remote storage.
     /// </summary>
     PropagateLocalDelete,

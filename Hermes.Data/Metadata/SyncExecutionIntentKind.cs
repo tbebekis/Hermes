@@ -29,6 +29,11 @@ public enum SyncExecutionIntentKind
     ApplyRemoteNamespaceToLocal,
 
     /// <summary>
+    /// Applies a local namespace change to remote storage.
+    /// </summary>
+    ApplyLocalNamespaceToRemote,
+
+    /// <summary>
     /// Propagates local deletion to remote storage.
     /// </summary>
     PropagateLocalDelete,
