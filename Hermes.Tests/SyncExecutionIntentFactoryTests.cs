@@ -168,10 +168,10 @@ public class SyncExecutionIntentFactoryTests
         Assert.Contains("Remote item id is required.", Intent.ValidationMessages);
     }
     /// <summary>
-    /// Verifies download propagation requires a resolved local path.
+    /// Verifies download propagation blocks when the remote parent local path is unresolved.
     /// </summary>
     [Fact]
-    public void CreateValidatesDownloadLocalPath()
+    public void CreateBlocksDownloadWhenRemoteParentLocalPathIsUnresolved()
     {
         SyncExecutionRequest ExecutionRequest = Request(SyncPlanDecisionKind.DownloadToLocal);
         ExecutionRequest.BaseSnapshot.LocalRelativePath = string.Empty;
@@ -180,9 +180,9 @@ public class SyncExecutionIntentFactoryTests
 
         SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(ExecutionRequest);
 
-        Assert.Equal(SyncExecutionIntentKind.DownloadToLocal, Intent.IntentKind);
+        Assert.Equal(SyncExecutionIntentKind.Blocked, Intent.IntentKind);
         Assert.False(Intent.CanExecute);
-        Assert.Contains("Local path is required.", Intent.ValidationMessages);
+        Assert.Contains("Remote parent local path is unresolved.", Intent.ValidationMessages);
     }
     /// <summary>
     /// Verifies root remote downloads can resolve the local path from the remote name.

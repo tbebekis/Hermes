@@ -59,6 +59,9 @@ public class MetadataSyncRunResult
     }
     static string ItemDisplayName(SyncExecutionRequest Request)
     {
+        if (Request == null)
+            return "unknown";
+
         if (!string.IsNullOrWhiteSpace(Request.RemoteObservation?.Name))
             return Request.RemoteObservation.Name;
 
@@ -72,6 +75,9 @@ public class MetadataSyncRunResult
     }
     static string ItemDisplayId(SyncExecutionRequest Request)
     {
+        if (Request == null)
+            return "unknown";
+
         if (!string.IsNullOrWhiteSpace(Request.RemoteObservation?.RemoteItemId))
             return Request.RemoteObservation.RemoteItemId;
 
@@ -113,7 +119,7 @@ public class MetadataSyncRunResult
         List<string> Items = Result.UncommittedResults
             .Where(Item => !string.IsNullOrWhiteSpace(Item.Message))
             .Take(5)
-            .Select(Item => $"{Item.ResultKind}:{Item.Message}")
+            .Select(Item => $"{Item.ResultKind}:{ItemDisplayName(Item.Request)}#{ItemDisplayId(Item.Request)}:{Item.Message}")
             .ToList();
 
         return Items.Count == 0 ? "none" : string.Join(", ", Items);

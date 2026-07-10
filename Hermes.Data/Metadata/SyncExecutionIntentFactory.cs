@@ -149,6 +149,14 @@ static public class SyncExecutionIntentFactory
             _ => SyncExecutionIntentKind.Invalid,
         };
     }
+    static bool IsRemoteParentLocalPathUnresolved(SyncExecutionRequest Request, string ResolvedLocalPath)
+    {
+        return !HasText(ResolvedLocalPath)
+            && HasText(Request.RemoteObservation?.Name)
+            && HasText(Request.RemoteObservation.RemoteParentId)
+            && !string.Equals(Request.RemoteObservation.RemoteParentId, Request.SyncRoot?.RemoteRootItemId, StringComparison.Ordinal)
+            && !HasText(Request.RemoteParentLocalRelativePath);
+    }
     static void Require(bool Condition, SyncExecutionIntent Intent, string Message)
     {
         if (!Condition)
@@ -191,13 +199,14 @@ static public class SyncExecutionIntentFactory
         Guard.NotNull(Request.Decision, nameof(Request.Decision));
 
         SyncExecutionIntentKind ResolvedIntentKind = IntentKind(Request.Decision.DecisionKind);
+        string ResolvedLocalPath = LocalPath(Request);
         SyncExecutionIntent Result = new()
         {
             Request = Request,
             IntentKind = ResolvedIntentKind,
             TrackedItemId = TrackedItemId(Request),
             RemoteItemId = RemoteItemId(Request),
-            LocalRelativePath = LocalPath(Request),
+            LocalRelativePath = ResolvedLocalPath,
             ItemType = ItemType(Request),
             Name = Name(Request, ResolvedIntentKind),
             RemoteParentId = RemoteParentId(Request),
@@ -207,6 +216,11 @@ static public class SyncExecutionIntentFactory
 
         if (Result.IntentKind == SyncExecutionIntentKind.Invalid)
             Result.ValidationMessages.Add("Decision kind cannot be executed.");
+        else if (Result.IntentKind == SyncExecutionIntentKind.DownloadToLocal && IsRemoteParentLocalPathUnresolved(Request, ResolvedLocalPath))
+        {
+            Result.IntentKind = SyncExecutionIntentKind.Blocked;
+            Result.ValidationMessages.Add("Remote parent local path is unresolved.");
+        }
         else if (Result.IntentKind == SyncExecutionIntentKind.ResolveConflict)
             Result.ValidationMessages.Add("Conflict resolution is required.");
         else if (Result.IntentKind == SyncExecutionIntentKind.Blocked)
