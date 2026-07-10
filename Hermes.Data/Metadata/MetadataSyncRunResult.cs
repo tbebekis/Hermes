@@ -75,4 +75,9 @@ public class MetadataSyncRunResult
     /// Gets the number of execution results committed by the run.
     /// </summary>
     public int CommittedExecutionCount => ExecutionApplyResult?.CommittedResults.Count ?? 0;
+
+    /// <summary>
+    /// Gets the number of execution results not committed by the run.
+    /// </summary>
+    public int UncommittedExecutionCount => ExecutionApplyResult?.UncommittedResults.Count ?? 0;
 }

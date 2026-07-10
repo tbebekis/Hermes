@@ -125,15 +125,25 @@ public class MetadataSyncLoopTests
             Options.Create(Settings()),
             Logger ?? NullLogger<MetadataSyncLoop>.Instance);
     }
-    static MetadataSyncRunResult RunResult() => new()
+    static MetadataSyncRunResult RunResult()
     {
-        Kind = MetadataSyncRunKind.Incremental,
-        LocalObservedItemCount = 2,
-        RemoteObservedItemCount = 0,
-        RemoteObservedChangeCount = 3,
-        SessionResult = new MetadataSyncSessionResult(),
-        ExecutionApplyResult = new SyncExecutionApplyResult(),
-    };
+        SyncExecutionApplyResult ApplyResult = new();
+        ApplyResult.UncommittedResults.Add(new SyncExecutionResult()
+        {
+            ResultKind = SyncExecutionResultKind.Blocked,
+            Message = "blocked",
+        });
+
+        return new MetadataSyncRunResult()
+        {
+            Kind = MetadataSyncRunKind.Incremental,
+            LocalObservedItemCount = 2,
+            RemoteObservedItemCount = 0,
+            RemoteObservedChangeCount = 3,
+            SessionResult = new MetadataSyncSessionResult(),
+            ExecutionApplyResult = ApplyResult,
+        };
+    }
 
     // ● public
 
@@ -177,6 +187,6 @@ public class MetadataSyncLoopTests
 
         await Loop(Runner, Logger).RunAsync(Cancellation.Token);
 
-        Assert.Contains(Logger.Entries, Item => Item.Contains("Kind: Incremental.") && Item.Contains("Local items: 2.") && Item.Contains("Remote changes: 3."));
+        Assert.Contains(Logger.Entries, Item => Item.Contains("Kind: Incremental.") && Item.Contains("Local items: 2.") && Item.Contains("Remote changes: 3.") && Item.Contains("Uncommitted executions: 1."));
     }
 }
