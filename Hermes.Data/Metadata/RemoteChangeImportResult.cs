@@ -16,7 +16,12 @@ public class RemoteChangeImportResult
     public List<RemoteObservedSnapshotRecord> Observations { get; } = new();
 
     /// <summary>
-    /// Gets the changes whose remote item id is not tracked yet.
+    /// Gets the tracked items created for previously unknown remote items.
+    /// </summary>
+    public List<TrackedItemRecord> CreatedTrackedItems { get; } = new();
+
+    /// <summary>
+    /// Gets the changes whose remote item id could not be imported yet.
     /// </summary>
     public List<StorageChange> UntrackedChanges { get; } = new();
 }

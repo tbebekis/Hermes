@@ -8,9 +8,12 @@ namespace Hermes.Data;
 /// </summary>
 public class SqlMetadataStore
 {
-    // ● private
+    // ● fields
 
     readonly SqlStore fStore;
+
+    // ● value readers
+
     static object DbValue(object Value) => Value ?? DBNull.Value;
     static string ReadString(DataRow Row, string FieldName)
     {
@@ -45,6 +48,9 @@ public class SqlMetadataStore
 
         return Table.Rows[0];
     }
+
+    // ● sql execution
+
     int ExecuteUpsert(DbTransaction Transaction, string UpdateSql, string InsertSql, Dictionary<string, object> Params)
     {
         int Count = fStore.ExecSql(Transaction, UpdateSql, Params);
@@ -59,6 +65,40 @@ public class SqlMetadataStore
         ExecuteUpsert(Context.Transaction, UpdateSql, InsertSql, Params);
         Context.Commit();
     }
+    void ExecuteInsertTrackedItem(DbTransaction Transaction, TrackedItemRecord Record)
+    {
+        fStore.ExecSql(Transaction, Sql.InsertTrackedItem, ToParams(Record));
+    }
+    void StoreRemoteObservation(DbTransaction Transaction, RemoteObservedSnapshotRecord Observation)
+    {
+        ExecuteUpsert(Transaction, Sql.UpdateRemoteObservation, Sql.InsertRemoteObservation, ToParams(Observation));
+    }
+    void StoreBaseSnapshot(DbTransaction Transaction, BaseSnapshotRecord Record)
+    {
+        ExecuteUpsert(Transaction, Sql.UpdateBaseSnapshot, Sql.InsertBaseSnapshot, ToParams(Record));
+    }
+    void StoreRemoteObservations(DbTransaction Transaction, IEnumerable<RemoteObservedSnapshotRecord> Observations)
+    {
+        foreach (RemoteObservedSnapshotRecord Observation in Observations)
+            StoreRemoteObservation(Transaction, Observation);
+    }
+    void StoreRemoteChangeImportResult(DbTransaction Transaction, RemoteChangeImportResult Result)
+    {
+        foreach (TrackedItemRecord TrackedItem in Result.CreatedTrackedItems)
+            ExecuteInsertTrackedItem(Transaction, TrackedItem);
+
+        StoreRemoteObservations(Transaction, Result.Observations);
+    }
+    void StoreRemoteBootstrapResult(DbTransaction Transaction, RemoteBootstrapResult Result)
+    {
+        foreach (TrackedItemRecord TrackedItem in Result.CreatedTrackedItems)
+            ExecuteInsertTrackedItem(Transaction, TrackedItem);
+
+        StoreRemoteObservations(Transaction, Result.Observations);
+    }
+
+    // ● parameter mapping
+
     static Dictionary<string, object> ToParams(SyncRootRecord Record) => new()
     {
         ["Id"] = Record.Id,
@@ -134,6 +174,9 @@ public class SqlMetadataStore
         ["StartPageToken"] = DbValue(Record.StartPageToken),
         ["UpdatedTime"] = DbValue(Record.UpdatedTime),
     };
+
+    // ● row mapping
+
     static SyncRootRecord ToSyncRoot(DataRow Row) => new()
     {
         Id = ReadString(Row, "Id"),
@@ -209,6 +252,9 @@ public class SqlMetadataStore
         StartPageToken = ReadString(Row, "StartPageToken"),
         UpdatedTime = ReadNullableDateTime(Row, "UpdatedTime"),
     };
+
+    // ● namespace helpers
+
     static string NamespaceKey(RemoteObservedSnapshotRecord Record)
     {
         return $"{Record.RemoteParentId ?? string.Empty}\u001F{Record.Name ?? string.Empty}";
@@ -232,7 +278,7 @@ public class SqlMetadataStore
         fStore = Store ?? throw new ArgumentNullException(nameof(Store));
     }
 
-    // ● public
+    // ● sync roots
 
     /// <summary>
     /// Inserts a sync root.
@@ -270,61 +316,15 @@ where Id = :Id";
         DataRow Row = FirstRow(fStore.Select("select * from SYNC_ROOT where Id = :Id", new Dictionary<string, object>() { ["Id"] = Id }));
         return Row == null ? null : ToSyncRoot(Row);
     }
+
+    // ● tracked items
+
     /// <summary>
     /// Inserts a tracked item.
     /// </summary>
     public void InsertTrackedItem(TrackedItemRecord Record)
     {
-        string SqlText = @"
-insert into TRACKED_ITEM
-    (Id, SyncRootId, RemoteItemId, LocalKey, ItemType)
-values
-    (:Id, :SyncRootId, :RemoteItemId, :LocalKey, :ItemType)";
-        fStore.ExecSql(SqlText, ToParams(Record));
-    }
-    /// <summary>
-    /// Tracks remote items that are not tracked yet and stores their remote observations.
-    /// </summary>
-    public RemoteBootstrapResult BootstrapRemoteItems(string SyncRootId, IEnumerable<StorageItem> Items, DateTime ObservedTime)
-    {
-        Guard.NotNullOrWhiteSpace(SyncRootId, nameof(SyncRootId));
-        Guard.NotNull(Items, nameof(Items));
-
-        RemoteBootstrapResult Result = new();
-        Dictionary<string, TrackedItemRecord> TrackedItemsByRemoteId = GetTrackedItems(SyncRootId)
-            .Where(Item => !string.IsNullOrWhiteSpace(Item.RemoteItemId))
-            .ToDictionary(Item => Item.RemoteItemId);
-
-        using SqlTransactionContext Context = fStore.BeginTransactionContext();
-
-        foreach (StorageItem Item in Items)
-        {
-            if (!TrackedItemsByRemoteId.TryGetValue(Item.Id, out TrackedItemRecord TrackedItem))
-            {
-                TrackedItem = new TrackedItemRecord()
-                {
-                    Id = Guid.NewGuid().ToString("N"),
-                    SyncRootId = SyncRootId,
-                    RemoteItemId = Item.Id,
-                    ItemType = Item.Kind == StorageItemKind.Folder ? "Folder" : "File",
-                };
-                fStore.ExecSql(Context.Transaction, @"
-insert into TRACKED_ITEM
-    (Id, SyncRootId, RemoteItemId, LocalKey, ItemType)
-values
-    (:Id, :SyncRootId, :RemoteItemId, :LocalKey, :ItemType)", ToParams(TrackedItem));
-                Result.CreatedTrackedItems.Add(TrackedItem);
-                TrackedItemsByRemoteId[Item.Id] = TrackedItem;
-            }
-
-            RemoteObservedSnapshotRecord Observation = RemoteObservationMapper.FromStorageItem(Item, TrackedItem.Id, ObservedTime);
-            ExecuteUpsert(Context.Transaction, Sql.UpdateRemoteObservation, Sql.InsertRemoteObservation, ToParams(Observation));
-            Result.Observations.Add(Observation);
-        }
-
-        Context.Commit();
-
-        return Result;
+        fStore.ExecSql(Sql.InsertTrackedItem, ToParams(Record));
     }
     /// <summary>
     /// Returns a tracked item by id.
@@ -377,6 +377,9 @@ values
 
         return Result;
     }
+
+    // ● base snapshots
+
     /// <summary>
     /// Inserts or updates a base snapshot.
     /// </summary>
@@ -392,6 +395,50 @@ values
         DataRow Row = FirstRow(fStore.Select("select * from BASE_SNAPSHOT where TrackedItemId = :TrackedItemId", new Dictionary<string, object>() { ["TrackedItemId"] = TrackedItemId }));
         return Row == null ? null : ToBaseSnapshot(Row);
     }
+    /// <summary>
+    /// Commits the current verified local and remote observations as the base snapshot.
+    /// </summary>
+    public BaseSnapshotRecord CommitBaseSnapshotFromObservations(string TrackedItemId, DateTime CommittedTime)
+    {
+        Guard.NotNullOrWhiteSpace(TrackedItemId, nameof(TrackedItemId));
+
+        LocalObservedSnapshotRecord LocalObservation = GetLocalObservation(TrackedItemId);
+        RemoteObservedSnapshotRecord RemoteObservation = GetRemoteObservation(TrackedItemId);
+        BaseSnapshotRecord BaseSnapshot = BaseSnapshotMapper.FromVerifiedObservations(LocalObservation, RemoteObservation, CommittedTime);
+
+        UpsertBaseSnapshot(BaseSnapshot);
+
+        return BaseSnapshot;
+    }
+    /// <summary>
+    /// Commits current verified local and remote observations as base snapshots in one transaction.
+    /// </summary>
+    public IReadOnlyList<BaseSnapshotRecord> CommitBaseSnapshotsFromObservations(IEnumerable<string> TrackedItemIds, DateTime CommittedTime)
+    {
+        Guard.NotNull(TrackedItemIds, nameof(TrackedItemIds));
+
+        List<BaseSnapshotRecord> BaseSnapshots = new();
+
+        foreach (string TrackedItemId in TrackedItemIds)
+        {
+            Guard.NotNullOrWhiteSpace(TrackedItemId, nameof(TrackedItemIds));
+
+            LocalObservedSnapshotRecord LocalObservation = GetLocalObservation(TrackedItemId);
+            RemoteObservedSnapshotRecord RemoteObservation = GetRemoteObservation(TrackedItemId);
+            BaseSnapshots.Add(BaseSnapshotMapper.FromVerifiedObservations(LocalObservation, RemoteObservation, CommittedTime));
+        }
+
+        using SqlTransactionContext Context = fStore.BeginTransactionContext();
+
+        foreach (BaseSnapshotRecord BaseSnapshot in BaseSnapshots)
+            StoreBaseSnapshot(Context.Transaction, BaseSnapshot);
+
+        Context.Commit();
+
+        return BaseSnapshots;
+    }
+    // ● local observations
+
     /// <summary>
     /// Inserts or updates a local observation.
     /// </summary>
@@ -412,6 +459,23 @@ values
         Context.Commit();
     }
     /// <summary>
+    /// Stores local scan import created tracked items and observations in one transaction.
+    /// </summary>
+    public void SaveLocalScanImportResult(LocalScanImportResult Result)
+    {
+        Guard.NotNull(Result, nameof(Result));
+
+        using SqlTransactionContext Context = fStore.BeginTransactionContext();
+
+        foreach (TrackedItemRecord TrackedItem in Result.CreatedTrackedItems)
+            ExecuteInsertTrackedItem(Context.Transaction, TrackedItem);
+
+        foreach (LocalObservedSnapshotRecord Observation in Result.Observations)
+            ExecuteUpsert(Context.Transaction, Sql.UpdateLocalObservation, Sql.InsertLocalObservation, ToParams(Observation));
+
+        Context.Commit();
+    }
+    /// <summary>
     /// Returns a local observation by tracked item id.
     /// </summary>
     public LocalObservedSnapshotRecord GetLocalObservation(string TrackedItemId)
@@ -419,6 +483,8 @@ values
         DataRow Row = FirstRow(fStore.Select("select * from LOCAL_OBSERVED_SNAPSHOT where TrackedItemId = :TrackedItemId", new Dictionary<string, object>() { ["TrackedItemId"] = TrackedItemId }));
         return Row == null ? null : ToLocalObservation(Row);
     }
+    // ● remote observations
+
     /// <summary>
     /// Inserts or updates a remote observation.
     /// </summary>
@@ -433,37 +499,8 @@ values
     {
         using SqlTransactionContext Context = fStore.BeginTransactionContext();
 
-        foreach (RemoteObservedSnapshotRecord Observation in Observations)
-            ExecuteUpsert(Context.Transaction, Sql.UpdateRemoteObservation, Sql.InsertRemoteObservation, ToParams(Observation));
-
+        StoreRemoteObservations(Context.Transaction, Observations);
         Context.Commit();
-    }
-    /// <summary>
-    /// Imports provider changes for tracked remote items and returns untracked changes separately.
-    /// </summary>
-    public RemoteChangeImportResult ImportKnownRemoteChanges(string SyncRootId, IEnumerable<StorageChange> Changes, DateTime ObservedTime)
-    {
-        Guard.NotNullOrWhiteSpace(SyncRootId, nameof(SyncRootId));
-        Guard.NotNull(Changes, nameof(Changes));
-
-        RemoteChangeImportResult Result = new();
-
-        foreach (StorageChange Change in Changes)
-        {
-            TrackedItemRecord TrackedItem = GetTrackedItemByRemoteId(SyncRootId, Change.ItemId);
-            if (TrackedItem == null)
-            {
-                Result.UntrackedChanges.Add(Change);
-                continue;
-            }
-
-            Result.Observations.Add(RemoteObservationMapper.FromChange(Change, TrackedItem.Id, ObservedTime));
-        }
-
-        if (Result.Observations.Count > 0)
-            SaveRemoteObservations(Result.Observations);
-
-        return Result;
     }
     /// <summary>
     /// Returns a remote observation by tracked item id.
@@ -473,6 +510,8 @@ values
         DataRow Row = FirstRow(fStore.Select("select * from REMOTE_OBSERVED_SNAPSHOT where TrackedItemId = :TrackedItemId", new Dictionary<string, object>() { ["TrackedItemId"] = TrackedItemId }));
         return Row == null ? null : ToRemoteObservation(Row);
     }
+    // ● remote checkpoints
+
     /// <summary>
     /// Inserts or updates a remote checkpoint.
     /// </summary>
@@ -488,6 +527,48 @@ values
         DataRow Row = FirstRow(fStore.Select("select * from REMOTE_CHECKPOINT where SyncRootId = :SyncRootId", new Dictionary<string, object>() { ["SyncRootId"] = SyncRootId }));
         return Row == null ? null : ToRemoteCheckpoint(Row);
     }
+    /// <summary>
+    /// Stores remote observations and checkpoint advancement atomically.
+    /// </summary>
+    public void SaveRemoteObservationsWithCheckpoint(IEnumerable<RemoteObservedSnapshotRecord> Observations, RemoteCheckpointRecord Checkpoint)
+    {
+        using SqlTransactionContext Context = fStore.BeginTransactionContext();
+
+        StoreRemoteObservations(Context.Transaction, Observations);
+        ExecuteUpsert(Context.Transaction, Sql.UpdateRemoteCheckpoint, Sql.InsertRemoteCheckpoint, ToParams(Checkpoint));
+        Context.Commit();
+    }
+    /// <summary>
+    /// Stores remote bootstrap results and checkpoint advancement atomically.
+    /// </summary>
+    public void SaveRemoteBootstrapResultWithCheckpoint(RemoteBootstrapResult Result, RemoteCheckpointRecord Checkpoint)
+    {
+        Guard.NotNull(Result, nameof(Result));
+        Guard.NotNull(Checkpoint, nameof(Checkpoint));
+
+        using SqlTransactionContext Context = fStore.BeginTransactionContext();
+
+        StoreRemoteBootstrapResult(Context.Transaction, Result);
+        ExecuteUpsert(Context.Transaction, Sql.UpdateRemoteCheckpoint, Sql.InsertRemoteCheckpoint, ToParams(Checkpoint));
+        Context.Commit();
+    }
+    /// <summary>
+    /// Stores remote change import results and checkpoint advancement atomically.
+    /// </summary>
+    public void SaveRemoteChangeImportResultWithCheckpoint(RemoteChangeImportResult Result, RemoteCheckpointRecord Checkpoint)
+    {
+        Guard.NotNull(Result, nameof(Result));
+        Guard.NotNull(Checkpoint, nameof(Checkpoint));
+
+        using SqlTransactionContext Context = fStore.BeginTransactionContext();
+
+        StoreRemoteChangeImportResult(Context.Transaction, Result);
+        ExecuteUpsert(Context.Transaction, Sql.UpdateRemoteCheckpoint, Sql.InsertRemoteCheckpoint, ToParams(Checkpoint));
+        Context.Commit();
+    }
+
+    // ● diff and planning
+
     /// <summary>
     /// Returns classifier input for a tracked item.
     /// </summary>
@@ -532,59 +613,6 @@ values
             .ThenBy(Item => Item.Name)
             .ToList();
     }
-    /// <summary>
-    /// Classifies all tracked items for a sync root.
-    /// </summary>
-    public IReadOnlyList<TrackedItemDiffRecord> ClassifySyncRoot(string SyncRootId)
-    {
-        SyncDiffClassifier Classifier = new();
-        List<TrackedItemDiffRecord> Result = new();
-        HashSet<string> CollidingItemIds = FindRemoteNamespaceCollisions(SyncRootId)
-            .SelectMany(Item => Item.TrackedItemIds)
-            .ToHashSet();
-
-        foreach (TrackedItemRecord Item in GetTrackedItems(SyncRootId))
-        {
-            Result.Add(new TrackedItemDiffRecord()
-            {
-                TrackedItemId = Item.Id,
-                DiffKind = Classifier.Classify(GetDiffInput(Item.Id, CollidingItemIds.Contains(Item.Id))),
-            });
-        }
-
-        return Result;
-    }
-    /// <summary>
-    /// Creates planner inputs for all tracked items in a sync root.
-    /// </summary>
-    public IReadOnlyList<SyncPlanInput> CreatePlanInputs(string SyncRootId)
-    {
-        List<SyncPlanInput> Result = new();
-
-        foreach (TrackedItemDiffRecord Diff in ClassifySyncRoot(SyncRootId))
-        {
-            Result.Add(new SyncPlanInput()
-            {
-                TrackedItemId = Diff.TrackedItemId,
-                DiffKind = Diff.DiffKind,
-            });
-        }
-
-        return Result;
-    }
-    /// <summary>
-    /// Stores remote observations and checkpoint advancement atomically.
-    /// </summary>
-    public void SaveRemoteObservationsWithCheckpoint(IEnumerable<RemoteObservedSnapshotRecord> Observations, RemoteCheckpointRecord Checkpoint)
-    {
-        using SqlTransactionContext Context = fStore.BeginTransactionContext();
-
-        foreach (RemoteObservedSnapshotRecord Observation in Observations)
-            ExecuteUpsert(Context.Transaction, Sql.UpdateRemoteObservation, Sql.InsertRemoteObservation, ToParams(Observation));
-
-        ExecuteUpsert(Context.Transaction, Sql.UpdateRemoteCheckpoint, Sql.InsertRemoteCheckpoint, ToParams(Checkpoint));
-        Context.Commit();
-    }
 
     // ● private types
 
@@ -595,6 +623,11 @@ values
     {
         // ● fields
 
+        public const string InsertTrackedItem = @"
+insert into TRACKED_ITEM
+    (Id, SyncRootId, RemoteItemId, LocalKey, ItemType)
+values
+    (:Id, :SyncRootId, :RemoteItemId, :LocalKey, :ItemType)";
         public const string UpdateBaseSnapshot = @"
 update BASE_SNAPSHOT set
     ExistsFlag = :ExistsFlag,
