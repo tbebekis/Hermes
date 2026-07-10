@@ -105,6 +105,23 @@ public class SyncExecutionIntentFactoryTests
         Assert.Empty(Intent.ValidationMessages);
     }
     /// <summary>
+    /// Verifies upload propagation requires a remote item id or remote parent id.
+    /// </summary>
+    [Fact]
+    public void CreateValidatesUploadRemoteTarget()
+    {
+        SyncExecutionRequest ExecutionRequest = Request(SyncPlanDecisionKind.UploadToRemote);
+        ExecutionRequest.TrackedItem.RemoteItemId = string.Empty;
+        ExecutionRequest.BaseSnapshot.RemoteParentId = string.Empty;
+        ExecutionRequest.RemoteObservation = null;
+
+        SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(ExecutionRequest);
+
+        Assert.Equal(SyncExecutionIntentKind.UploadToRemote, Intent.IntentKind);
+        Assert.False(Intent.CanExecute);
+        Assert.Contains("Remote item id or remote parent id is required.", Intent.ValidationMessages);
+    }
+    /// <summary>
     /// Verifies local delete propagation requires a remote item id.
     /// </summary>
     [Fact]
@@ -119,6 +136,22 @@ public class SyncExecutionIntentFactoryTests
         Assert.Equal(SyncExecutionIntentKind.PropagateLocalDelete, Intent.IntentKind);
         Assert.False(Intent.CanExecute);
         Assert.Contains("Remote item id is required.", Intent.ValidationMessages);
+    }
+    /// <summary>
+    /// Verifies download propagation requires a resolved local path.
+    /// </summary>
+    [Fact]
+    public void CreateValidatesDownloadLocalPath()
+    {
+        SyncExecutionRequest ExecutionRequest = Request(SyncPlanDecisionKind.DownloadToLocal);
+        ExecutionRequest.BaseSnapshot.LocalRelativePath = string.Empty;
+        ExecutionRequest.LocalObservation = null;
+
+        SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(ExecutionRequest);
+
+        Assert.Equal(SyncExecutionIntentKind.DownloadToLocal, Intent.IntentKind);
+        Assert.False(Intent.CanExecute);
+        Assert.Contains("Local path is required.", Intent.ValidationMessages);
     }
     /// <summary>
     /// Verifies remote delete propagation can use the base local path.

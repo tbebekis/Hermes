@@ -18,33 +18,107 @@ public class SyncMutationExecutorBase : SyncExecutorBase
     /// <summary>
     /// Executes an upload to remote storage.
     /// </summary>
-    protected virtual Task<SyncExecutionResult> ExecuteUploadToRemoteAsync(SyncExecutionIntent Intent, CancellationToken CancellationToken)
+    protected virtual async Task<SyncExecutionResult> ExecuteUploadToRemoteAsync(SyncExecutionIntent Intent, CancellationToken CancellationToken)
     {
-        return Task.FromResult(SyncExecutionResultFactory.Blocked(Intent.Request, "Upload execution is not implemented."));
+        StorageResult<StorageItem> Result;
+
+        if (string.Equals(Intent.ItemType, "Folder", StringComparison.OrdinalIgnoreCase))
+        {
+            Result = await RemoteEndpoint.CreateFolderAsync(Intent.Name, Intent.RemoteParentId, CancellationToken);
+        }
+        else if (!string.IsNullOrWhiteSpace(Intent.RemoteItemId))
+        {
+            Result = await RemoteEndpoint.UpdateFileContentAsync(
+                Intent.RemoteItemId,
+                LocalEndpoint.ResolvePath(Intent.LocalRelativePath),
+                CancellationToken);
+        }
+        else
+        {
+            Result = await RemoteEndpoint.UploadFileAsync(
+                LocalEndpoint.ResolvePath(Intent.LocalRelativePath),
+                Intent.RemoteParentId,
+                CancellationToken);
+        }
+
+        if (Result.Succeeded)
+            return SyncExecutionResultFactory.Completed(Intent.Request);
+
+        return SyncExecutionResultFactory.FromStorageError(Intent.Request, Result.Error);
     }
 
     /// <summary>
     /// Executes a download to the local filesystem.
     /// </summary>
-    protected virtual Task<SyncExecutionResult> ExecuteDownloadToLocalAsync(SyncExecutionIntent Intent, CancellationToken CancellationToken)
+    protected virtual async Task<SyncExecutionResult> ExecuteDownloadToLocalAsync(SyncExecutionIntent Intent, CancellationToken CancellationToken)
     {
-        return Task.FromResult(SyncExecutionResultFactory.Blocked(Intent.Request, "Download execution is not implemented."));
+        if (string.Equals(Intent.ItemType, "Folder", StringComparison.OrdinalIgnoreCase))
+        {
+            Result DirectoryResult = await LocalEndpoint.CreateDirectoryAsync(Intent.LocalRelativePath, CancellationToken);
+
+            if (DirectoryResult.Succeeded)
+                return SyncExecutionResultFactory.Completed(Intent.Request);
+
+            return new SyncExecutionResult()
+            {
+                Request = Intent.Request,
+                ResultKind = SyncExecutionResultKind.FailedPermanent,
+                Message = DirectoryResult.ErrorText,
+            };
+        }
+
+        Result ParentResult = await LocalEndpoint.EnsureParentDirectoryAsync(Intent.LocalRelativePath, CancellationToken);
+
+        if (ParentResult.Failed)
+        {
+            return new SyncExecutionResult()
+            {
+                Request = Intent.Request,
+                ResultKind = SyncExecutionResultKind.FailedPermanent,
+                Message = ParentResult.ErrorText,
+            };
+        }
+
+        StorageResult<StorageItem> Result = await RemoteEndpoint.DownloadFileAsync(
+            Intent.RemoteItemId,
+            LocalEndpoint.ResolvePath(Intent.LocalRelativePath),
+            CancellationToken);
+
+        if (Result.Succeeded)
+            return SyncExecutionResultFactory.Completed(Intent.Request);
+
+        return SyncExecutionResultFactory.FromStorageError(Intent.Request, Result.Error);
     }
 
     /// <summary>
     /// Executes local delete propagation to remote storage.
     /// </summary>
-    protected virtual Task<SyncExecutionResult> ExecutePropagateLocalDeleteAsync(SyncExecutionIntent Intent, CancellationToken CancellationToken)
+    protected virtual async Task<SyncExecutionResult> ExecutePropagateLocalDeleteAsync(SyncExecutionIntent Intent, CancellationToken CancellationToken)
     {
-        return Task.FromResult(SyncExecutionResultFactory.Blocked(Intent.Request, "Local delete propagation is not implemented."));
+        StorageResult<StorageItem> Result = await RemoteEndpoint.DeleteItemAsync(Intent.RemoteItemId, CancellationToken);
+
+        if (Result.Succeeded)
+            return SyncExecutionResultFactory.Completed(Intent.Request);
+
+        return SyncExecutionResultFactory.FromStorageError(Intent.Request, Result.Error);
     }
 
     /// <summary>
     /// Executes remote delete propagation to the local filesystem.
     /// </summary>
-    protected virtual Task<SyncExecutionResult> ExecutePropagateRemoteDeleteAsync(SyncExecutionIntent Intent, CancellationToken CancellationToken)
+    protected virtual async Task<SyncExecutionResult> ExecutePropagateRemoteDeleteAsync(SyncExecutionIntent Intent, CancellationToken CancellationToken)
     {
-        return Task.FromResult(SyncExecutionResultFactory.Blocked(Intent.Request, "Remote delete propagation is not implemented."));
+        Result Result = await LocalEndpoint.DeleteItemAsync(Intent.LocalRelativePath, CancellationToken);
+
+        if (Result.Succeeded)
+            return SyncExecutionResultFactory.Completed(Intent.Request);
+
+        return new SyncExecutionResult()
+        {
+            Request = Intent.Request,
+            ResultKind = SyncExecutionResultKind.FailedPermanent,
+            Message = Result.ErrorText,
+        };
     }
 
     /// <summary>

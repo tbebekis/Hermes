@@ -46,39 +46,127 @@ public class SyncMutationExecutorBaseTests
     {
         // ● private
 
+        readonly StorageResult<StorageItem> fDownloadResult;
+        readonly StorageResult<StorageItem> fDeleteResult;
+
         static StorageItem Item() => new("remote-1", "remote-root", "File.txt", "/File.txt", StorageItemKind.File);
+
+        // ● constructor
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="TestRemoteEndpoint"/> class.
+        /// </summary>
+        public TestRemoteEndpoint()
+            : this(StorageResult<StorageItem>.Success(Item()), StorageResult<StorageItem>.Success(Item()))
+        {
+        }
+        /// <summary>
+        /// Initializes a new instance of the <see cref="TestRemoteEndpoint"/> class.
+        /// </summary>
+        public TestRemoteEndpoint(StorageResult<StorageItem> DeleteResult)
+            : this(StorageResult<StorageItem>.Success(Item()), DeleteResult)
+        {
+        }
+        /// <summary>
+        /// Initializes a new instance of the <see cref="TestRemoteEndpoint"/> class.
+        /// </summary>
+        public TestRemoteEndpoint(StorageResult<StorageItem> DownloadResult, StorageResult<StorageItem> DeleteResult)
+        {
+            fDownloadResult = Guard.NotNull(DownloadResult, nameof(DownloadResult));
+            fDeleteResult = Guard.NotNull(DeleteResult, nameof(DeleteResult));
+        }
 
         // ● public
 
         /// <inheritdoc/>
         public Task<StorageResult<StorageItem>> CreateFolderAsync(string Name, string ParentId, CancellationToken CancellationToken)
         {
-            return Task.FromResult(StorageResult<StorageItem>.Success(Item()));
+            CreatedFolderNames.Add(Name);
+            CreatedFolderParentIds.Add(ParentId);
+            return Task.FromResult(CreateFolderResult);
         }
 
         /// <inheritdoc/>
         public Task<StorageResult<StorageItem>> UploadFileAsync(string LocalFilePath, string ParentId, CancellationToken CancellationToken)
         {
-            return Task.FromResult(StorageResult<StorageItem>.Success(Item()));
+            UploadedLocalFilePaths.Add(LocalFilePath);
+            UploadedParentIds.Add(ParentId);
+            return Task.FromResult(UploadFileResult);
         }
 
         /// <inheritdoc/>
         public Task<StorageResult<StorageItem>> UpdateFileContentAsync(string RemoteItemId, string LocalFilePath, CancellationToken CancellationToken)
         {
-            return Task.FromResult(StorageResult<StorageItem>.Success(Item()));
+            UpdatedItemIds.Add(RemoteItemId);
+            UpdatedLocalFilePaths.Add(LocalFilePath);
+            return Task.FromResult(UpdateFileContentResult);
         }
 
         /// <inheritdoc/>
         public Task<StorageResult<StorageItem>> DownloadFileAsync(string RemoteItemId, string LocalFilePath, CancellationToken CancellationToken)
         {
-            return Task.FromResult(StorageResult<StorageItem>.Success(Item()));
+            DownloadedItemIds.Add(RemoteItemId);
+            DownloadedLocalFilePaths.Add(LocalFilePath);
+            return Task.FromResult(fDownloadResult);
         }
 
         /// <inheritdoc/>
         public Task<StorageResult<StorageItem>> DeleteItemAsync(string RemoteItemId, CancellationToken CancellationToken)
         {
-            return Task.FromResult(StorageResult<StorageItem>.Success(Item()));
+            DeletedItemIds.Add(RemoteItemId);
+            return Task.FromResult(fDeleteResult);
         }
+
+        // ● properties
+
+        /// <summary>
+        /// Gets the created folder names.
+        /// </summary>
+        public List<string> CreatedFolderNames { get; } = [];
+        /// <summary>
+        /// Gets the created folder parent ids.
+        /// </summary>
+        public List<string> CreatedFolderParentIds { get; } = [];
+        /// <summary>
+        /// Gets the uploaded local file paths.
+        /// </summary>
+        public List<string> UploadedLocalFilePaths { get; } = [];
+        /// <summary>
+        /// Gets the uploaded parent ids.
+        /// </summary>
+        public List<string> UploadedParentIds { get; } = [];
+        /// <summary>
+        /// Gets the updated item ids.
+        /// </summary>
+        public List<string> UpdatedItemIds { get; } = [];
+        /// <summary>
+        /// Gets the updated local file paths.
+        /// </summary>
+        public List<string> UpdatedLocalFilePaths { get; } = [];
+        /// <summary>
+        /// Gets the downloaded item ids.
+        /// </summary>
+        public List<string> DownloadedItemIds { get; } = [];
+        /// <summary>
+        /// Gets the downloaded local file paths.
+        /// </summary>
+        public List<string> DownloadedLocalFilePaths { get; } = [];
+        /// <summary>
+        /// Gets the deleted item ids.
+        /// </summary>
+        public List<string> DeletedItemIds { get; } = [];
+        /// <summary>
+        /// Gets or sets the create folder result.
+        /// </summary>
+        public StorageResult<StorageItem> CreateFolderResult { get; set; } = StorageResult<StorageItem>.Success(Item());
+        /// <summary>
+        /// Gets or sets the upload file result.
+        /// </summary>
+        public StorageResult<StorageItem> UploadFileResult { get; set; } = StorageResult<StorageItem>.Success(Item());
+        /// <summary>
+        /// Gets or sets the update file content result.
+        /// </summary>
+        public StorageResult<StorageItem> UpdateFileContentResult { get; set; } = StorageResult<StorageItem>.Success(Item());
     }
 
     /// <summary>
@@ -104,13 +192,6 @@ public class SyncMutationExecutorBaseTests
 
         /// <inheritdoc/>
         protected override Task<SyncExecutionResult> ExecutePropagateLocalDeleteAsync(SyncExecutionIntent Intent, CancellationToken CancellationToken)
-        {
-            ExecutedIntentKind = Intent.IntentKind;
-            return Task.FromResult(SyncExecutionResultFactory.Completed(Intent.Request));
-        }
-
-        /// <inheritdoc/>
-        protected override Task<SyncExecutionResult> ExecutePropagateRemoteDeleteAsync(SyncExecutionIntent Intent, CancellationToken CancellationToken)
         {
             ExecutedIntentKind = Intent.IntentKind;
             return Task.FromResult(SyncExecutionResultFactory.Completed(Intent.Request));
@@ -191,6 +272,129 @@ public class SyncMutationExecutorBaseTests
         LocalObservation = LocalObservation(),
         RemoteObservation = RemoteObservation(),
     };
+    static SyncExecutionRequest FolderRequest(SyncPlanDecisionKind DecisionKind) => new()
+    {
+        Decision = new SyncPlanDecision("folder-1", SyncDiffKind.LocalChanged, DecisionKind),
+        TrackedItem = new TrackedItemRecord()
+        {
+            Id = "folder-1",
+            SyncRootId = "root-1",
+            RemoteItemId = "remote-folder-1",
+            LocalKey = "Folder",
+            ItemType = "Folder",
+        },
+        BaseSnapshot = new BaseSnapshotRecord()
+        {
+            TrackedItemId = "folder-1",
+            ExistsFlag = true,
+            ItemType = "Folder",
+            Name = "Folder",
+            LocalRelativePath = "Folder",
+            RemoteParentId = "remote-root",
+            Trashed = false,
+            CommittedTime = new DateTime(2026, 7, 11, 10, 20, 0, DateTimeKind.Utc),
+        },
+        LocalObservation = new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "folder-1",
+            ExistsFlag = true,
+            RelativePath = "Folder",
+            Name = "Folder",
+            ItemType = "Folder",
+            ObservedTime = new DateTime(2026, 7, 11, 10, 20, 0, DateTimeKind.Utc),
+        },
+        RemoteObservation = new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "folder-1",
+            RemoteItemId = "remote-folder-1",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "Folder",
+            RemoteParentId = "remote-root",
+            ItemType = "Folder",
+            Trashed = false,
+            ObservedTime = new DateTime(2026, 7, 11, 10, 20, 0, DateTimeKind.Utc),
+        },
+    };
+    static SyncExecutionRequest NewFileUploadRequest() => new()
+    {
+        Decision = Decision(SyncPlanDecisionKind.UploadToRemote),
+        TrackedItem = new TrackedItemRecord()
+        {
+            Id = "new-file-1",
+            SyncRootId = "root-1",
+            RemoteItemId = string.Empty,
+            LocalKey = "NewFile.txt",
+            ItemType = "File",
+        },
+        BaseSnapshot = new BaseSnapshotRecord()
+        {
+            TrackedItemId = "new-file-1",
+            ExistsFlag = false,
+            ItemType = "File",
+            Name = "NewFile.txt",
+            LocalRelativePath = "NewFile.txt",
+            RemoteParentId = "remote-root",
+            Trashed = false,
+            CommittedTime = new DateTime(2026, 7, 11, 10, 20, 0, DateTimeKind.Utc),
+        },
+        LocalObservation = new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "new-file-1",
+            ExistsFlag = true,
+            RelativePath = "NewFile.txt",
+            Name = "NewFile.txt",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-local",
+            ObservedTime = new DateTime(2026, 7, 11, 10, 20, 0, DateTimeKind.Utc),
+        },
+        RemoteObservation = null,
+    };
+
+    /// <summary>
+    /// Provides a temporary folder for mutation executor tests.
+    /// </summary>
+    sealed class TempFolder : IDisposable
+    {
+        // ● fields
+
+        bool fDisposed;
+
+        // ● constructor
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="TempFolder"/> class.
+        /// </summary>
+        public TempFolder()
+        {
+            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "hermes-mutation-executor-tests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path);
+        }
+
+        // ● public
+
+        /// <summary>
+        /// Deletes the temporary folder.
+        /// </summary>
+        public void Dispose()
+        {
+            if (fDisposed)
+                return;
+
+            if (Directory.Exists(Path))
+                Directory.Delete(Path, true);
+
+            fDisposed = true;
+        }
+
+        // ● properties
+
+        /// <summary>
+        /// Gets the temporary folder path.
+        /// </summary>
+        public string Path { get; }
+    }
 
     // ● public
 
@@ -229,12 +433,80 @@ public class SyncMutationExecutorBaseTests
     }
 
     /// <summary>
-    /// Verifies default mutation executor blocks unimplemented executable intents.
+    /// Verifies upload propagation updates an existing remote file.
     /// </summary>
     [Fact]
-    public async Task ExecuteAsyncBlocksDefaultImplementation()
+    public async Task ExecuteAsyncUpdatesExistingRemoteFile()
     {
-        SyncMutationExecutorBase Executor = new(new TestLocalEndpoint(), new TestRemoteEndpoint());
+        TestRemoteEndpoint RemoteEndpoint = new();
+        SyncMutationExecutorBase Executor = new(new TestLocalEndpoint(), RemoteEndpoint);
+
+        IReadOnlyList<SyncExecutionResult> Results = await Executor.ExecuteAsync(
+            [Request(SyncPlanDecisionKind.UploadToRemote)],
+            CancellationToken.None);
+
+        Assert.Single(Results);
+        Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Results[0].ResultKind);
+        string UpdatedItemId = Assert.Single(RemoteEndpoint.UpdatedItemIds);
+        string UpdatedLocalFilePath = Assert.Single(RemoteEndpoint.UpdatedLocalFilePaths);
+        Assert.Equal("remote-1", UpdatedItemId);
+        Assert.Equal("/local/File.txt", UpdatedLocalFilePath);
+    }
+
+    /// <summary>
+    /// Verifies upload propagation creates a new remote file when no remote item id exists.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsyncUploadsNewRemoteFile()
+    {
+        TestRemoteEndpoint RemoteEndpoint = new();
+        SyncMutationExecutorBase Executor = new(new TestLocalEndpoint(), RemoteEndpoint);
+
+        IReadOnlyList<SyncExecutionResult> Results = await Executor.ExecuteAsync(
+            [NewFileUploadRequest()],
+            CancellationToken.None);
+
+        Assert.Single(Results);
+        Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Results[0].ResultKind);
+        string UploadedLocalFilePath = Assert.Single(RemoteEndpoint.UploadedLocalFilePaths);
+        string UploadedParentId = Assert.Single(RemoteEndpoint.UploadedParentIds);
+        Assert.Equal("/local/NewFile.txt", UploadedLocalFilePath);
+        Assert.Equal("remote-root", UploadedParentId);
+    }
+
+    /// <summary>
+    /// Verifies upload propagation creates a remote folder.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsyncCreatesRemoteFolder()
+    {
+        TestRemoteEndpoint RemoteEndpoint = new();
+        SyncMutationExecutorBase Executor = new(new TestLocalEndpoint(), RemoteEndpoint);
+
+        IReadOnlyList<SyncExecutionResult> Results = await Executor.ExecuteAsync(
+            [FolderRequest(SyncPlanDecisionKind.UploadToRemote)],
+            CancellationToken.None);
+
+        Assert.Single(Results);
+        Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Results[0].ResultKind);
+        string CreatedFolderName = Assert.Single(RemoteEndpoint.CreatedFolderNames);
+        string CreatedFolderParentId = Assert.Single(RemoteEndpoint.CreatedFolderParentIds);
+        Assert.Equal("Folder", CreatedFolderName);
+        Assert.Equal("remote-root", CreatedFolderParentId);
+    }
+
+    /// <summary>
+    /// Verifies upload propagation maps remote storage failures.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsyncMapsRemoteUploadFailure()
+    {
+        StorageError Error = new(StorageErrorKind.PermissionDenied, "denied");
+        TestRemoteEndpoint RemoteEndpoint = new()
+        {
+            UpdateFileContentResult = StorageResult<StorageItem>.Failure(Error),
+        };
+        SyncMutationExecutorBase Executor = new(new TestLocalEndpoint(), RemoteEndpoint);
 
         IReadOnlyList<SyncExecutionResult> Results = await Executor.ExecuteAsync(
             [Request(SyncPlanDecisionKind.UploadToRemote)],
@@ -242,6 +514,128 @@ public class SyncMutationExecutorBaseTests
 
         Assert.Single(Results);
         Assert.Equal(SyncExecutionResultKind.Blocked, Results[0].ResultKind);
-        Assert.Contains("Upload execution is not implemented.", Results[0].Message);
+        Assert.Same(Error, Results[0].Error);
+        Assert.Equal("denied", Results[0].Message);
+    }
+
+    /// <summary>
+    /// Verifies download propagation downloads the remote file to the resolved local path.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsyncDownloadsRemoteFileToLocal()
+    {
+        using TempFolder Folder = new();
+        TestRemoteEndpoint RemoteEndpoint = new();
+        SyncMutationExecutorBase Executor = new(new LocalSyncMutationEndpoint(Folder.Path), RemoteEndpoint);
+
+        IReadOnlyList<SyncExecutionResult> Results = await Executor.ExecuteAsync(
+            [Request(SyncPlanDecisionKind.DownloadToLocal)],
+            CancellationToken.None);
+
+        Assert.Single(Results);
+        Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Results[0].ResultKind);
+        string DownloadedItemId = Assert.Single(RemoteEndpoint.DownloadedItemIds);
+        string DownloadedLocalFilePath = Assert.Single(RemoteEndpoint.DownloadedLocalFilePaths);
+        Assert.Equal("remote-1", DownloadedItemId);
+        Assert.Equal(System.IO.Path.Combine(Folder.Path, "File.txt"), DownloadedLocalFilePath);
+    }
+
+    /// <summary>
+    /// Verifies remote folder download creates the local directory.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsyncCreatesLocalFolderForRemoteFolderDownload()
+    {
+        using TempFolder Folder = new();
+        TestRemoteEndpoint RemoteEndpoint = new();
+        SyncMutationExecutorBase Executor = new(new LocalSyncMutationEndpoint(Folder.Path), RemoteEndpoint);
+
+        IReadOnlyList<SyncExecutionResult> Results = await Executor.ExecuteAsync(
+            [FolderRequest(SyncPlanDecisionKind.DownloadToLocal)],
+            CancellationToken.None);
+
+        Assert.Single(Results);
+        Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Results[0].ResultKind);
+        Assert.True(Directory.Exists(System.IO.Path.Combine(Folder.Path, "Folder")));
+        Assert.Empty(RemoteEndpoint.DownloadedItemIds);
+    }
+
+    /// <summary>
+    /// Verifies download propagation maps remote storage failures.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsyncMapsRemoteDownloadFailure()
+    {
+        StorageError Error = new(StorageErrorKind.RateLimited, "rate limited");
+        TestRemoteEndpoint RemoteEndpoint = new(StorageResult<StorageItem>.Failure(Error), StorageResult<StorageItem>.Success(new StorageItem("delete-1", "remote-root", "File.txt", "/File.txt", StorageItemKind.File)));
+        SyncMutationExecutorBase Executor = new(new TestLocalEndpoint(), RemoteEndpoint);
+
+        IReadOnlyList<SyncExecutionResult> Results = await Executor.ExecuteAsync(
+            [Request(SyncPlanDecisionKind.DownloadToLocal)],
+            CancellationToken.None);
+
+        Assert.Single(Results);
+        Assert.Equal(SyncExecutionResultKind.FailedRetryable, Results[0].ResultKind);
+        Assert.Same(Error, Results[0].Error);
+        Assert.Equal("rate limited", Results[0].Message);
+    }
+
+    /// <summary>
+    /// Verifies remote delete propagation deletes the local item.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsyncPropagatesRemoteDeleteToLocal()
+    {
+        using TempFolder Folder = new();
+        string FilePath = System.IO.Path.Combine(Folder.Path, "File.txt");
+        await System.IO.File.WriteAllTextAsync(FilePath, "content");
+        SyncMutationExecutorBase Executor = new(new LocalSyncMutationEndpoint(Folder.Path), new TestRemoteEndpoint());
+
+        IReadOnlyList<SyncExecutionResult> Results = await Executor.ExecuteAsync(
+            [Request(SyncPlanDecisionKind.PropagateRemoteDelete)],
+            CancellationToken.None);
+
+        Assert.Single(Results);
+        Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Results[0].ResultKind);
+        Assert.False(System.IO.File.Exists(FilePath));
+    }
+
+    /// <summary>
+    /// Verifies local delete propagation deletes the remote item.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsyncPropagatesLocalDeleteToRemote()
+    {
+        TestRemoteEndpoint RemoteEndpoint = new();
+        SyncMutationExecutorBase Executor = new(new TestLocalEndpoint(), RemoteEndpoint);
+
+        IReadOnlyList<SyncExecutionResult> Results = await Executor.ExecuteAsync(
+            [Request(SyncPlanDecisionKind.PropagateLocalDelete)],
+            CancellationToken.None);
+
+        Assert.Single(Results);
+        Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Results[0].ResultKind);
+        string DeletedItemId = Assert.Single(RemoteEndpoint.DeletedItemIds);
+        Assert.Equal("remote-1", DeletedItemId);
+    }
+
+    /// <summary>
+    /// Verifies local delete propagation maps remote storage failures.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsyncMapsRemoteDeleteFailure()
+    {
+        StorageError Error = new(StorageErrorKind.PermissionDenied, "denied");
+        TestRemoteEndpoint RemoteEndpoint = new(StorageResult<StorageItem>.Failure(Error));
+        SyncMutationExecutorBase Executor = new(new TestLocalEndpoint(), RemoteEndpoint);
+
+        IReadOnlyList<SyncExecutionResult> Results = await Executor.ExecuteAsync(
+            [Request(SyncPlanDecisionKind.PropagateLocalDelete)],
+            CancellationToken.None);
+
+        Assert.Single(Results);
+        Assert.Equal(SyncExecutionResultKind.Blocked, Results[0].ResultKind);
+        Assert.Same(Error, Results[0].Error);
+        Assert.Equal("denied", Results[0].Message);
     }
 }

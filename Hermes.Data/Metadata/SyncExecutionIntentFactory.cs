@@ -153,9 +153,12 @@ static public class SyncExecutionIntentFactory
         {
             case SyncExecutionIntentKind.UploadToRemote:
                 Require(Exists(Request.LocalObservation), Intent, "Existing local observation is required.");
+                Require(HasText(LocalPath(Request)), Intent, "Local path is required.");
+                Require(HasText(RemoteItemId(Request)) || HasText(RemoteParentId(Request)), Intent, "Remote item id or remote parent id is required.");
                 break;
             case SyncExecutionIntentKind.DownloadToLocal:
                 Require(Exists(Request.RemoteObservation), Intent, "Existing remote observation is required.");
+                Require(HasText(LocalPath(Request)), Intent, "Local path is required.");
                 break;
             case SyncExecutionIntentKind.PropagateLocalDelete:
                 Require(HasText(RemoteItemId(Request)), Intent, "Remote item id is required.");
