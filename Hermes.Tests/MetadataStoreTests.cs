@@ -104,6 +104,16 @@ public class MetadataStoreTests
         LocalKey = "local-2",
         ItemType = "File",
     };
+    static SyncRootRecord CreateSyncRoot2() => new()
+    {
+        Id = "root-2",
+        ProviderName = "GoogleDrive",
+        ConnectionId = "account-1",
+        LocalRootPath = "/tmp/hermes-2",
+        RemoteRootItemId = "remote-root-2",
+        IsEnabled = true,
+        CreatedTime = new DateTime(2026, 7, 10, 10, 0, 0, DateTimeKind.Utc),
+    };
 
     // ● public
 
@@ -146,6 +156,67 @@ public class MetadataStoreTests
         Assert.NotNull(Loaded);
         Assert.Equal("root-1", Loaded.SyncRootId);
         Assert.Equal("remote-1", Loaded.RemoteItemId);
+    }
+    /// <summary>
+    /// Verifies tracked items can be found by remote id in a sync root.
+    /// </summary>
+    [Fact]
+    public void TrackedItemCanBeFoundByRemoteId()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem());
+
+        TrackedItemRecord Loaded = Store.GetTrackedItemByRemoteId("root-1", "remote-1");
+
+        Assert.NotNull(Loaded);
+        Assert.Equal("item-1", Loaded.Id);
+    }
+    /// <summary>
+    /// Verifies tracked items can be found by local key in a sync root.
+    /// </summary>
+    [Fact]
+    public void TrackedItemCanBeFoundByLocalKey()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem());
+
+        TrackedItemRecord Loaded = Store.GetTrackedItemByLocalKey("root-1", "local-1");
+
+        Assert.NotNull(Loaded);
+        Assert.Equal("item-1", Loaded.Id);
+    }
+    /// <summary>
+    /// Verifies tracked item identity lookups are scoped by sync root.
+    /// </summary>
+    [Fact]
+    public void TrackedItemIdentityLookupIsScopedBySyncRoot()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        TrackedItemRecord Item2 = new()
+        {
+            Id = "item-3",
+            SyncRootId = "root-2",
+            RemoteItemId = "remote-1",
+            LocalKey = "local-1",
+            ItemType = "File",
+        };
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertSyncRoot(CreateSyncRoot2());
+        Store.InsertTrackedItem(CreateTrackedItem());
+        Store.InsertTrackedItem(Item2);
+
+        Assert.Equal("item-1", Store.GetTrackedItemByRemoteId("root-1", "remote-1").Id);
+        Assert.Equal("item-3", Store.GetTrackedItemByRemoteId("root-2", "remote-1").Id);
+        Assert.Equal("item-1", Store.GetTrackedItemByLocalKey("root-1", "local-1").Id);
+        Assert.Equal("item-3", Store.GetTrackedItemByLocalKey("root-2", "local-1").Id);
     }
     /// <summary>
     /// Verifies observation, base snapshot, and checkpoint upserts.
@@ -649,5 +720,242 @@ public class MetadataStoreTests
 
         Assert.Single(Decisions);
         Assert.Equal(SyncPlanDecisionKind.DownloadToLocal, Decisions[0].DecisionKind);
+    }
+    /// <summary>
+    /// Verifies local observations can be saved in a batch.
+    /// </summary>
+    [Fact]
+    public void LocalObservationsCanBeSavedInBatch()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        DateTime ObservedTime = new(2026, 7, 10, 21, 0, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem());
+        Store.InsertTrackedItem(CreateTrackedItem2());
+        Store.SaveLocalObservations(
+        [
+            LocalObservationMapper.FromScanItem(
+                new LocalScanItem()
+                {
+                    RelativePath = "File1.txt",
+                    Name = "File1.txt",
+                    ItemType = "File",
+                    Size = 5,
+                    ModifiedTime = ObservedTime,
+                    ContentHash = "hash-1",
+                },
+                "item-1",
+                ObservedTime,
+                "scan-1"),
+            LocalObservationMapper.Missing("item-2", ObservedTime, "scan-1"),
+        ]);
+
+        LocalObservedSnapshotRecord Existing = Store.GetLocalObservation("item-1");
+        LocalObservedSnapshotRecord Missing = Store.GetLocalObservation("item-2");
+
+        Assert.True(Existing.ExistsFlag);
+        Assert.Equal("File1.txt", Existing.RelativePath);
+        Assert.Equal("hash-1", Existing.ContentHash);
+        Assert.False(Missing.ExistsFlag);
+        Assert.Null(Missing.RelativePath);
+        Assert.Equal("scan-1", Missing.ScanId);
+    }
+    /// <summary>
+    /// Verifies remote observations can be saved in a batch.
+    /// </summary>
+    [Fact]
+    public void RemoteObservationsCanBeSavedInBatch()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        DateTime ObservedTime = new(2026, 7, 10, 22, 0, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem());
+        Store.InsertTrackedItem(CreateTrackedItem2());
+        Store.SaveRemoteObservations(
+        [
+            RemoteObservationMapper.FromStorageItem(
+                new StorageItem(
+                    "remote-1",
+                    "remote-root",
+                    "Remote1.txt",
+                    "/Remote1.txt",
+                    StorageItemKind.File,
+                    "text/plain",
+                    42,
+                    "hash-1",
+                    default,
+                    default,
+                    1,
+                    false),
+                "item-1",
+                ObservedTime),
+            RemoteObservationMapper.FromChange(
+                new StorageChange("remote-2", true, new DateTimeOffset(ObservedTime), null),
+                "item-2",
+                ObservedTime),
+        ]);
+
+        RemoteObservedSnapshotRecord Existing = Store.GetRemoteObservation("item-1");
+        RemoteObservedSnapshotRecord Removed = Store.GetRemoteObservation("item-2");
+
+        Assert.True(Existing.ExistsFlag);
+        Assert.Equal("Remote1.txt", Existing.Name);
+        Assert.Equal("hash-1", Existing.ContentHash);
+        Assert.False(Removed.ExistsFlag);
+        Assert.True(Removed.Removed);
+        Assert.Null(Removed.Name);
+    }
+    /// <summary>
+    /// Verifies known provider changes can be imported as remote observations.
+    /// </summary>
+    [Fact]
+    public void KnownRemoteChangesCanBeImported()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        DateTime ObservedTime = new(2026, 7, 10, 23, 0, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem());
+
+        RemoteChangeImportResult Result = Store.ImportKnownRemoteChanges(
+            "root-1",
+            [
+                new StorageChange(
+                    "remote-1",
+                    false,
+                    new DateTimeOffset(ObservedTime),
+                    new StorageItem(
+                        "remote-1",
+                        "remote-root",
+                        "Changed.txt",
+                        "/Changed.txt",
+                        StorageItemKind.File,
+                        "text/plain",
+                        42,
+                        "hash-1",
+                        default,
+                        default,
+                        3,
+                        false)),
+            ],
+            ObservedTime);
+        RemoteObservedSnapshotRecord Observation = Store.GetRemoteObservation("item-1");
+
+        Assert.Single(Result.Observations);
+        Assert.Empty(Result.UntrackedChanges);
+        Assert.NotNull(Observation);
+        Assert.Equal("Changed.txt", Observation.Name);
+        Assert.Equal("remote-1", Observation.RemoteItemId);
+        Assert.Equal(3, Observation.ProviderVersion);
+    }
+    /// <summary>
+    /// Verifies unknown provider changes are returned without creating observations.
+    /// </summary>
+    [Fact]
+    public void UnknownRemoteChangesAreReturnedAsUntracked()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        DateTime ObservedTime = new(2026, 7, 11, 0, 0, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+
+        RemoteChangeImportResult Result = Store.ImportKnownRemoteChanges(
+            "root-1",
+            [
+                new StorageChange("remote-unknown", true, new DateTimeOffset(ObservedTime), null),
+            ],
+            ObservedTime);
+
+        Assert.Empty(Result.Observations);
+        Assert.Single(Result.UntrackedChanges);
+        Assert.Equal("remote-unknown", Result.UntrackedChanges[0].ItemId);
+    }
+    /// <summary>
+    /// Verifies remote items can be bootstrapped as tracked items.
+    /// </summary>
+    [Fact]
+    public void RemoteItemsCanBeBootstrappedAsTrackedItems()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        DateTime ObservedTime = new(2026, 7, 11, 1, 0, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+
+        RemoteBootstrapResult Result = Store.BootstrapRemoteItems(
+            "root-1",
+            [
+                new StorageItem(
+                    "remote-new",
+                    "remote-root",
+                    "RemoteNew.txt",
+                    "/RemoteNew.txt",
+                    StorageItemKind.File,
+                    "text/plain",
+                    42,
+                    "hash-new",
+                    default,
+                    default,
+                    1,
+                    false),
+            ],
+            ObservedTime);
+        TrackedItemRecord TrackedItem = Store.GetTrackedItemByRemoteId("root-1", "remote-new");
+        RemoteObservedSnapshotRecord Observation = Store.GetRemoteObservation(TrackedItem.Id);
+
+        Assert.Single(Result.CreatedTrackedItems);
+        Assert.Single(Result.Observations);
+        Assert.NotNull(TrackedItem);
+        Assert.Equal("File", TrackedItem.ItemType);
+        Assert.Null(TrackedItem.LocalKey);
+        Assert.Equal("RemoteNew.txt", Observation.Name);
+        Assert.Equal("hash-new", Observation.ContentHash);
+    }
+    /// <summary>
+    /// Verifies bootstrapping an already tracked remote item only updates its observation.
+    /// </summary>
+    [Fact]
+    public void RemoteBootstrapUpdatesExistingTrackedItems()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        DateTime ObservedTime = new(2026, 7, 11, 2, 0, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem());
+
+        RemoteBootstrapResult Result = Store.BootstrapRemoteItems(
+            "root-1",
+            [
+                new StorageItem(
+                    "remote-1",
+                    "remote-root",
+                    "RemoteRenamed.txt",
+                    "/RemoteRenamed.txt",
+                    StorageItemKind.File,
+                    "text/plain",
+                    50,
+                    "hash-renamed",
+                    default,
+                    default,
+                    2,
+                    false),
+            ],
+            ObservedTime);
+        IReadOnlyList<TrackedItemRecord> Items = Store.GetTrackedItems("root-1");
+        RemoteObservedSnapshotRecord Observation = Store.GetRemoteObservation("item-1");
+
+        Assert.Empty(Result.CreatedTrackedItems);
+        Assert.Single(Result.Observations);
+        Assert.Single(Items);
+        Assert.Equal("RemoteRenamed.txt", Observation.Name);
+        Assert.Equal("hash-renamed", Observation.ContentHash);
+        Assert.Equal(2, Observation.ProviderVersion);
     }
 }

@@ -3,6 +3,7 @@
 
 global using Hermes.Common;
 global using Hermes.Core;
+global using Hermes.Storage;
 global using System;
 global using System.Collections.Generic;
 global using System.Data;

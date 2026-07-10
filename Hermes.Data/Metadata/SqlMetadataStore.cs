@@ -35,6 +35,16 @@ public class SqlMetadataStore
         return Value == DBNull.Value ? null : Convert.ToDateTime(Value);
     }
     static DataRow FirstRow(MemTable Table) => Table.Rows.Count == 0 ? null : Table.Rows[0];
+    static DataRow SingleOptionalRow(MemTable Table, string Description)
+    {
+        if (Table.Rows.Count == 0)
+            return null;
+
+        if (Table.Rows.Count > 1)
+            throw new TripousDataException($"Multiple rows found for {Description}.");
+
+        return Table.Rows[0];
+    }
     int ExecuteUpsert(DbTransaction Transaction, string UpdateSql, string InsertSql, Dictionary<string, object> Params)
     {
         int Count = fStore.ExecSql(Transaction, UpdateSql, Params);
@@ -273,11 +283,85 @@ values
         fStore.ExecSql(SqlText, ToParams(Record));
     }
     /// <summary>
+    /// Tracks remote items that are not tracked yet and stores their remote observations.
+    /// </summary>
+    public RemoteBootstrapResult BootstrapRemoteItems(string SyncRootId, IEnumerable<StorageItem> Items, DateTime ObservedTime)
+    {
+        Guard.NotNullOrWhiteSpace(SyncRootId, nameof(SyncRootId));
+        Guard.NotNull(Items, nameof(Items));
+
+        RemoteBootstrapResult Result = new();
+        Dictionary<string, TrackedItemRecord> TrackedItemsByRemoteId = GetTrackedItems(SyncRootId)
+            .Where(Item => !string.IsNullOrWhiteSpace(Item.RemoteItemId))
+            .ToDictionary(Item => Item.RemoteItemId);
+
+        using SqlTransactionContext Context = fStore.BeginTransactionContext();
+
+        foreach (StorageItem Item in Items)
+        {
+            if (!TrackedItemsByRemoteId.TryGetValue(Item.Id, out TrackedItemRecord TrackedItem))
+            {
+                TrackedItem = new TrackedItemRecord()
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    SyncRootId = SyncRootId,
+                    RemoteItemId = Item.Id,
+                    ItemType = Item.Kind == StorageItemKind.Folder ? "Folder" : "File",
+                };
+                fStore.ExecSql(Context.Transaction, @"
+insert into TRACKED_ITEM
+    (Id, SyncRootId, RemoteItemId, LocalKey, ItemType)
+values
+    (:Id, :SyncRootId, :RemoteItemId, :LocalKey, :ItemType)", ToParams(TrackedItem));
+                Result.CreatedTrackedItems.Add(TrackedItem);
+                TrackedItemsByRemoteId[Item.Id] = TrackedItem;
+            }
+
+            RemoteObservedSnapshotRecord Observation = RemoteObservationMapper.FromStorageItem(Item, TrackedItem.Id, ObservedTime);
+            ExecuteUpsert(Context.Transaction, Sql.UpdateRemoteObservation, Sql.InsertRemoteObservation, ToParams(Observation));
+            Result.Observations.Add(Observation);
+        }
+
+        Context.Commit();
+
+        return Result;
+    }
+    /// <summary>
     /// Returns a tracked item by id.
     /// </summary>
     public TrackedItemRecord GetTrackedItem(string Id)
     {
         DataRow Row = FirstRow(fStore.Select("select * from TRACKED_ITEM where Id = :Id", new Dictionary<string, object>() { ["Id"] = Id }));
+        return Row == null ? null : ToTrackedItem(Row);
+    }
+    /// <summary>
+    /// Returns a tracked item by remote item id inside a sync root.
+    /// </summary>
+    public TrackedItemRecord GetTrackedItemByRemoteId(string SyncRootId, string RemoteItemId)
+    {
+        MemTable Table = fStore.Select(
+            "select * from TRACKED_ITEM where SyncRootId = :SyncRootId and RemoteItemId = :RemoteItemId",
+            new Dictionary<string, object>()
+            {
+                ["SyncRootId"] = SyncRootId,
+                ["RemoteItemId"] = RemoteItemId,
+            });
+        DataRow Row = SingleOptionalRow(Table, $"remote item id {RemoteItemId}");
+        return Row == null ? null : ToTrackedItem(Row);
+    }
+    /// <summary>
+    /// Returns a tracked item by local key inside a sync root.
+    /// </summary>
+    public TrackedItemRecord GetTrackedItemByLocalKey(string SyncRootId, string LocalKey)
+    {
+        MemTable Table = fStore.Select(
+            "select * from TRACKED_ITEM where SyncRootId = :SyncRootId and LocalKey = :LocalKey",
+            new Dictionary<string, object>()
+            {
+                ["SyncRootId"] = SyncRootId,
+                ["LocalKey"] = LocalKey,
+            });
+        DataRow Row = SingleOptionalRow(Table, $"local key {LocalKey}");
         return Row == null ? null : ToTrackedItem(Row);
     }
     /// <summary>
@@ -316,6 +400,18 @@ values
         ExecuteUpsert(Sql.UpdateLocalObservation, Sql.InsertLocalObservation, ToParams(Record));
     }
     /// <summary>
+    /// Inserts or updates local observations in one transaction.
+    /// </summary>
+    public void SaveLocalObservations(IEnumerable<LocalObservedSnapshotRecord> Observations)
+    {
+        using SqlTransactionContext Context = fStore.BeginTransactionContext();
+
+        foreach (LocalObservedSnapshotRecord Observation in Observations)
+            ExecuteUpsert(Context.Transaction, Sql.UpdateLocalObservation, Sql.InsertLocalObservation, ToParams(Observation));
+
+        Context.Commit();
+    }
+    /// <summary>
     /// Returns a local observation by tracked item id.
     /// </summary>
     public LocalObservedSnapshotRecord GetLocalObservation(string TrackedItemId)
@@ -329,6 +425,45 @@ values
     public void UpsertRemoteObservation(RemoteObservedSnapshotRecord Record)
     {
         ExecuteUpsert(Sql.UpdateRemoteObservation, Sql.InsertRemoteObservation, ToParams(Record));
+    }
+    /// <summary>
+    /// Inserts or updates remote observations in one transaction.
+    /// </summary>
+    public void SaveRemoteObservations(IEnumerable<RemoteObservedSnapshotRecord> Observations)
+    {
+        using SqlTransactionContext Context = fStore.BeginTransactionContext();
+
+        foreach (RemoteObservedSnapshotRecord Observation in Observations)
+            ExecuteUpsert(Context.Transaction, Sql.UpdateRemoteObservation, Sql.InsertRemoteObservation, ToParams(Observation));
+
+        Context.Commit();
+    }
+    /// <summary>
+    /// Imports provider changes for tracked remote items and returns untracked changes separately.
+    /// </summary>
+    public RemoteChangeImportResult ImportKnownRemoteChanges(string SyncRootId, IEnumerable<StorageChange> Changes, DateTime ObservedTime)
+    {
+        Guard.NotNullOrWhiteSpace(SyncRootId, nameof(SyncRootId));
+        Guard.NotNull(Changes, nameof(Changes));
+
+        RemoteChangeImportResult Result = new();
+
+        foreach (StorageChange Change in Changes)
+        {
+            TrackedItemRecord TrackedItem = GetTrackedItemByRemoteId(SyncRootId, Change.ItemId);
+            if (TrackedItem == null)
+            {
+                Result.UntrackedChanges.Add(Change);
+                continue;
+            }
+
+            Result.Observations.Add(RemoteObservationMapper.FromChange(Change, TrackedItem.Id, ObservedTime));
+        }
+
+        if (Result.Observations.Count > 0)
+            SaveRemoteObservations(Result.Observations);
+
+        return Result;
     }
     /// <summary>
     /// Returns a remote observation by tracked item id.
