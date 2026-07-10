@@ -11,3 +11,5 @@ global using Microsoft.Extensions.Hosting;
 global using Microsoft.Extensions.Options;
 global using System.Threading;
 global using System.Threading.Tasks;
+global using Tripous;
+global using Tripous.Data;

@@ -32,6 +32,10 @@ static public class Program
                 });
                 Services.AddSingleton<IRemoteSyncMutationEndpoint, GoogleDriveRemoteSyncMutationEndpoint>();
                 Services.AddSingleton<ISyncExecutor, SyncMutationExecutorBase>();
+                Services.AddSingleton(_ => ServiceDataStartup.CreateDefaultStore());
+                Services.AddSingleton<SqlMetadataStore>();
+                Services.AddSingleton<MetadataSyncSession>();
+                Services.AddSingleton<MetadataSyncRunner>();
                 Services.AddSingleton<SyncPlanner>();
                 Services.AddSingleton<OperationQueue>();
                 Services.AddSingleton<ConflictResolver>();
