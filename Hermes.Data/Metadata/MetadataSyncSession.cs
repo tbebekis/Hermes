@@ -254,11 +254,7 @@ public class MetadataSyncSession
             return false;
 
         if (string.Equals(ScanItem.ItemType, "Folder", StringComparison.Ordinal))
-        {
-            return string.Equals(BaseSnapshot.ItemType, "Folder", StringComparison.Ordinal)
-                && (string.Equals(ParentLocalPath(BaseSnapshot.LocalRelativePath), ScanItem.ParentRelativePath ?? string.Empty, StringComparison.Ordinal)
-                    || string.Equals(BaseSnapshot.Name, ScanItem.Name, StringComparison.Ordinal));
-        }
+            return string.Equals(BaseSnapshot.ItemType, "Folder", StringComparison.Ordinal);
 
         if (string.IsNullOrWhiteSpace(ScanItem.ContentHash) || !ScanItem.Size.HasValue)
             return false;

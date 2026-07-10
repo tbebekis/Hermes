@@ -488,6 +488,16 @@ public class SyncMutationExecutorBaseTests
         Result.LocalParentRemoteItemId = "remote-parent";
         return Result;
     }
+    static SyncExecutionRequest LocalFolderRenameAndMoveRequest()
+    {
+        SyncExecutionRequest Result = FolderRequest(SyncPlanDecisionKind.ApplyLocalNamespaceToRemote);
+        Result.Decision = new SyncPlanDecision("folder-1", SyncDiffKind.LocalNamespaceChanged, SyncPlanDecisionKind.ApplyLocalNamespaceToRemote);
+        Result.LocalObservation.Name = "RenamedFolder";
+        Result.LocalObservation.RelativePath = "Parent/RenamedFolder";
+        Result.LocalObservation.ParentRelativePath = "Parent";
+        Result.LocalParentRemoteItemId = "remote-parent";
+        return Result;
+    }
     static SyncExecutionRequest NewFileUploadRequest() => new()
     {
         Decision = Decision(SyncPlanDecisionKind.UploadToRemote),
@@ -735,6 +745,28 @@ public class SyncMutationExecutorBaseTests
         Assert.Single(Results);
         Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Results[0].ResultKind);
         Assert.Empty(RemoteEndpoint.RenamedItemIds);
+        Assert.Equal("remote-folder-1", Assert.Single(RemoteEndpoint.MovedItemIds));
+        Assert.Equal("remote-root", Assert.Single(RemoteEndpoint.MovedOldParentIds));
+        Assert.Equal("remote-parent", Assert.Single(RemoteEndpoint.MovedNewParentIds));
+    }
+
+    /// <summary>
+    /// Verifies combined local folder rename and move intents rename then move remote folders.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsyncAppliesLocalFolderRenameAndMoveToRemoteItem()
+    {
+        TestRemoteEndpoint RemoteEndpoint = new();
+        SyncMutationExecutorBase Executor = new(new TestLocalEndpoint(), RemoteEndpoint);
+
+        IReadOnlyList<SyncExecutionResult> Results = await Executor.ExecuteAsync(
+            [LocalFolderRenameAndMoveRequest()],
+            CancellationToken.None);
+
+        Assert.Single(Results);
+        Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Results[0].ResultKind);
+        Assert.Equal("remote-folder-1", Assert.Single(RemoteEndpoint.RenamedItemIds));
+        Assert.Equal("RenamedFolder", Assert.Single(RemoteEndpoint.RenamedNames));
         Assert.Equal("remote-folder-1", Assert.Single(RemoteEndpoint.MovedItemIds));
         Assert.Equal("remote-root", Assert.Single(RemoteEndpoint.MovedOldParentIds));
         Assert.Equal("remote-parent", Assert.Single(RemoteEndpoint.MovedNewParentIds));

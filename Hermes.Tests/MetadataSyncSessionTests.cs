@@ -1788,6 +1788,205 @@ public class MetadataSyncSessionTests
         Assert.Equal("remote-folder", Store.GetBaseSnapshot("file-item").RemoteParentId);
     }
     /// <summary>
+    /// Verifies combined local folder rename and move updates descendant local metadata before base commit.
+    /// </summary>
+    [Fact]
+    public void ApplyExecutionResultsStoresLocalFolderRenameAndMoveDescendantPathsBeforeBaseCommit()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 8, 4, 55, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(new TrackedItemRecord()
+        {
+            Id = "parent-item",
+            SyncRootId = "root-1",
+            RemoteItemId = "remote-parent",
+            LocalKey = "Parent",
+            ItemType = "Folder",
+        });
+        Store.InsertTrackedItem(new TrackedItemRecord()
+        {
+            Id = "folder-item",
+            SyncRootId = "root-1",
+            RemoteItemId = "remote-folder",
+            LocalKey = "Folder",
+            ItemType = "Folder",
+        });
+        Store.InsertTrackedItem(CreateTrackedItem("file-item", "remote-file", "Folder/Nested.txt"));
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "parent-item",
+            ExistsFlag = true,
+            RelativePath = "Parent",
+            Name = "Parent",
+            ItemType = "Folder",
+            ObservedTime = Time,
+        });
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "folder-item",
+            ExistsFlag = true,
+            RelativePath = "Folder",
+            Name = "Folder",
+            ItemType = "Folder",
+            ObservedTime = Time,
+        });
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "file-item",
+            ExistsFlag = true,
+            RelativePath = "Folder/Nested.txt",
+            Name = "Nested.txt",
+            ParentRelativePath = "Folder",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-nested",
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "parent-item",
+            RemoteItemId = "remote-parent",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "Parent",
+            RemoteParentId = "remote-root",
+            ItemType = "Folder",
+            ProviderVersion = 1,
+            Trashed = false,
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "folder-item",
+            RemoteItemId = "remote-folder",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "Folder",
+            RemoteParentId = "remote-root",
+            ItemType = "Folder",
+            ProviderVersion = 1,
+            Trashed = false,
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "file-item",
+            RemoteItemId = "remote-file",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "Nested.txt",
+            RemoteParentId = "remote-folder",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-nested",
+            ProviderVersion = 1,
+            Trashed = false,
+            ObservedTime = Time,
+        });
+        Store.UpsertBaseSnapshot(new BaseSnapshotRecord()
+        {
+            TrackedItemId = "parent-item",
+            ExistsFlag = true,
+            ItemType = "Folder",
+            Name = "Parent",
+            LocalRelativePath = "Parent",
+            RemoteParentId = "remote-root",
+            Trashed = false,
+            CommittedTime = Time,
+        });
+        Store.UpsertBaseSnapshot(new BaseSnapshotRecord()
+        {
+            TrackedItemId = "folder-item",
+            ExistsFlag = true,
+            ItemType = "Folder",
+            Name = "Folder",
+            LocalRelativePath = "Folder",
+            RemoteParentId = "remote-root",
+            Trashed = false,
+            CommittedTime = Time,
+        });
+        Store.UpsertBaseSnapshot(new BaseSnapshotRecord()
+        {
+            TrackedItemId = "file-item",
+            ExistsFlag = true,
+            ItemType = "File",
+            Name = "Nested.txt",
+            LocalRelativePath = "Folder/Nested.txt",
+            RemoteParentId = "remote-folder",
+            Size = 42,
+            ContentHash = "hash-nested",
+            ProviderVersion = 1,
+            Trashed = false,
+            CommittedTime = Time,
+        });
+        LocalScanImportResult ImportResult = Session.ImportLocalScan(
+            "root-1",
+            [
+                CreateLocalFolderScanItem("Parent", Time),
+                new LocalScanItem()
+                {
+                    RelativePath = "Parent/RenamedFolder",
+                    Name = "RenamedFolder",
+                    ParentRelativePath = "Parent",
+                    ItemType = "Folder",
+                    ModifiedTime = Time,
+                },
+                new LocalScanItem()
+                {
+                    RelativePath = "Parent/RenamedFolder/Nested.txt",
+                    Name = "Nested.txt",
+                    ParentRelativePath = "Parent/RenamedFolder",
+                    ItemType = "File",
+                    Size = 42,
+                    ContentHash = "hash-nested",
+                    ModifiedTime = Time,
+                },
+            ],
+            Time,
+            "scan-folder-rename-move");
+        MetadataSyncSessionResult SessionResult = Session.AdvanceMetadataOnly("root-1", Time);
+        SyncExecutionRequest Request = SessionResult.PendingExecutionRequests.Single(Item => Item.Decision.TrackedItemId == "folder-item");
+
+        SyncExecutionApplyResult Result = Session.ApplyExecutionResults(
+            [
+                new SyncExecutionResult()
+                {
+                    Request = Request,
+                    ResultKind = SyncExecutionResultKind.CompletedAndVerified,
+                    RemoteItem = new StorageItem(
+                        "remote-folder",
+                        "remote-parent",
+                        "RenamedFolder",
+                        "/Parent/RenamedFolder",
+                        StorageItemKind.Folder,
+                        "application/vnd.google-apps.folder",
+                        0,
+                        string.Empty,
+                        default,
+                        default,
+                        2,
+                        false),
+                    LocalRelativePath = "Parent/RenamedFolder",
+                },
+            ],
+            Time);
+
+        Assert.Empty(ImportResult.CreatedTrackedItems);
+        Assert.Single(Result.CommittedResults);
+        Assert.Equal(2, Result.CommittedBaseSnapshots.Count);
+        Assert.Equal("Parent/RenamedFolder", Store.GetTrackedItem("folder-item").LocalKey);
+        Assert.Equal("Parent/RenamedFolder/Nested.txt", Store.GetTrackedItem("file-item").LocalKey);
+        Assert.Equal("Parent/RenamedFolder/Nested.txt", Store.GetLocalObservation("file-item").RelativePath);
+        Assert.Equal("Parent/RenamedFolder/Nested.txt", Store.GetBaseSnapshot("file-item").LocalRelativePath);
+        Assert.Equal("RenamedFolder", Store.GetBaseSnapshot("folder-item").Name);
+        Assert.Equal("remote-parent", Store.GetBaseSnapshot("folder-item").RemoteParentId);
+        Assert.Equal("remote-folder", Store.GetBaseSnapshot("file-item").RemoteParentId);
+    }
+    /// <summary>
     /// Verifies remote folder moves update descendant local metadata before base commit.
     /// </summary>
     [Fact]

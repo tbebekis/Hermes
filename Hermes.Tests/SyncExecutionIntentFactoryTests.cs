@@ -211,10 +211,10 @@ public class SyncExecutionIntentFactoryTests
         Assert.Empty(Intent.ValidationMessages);
     }
     /// <summary>
-    /// Verifies combined local folder rename and move decisions are blocked.
+    /// Verifies combined local folder rename and move decisions create executable remote namespace intents.
     /// </summary>
     [Fact]
-    public void CreateBlocksCombinedLocalFolderRenameAndMove()
+    public void CreateMapsCombinedLocalFolderRenameAndMoveToExecutableIntent()
     {
         SyncExecutionRequest ExecutionRequest = Request(SyncPlanDecisionKind.ApplyLocalNamespaceToRemote);
         ExecutionRequest.Decision = new SyncPlanDecision("item-1", SyncDiffKind.LocalNamespaceChanged, SyncPlanDecisionKind.ApplyLocalNamespaceToRemote);
@@ -232,9 +232,13 @@ public class SyncExecutionIntentFactoryTests
 
         SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(ExecutionRequest);
 
-        Assert.Equal(SyncExecutionIntentKind.Blocked, Intent.IntentKind);
-        Assert.False(Intent.CanExecute);
-        Assert.Contains("Combined local folder rename and move propagation is not supported yet.", Intent.ValidationMessages);
+        Assert.Equal(SyncExecutionIntentKind.ApplyLocalNamespaceToRemote, Intent.IntentKind);
+        Assert.Equal("Folder", Intent.SourceName);
+        Assert.Equal("RenamedFolder", Intent.Name);
+        Assert.Equal("remote-root", Intent.SourceRemoteParentId);
+        Assert.Equal("remote-parent", Intent.RemoteParentId);
+        Assert.True(Intent.CanExecute);
+        Assert.Empty(Intent.ValidationMessages);
     }
     /// <summary>
     /// Verifies local move decisions create executable remote namespace intents.
