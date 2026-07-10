@@ -34,6 +34,12 @@ static public class Program
                 Services.AddSingleton<ISyncExecutor, SyncMutationExecutorBase>();
                 Services.AddSingleton(_ => ServiceDataStartup.CreateDefaultStore());
                 Services.AddSingleton<SqlMetadataStore>();
+                Services.AddSingleton(Provider =>
+                {
+                    SqlMetadataStore Store = Provider.GetRequiredService<SqlMetadataStore>();
+                    SyncSettings Settings = Provider.GetRequiredService<IOptions<SyncSettings>>().Value;
+                    return SyncRootSettingsSynchronizer.EnsureSyncRoot(Store, Settings, DateTime.UtcNow);
+                });
                 Services.AddSingleton<MetadataSyncSession>();
                 Services.AddSingleton<MetadataSyncRunner>();
                 Services.AddSingleton<SyncPlanner>();

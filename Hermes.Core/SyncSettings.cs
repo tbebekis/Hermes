@@ -11,6 +11,11 @@ public class SyncSettings
     // ● properties
 
     /// <summary>
+    /// Gets or sets the sync root id.
+    /// </summary>
+    public string SyncRootId { get; set; } = "default";
+
+    /// <summary>
     /// Gets or sets the local root folder.
     /// </summary>
     public string LocalRootPath { get; set; } = string.Empty;
