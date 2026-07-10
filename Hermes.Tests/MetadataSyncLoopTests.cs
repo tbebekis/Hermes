@@ -140,6 +140,15 @@ public class MetadataSyncLoopTests
         {
             Decision = new SyncPlanDecision("item-3", SyncDiffKind.LocalChanged, SyncPlanDecisionKind.UploadToRemote),
         });
+        SessionResult.PendingExecutionRequests.Add(new SyncExecutionRequest()
+        {
+            Decision = new SyncPlanDecision("item-4", SyncDiffKind.NamespaceCollision, SyncPlanDecisionKind.Blocked),
+            RemoteObservation = new RemoteObservedSnapshotRecord()
+            {
+                Name = "DuplicateName.txt",
+                RemoteItemId = "remote-4",
+            },
+        });
 
         SyncExecutionApplyResult ApplyResult = new();
         ApplyResult.UncommittedResults.Add(new SyncExecutionResult()
@@ -202,6 +211,6 @@ public class MetadataSyncLoopTests
         await Loop(Runner, Logger).RunAsync(Cancellation.Token);
 
         Assert.Contains(Logger.Entries, Item => Item.Contains("Mutations enabled: False."));
-        Assert.Contains(Logger.Entries, Item => Item.Contains("Kind: Incremental.") && Item.Contains("Local items: 2.") && Item.Contains("Remote changes: 3.") && Item.Contains("Pending summary: UploadToRemote=2, DownloadToLocal=1.") && Item.Contains("Pending diffs: LocalChanged=2, RemoteChanged=1.") && Item.Contains("Uncommitted executions: 1."));
+        Assert.Contains(Logger.Entries, Item => Item.Contains("Kind: Incremental.") && Item.Contains("Local items: 2.") && Item.Contains("Remote changes: 3.") && Item.Contains("Pending summary: UploadToRemote=2, DownloadToLocal=1, Blocked=1.") && Item.Contains("Pending diffs: LocalChanged=2, RemoteChanged=1, NamespaceCollision=1.") && Item.Contains("Blocked items: NamespaceCollision:DuplicateName.txt#remote-4.") && Item.Contains("Uncommitted executions: 1."));
     }
 }

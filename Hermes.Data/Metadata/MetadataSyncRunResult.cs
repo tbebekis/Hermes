@@ -57,6 +57,42 @@ public class MetadataSyncRunResult
                 .OrderBy(Group => Group.Key)
                 .Select(Group => $"{Group.Key}={Group.Count()}"));
     }
+    static string ItemDisplayName(SyncExecutionRequest Request)
+    {
+        if (!string.IsNullOrWhiteSpace(Request.RemoteObservation?.Name))
+            return Request.RemoteObservation.Name;
+
+        if (!string.IsNullOrWhiteSpace(Request.LocalObservation?.Name))
+            return Request.LocalObservation.Name;
+
+        if (!string.IsNullOrWhiteSpace(Request.TrackedItem?.RemoteItemId))
+            return Request.TrackedItem.RemoteItemId;
+
+        return Request.Decision?.TrackedItemId ?? "unknown";
+    }
+    static string ItemDisplayId(SyncExecutionRequest Request)
+    {
+        if (!string.IsNullOrWhiteSpace(Request.RemoteObservation?.RemoteItemId))
+            return Request.RemoteObservation.RemoteItemId;
+
+        if (!string.IsNullOrWhiteSpace(Request.TrackedItem?.RemoteItemId))
+            return Request.TrackedItem.RemoteItemId;
+
+        return Request.Decision?.TrackedItemId ?? "unknown";
+    }
+    static string FormatBlockedExecutionSummary(MetadataSyncSessionResult Result)
+    {
+        if (Result == null || Result.PendingExecutionRequests.Count == 0)
+            return "none";
+
+        List<string> Items = Result.PendingExecutionRequests
+            .Where(Item => Item.Decision?.DecisionKind == SyncPlanDecisionKind.Blocked)
+            .Take(5)
+            .Select(Item => $"{Item.Decision.DiffKind}:{ItemDisplayName(Item)}#{ItemDisplayId(Item)}")
+            .ToList();
+
+        return Items.Count == 0 ? "none" : string.Join(", ", Items);
+    }
 
     // ● properties
 
@@ -119,4 +155,9 @@ public class MetadataSyncRunResult
     /// Gets a summary of pending execution request diff kinds.
     /// </summary>
     public string PendingDiffSummary => FormatPendingDiffSummary(SessionResult);
+
+    /// <summary>
+    /// Gets a bounded summary of blocked pending execution requests.
+    /// </summary>
+    public string BlockedExecutionSummary => FormatBlockedExecutionSummary(SessionResult);
 }
