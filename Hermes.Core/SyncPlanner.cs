@@ -48,11 +48,4 @@ public class SyncPlanner
 
         return Result;
     }
-    /// <summary>
-    /// Creates an empty initial synchronization plan.
-    /// </summary>
-    public IReadOnlyList<SyncOperation> CreateInitialPlan()
-    {
-        return Array.Empty<SyncOperation>();
-    }
 }
