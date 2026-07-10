@@ -58,6 +58,12 @@ public class MetadataSyncSession
         Target.PendingExecutorDecisions.AddRange(Source.PendingExecutorDecisions);
         Target.PendingExecutionRequests.AddRange(Source.PendingExecutionRequests);
     }
+    static void AddExecutionApplyResult(SyncExecutionApplyResult Target, SyncExecutionApplyResult Source)
+    {
+        Target.CommittedResults.AddRange(Source.CommittedResults);
+        Target.UncommittedResults.AddRange(Source.UncommittedResults);
+        Target.CommittedBaseSnapshots.AddRange(Source.CommittedBaseSnapshots);
+    }
     static string LocalKey(LocalScanItem Item) => Item.RelativePath;
     static TrackedItemRecord CreateLocalTrackedItem(string SyncRootId, LocalScanItem Item) => new()
     {
@@ -270,6 +276,53 @@ public class MetadataSyncSession
             RemoteParentLocalRelativePath = ResolveRemoteParentLocalPath(SyncRoot, RemoteObservation),
             LocalParentRemoteItemId = ResolveLocalParentRemoteId(SyncRoot, LocalObservation),
         };
+    }
+    SyncExecutionRequest RefreshExecutionRequest(SyncExecutionRequest Request)
+    {
+        if (!string.IsNullOrWhiteSpace(Request?.Decision?.TrackedItemId) && fStore.GetTrackedItem(Request.Decision.TrackedItemId) != null)
+            return CreateExecutionRequest(Request.Decision);
+
+        return Request;
+    }
+    static string RequestRemoteItemId(SyncExecutionRequest Request)
+    {
+        if (!string.IsNullOrWhiteSpace(Request?.TrackedItem?.RemoteItemId))
+            return Request.TrackedItem.RemoteItemId;
+
+        if (!string.IsNullOrWhiteSpace(Request?.RemoteObservation?.RemoteItemId))
+            return Request.RemoteObservation.RemoteItemId;
+
+        return string.Empty;
+    }
+    static int RemoteDependencyDepth(SyncExecutionRequest Request, Dictionary<string, SyncExecutionRequest> RequestsByRemoteId, Dictionary<string, int> Cache)
+    {
+        string RemoteItemId = RequestRemoteItemId(Request);
+        if (string.IsNullOrWhiteSpace(RemoteItemId))
+            return 0;
+
+        if (Cache.TryGetValue(RemoteItemId, out int Cached))
+            return Cached;
+
+        string ParentId = Request?.RemoteObservation?.RemoteParentId;
+        int Result = !string.IsNullOrWhiteSpace(ParentId) && RequestsByRemoteId.TryGetValue(ParentId, out SyncExecutionRequest Parent)
+            ? RemoteDependencyDepth(Parent, RequestsByRemoteId, Cache) + 1
+            : 0;
+
+        Cache[RemoteItemId] = Result;
+        return Result;
+    }
+    static IReadOnlyList<SyncExecutionRequest> OrderExecutionRequests(IEnumerable<SyncExecutionRequest> Requests)
+    {
+        List<SyncExecutionRequest> Result = Requests.ToList();
+        Dictionary<string, SyncExecutionRequest> RequestsByRemoteId = Result
+            .Select(Item => new { RemoteItemId = RequestRemoteItemId(Item), Request = Item })
+            .Where(Item => !string.IsNullOrWhiteSpace(Item.RemoteItemId))
+            .ToDictionary(Item => Item.RemoteItemId, Item => Item.Request);
+        Dictionary<string, int> Cache = new();
+
+        return Result
+            .OrderBy(Item => RemoteDependencyDepth(Item, RequestsByRemoteId, Cache))
+            .ToList();
     }
     static bool CanCommitExecutionResult(SyncExecutionResult Result)
     {
@@ -675,9 +728,18 @@ public class MetadataSyncSession
         Guard.NotNull(Requests, nameof(Requests));
         Guard.NotNull(Executor, nameof(Executor));
 
-        IReadOnlyList<SyncExecutionResult> Results = await Executor.ExecuteAsync(Requests, CancellationToken);
+        SyncExecutionApplyResult Result = new();
 
-        return ApplyExecutionResults(Results, CommittedTime);
+        foreach (SyncExecutionRequest Request in OrderExecutionRequests(Requests))
+        {
+            CancellationToken.ThrowIfCancellationRequested();
+
+            SyncExecutionRequest RefreshedRequest = RefreshExecutionRequest(Request);
+            IReadOnlyList<SyncExecutionResult> Results = await Executor.ExecuteAsync([RefreshedRequest], CancellationToken);
+            AddExecutionApplyResult(Result, ApplyExecutionResults(Results, CommittedTime));
+        }
+
+        return Result;
     }
     /// <summary>
     /// Executes pending synchronization requests from a session result and applies their execution results.

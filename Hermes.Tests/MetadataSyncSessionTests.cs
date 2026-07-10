@@ -1317,6 +1317,83 @@ public class MetadataSyncSessionTests
         Assert.Equal("hash-remote", Store.GetBaseSnapshot("item-1").ContentHash);
     }
     /// <summary>
+    /// Verifies pending requests are applied between executions so restored child downloads can resolve restored parent paths.
+    /// </summary>
+    [Fact]
+    public async Task ExecutePendingRequestsAsyncRefreshesRequestsAfterEachCommittedResult()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 8, 16, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("folder-item", "remote-folder", "Folder"));
+        Store.InsertTrackedItem(CreateTrackedItem("file-item", "remote-file", "Folder/Nested.txt"));
+        Store.UpsertLocalObservation(LocalObservationMapper.Missing("folder-item", Time, "scan-restore"));
+        Store.UpsertLocalObservation(LocalObservationMapper.Missing("file-item", Time, "scan-restore"));
+        Store.UpsertBaseSnapshot(new BaseSnapshotRecord() { TrackedItemId = "folder-item", ExistsFlag = false, CommittedTime = Time });
+        Store.UpsertBaseSnapshot(new BaseSnapshotRecord() { TrackedItemId = "file-item", ExistsFlag = false, CommittedTime = Time });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "folder-item",
+            RemoteItemId = "remote-folder",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "Folder",
+            RemoteParentId = "remote-root",
+            ItemType = "Folder",
+            ProviderVersion = 2,
+            Trashed = false,
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "file-item",
+            RemoteItemId = "remote-file",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "Nested.txt",
+            RemoteParentId = "remote-folder",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-nested",
+            ProviderVersion = 2,
+            Trashed = false,
+            ObservedTime = Time,
+        });
+        MetadataSyncSessionResult SessionResult = Session.AdvanceMetadataOnly("root-1", Time);
+        FakeSyncExecutor Executor = new(Request =>
+        {
+            SyncExecutionIntent Intent = SyncExecutionIntentFactory.Create(Request);
+            Request.LocalObservation = new LocalObservedSnapshotRecord()
+            {
+                TrackedItemId = Request.Decision.TrackedItemId,
+                ExistsFlag = true,
+                RelativePath = Intent.LocalRelativePath,
+                Name = Intent.Name,
+                ItemType = Intent.ItemType,
+                Size = Intent.Size,
+                ContentHash = Intent.ContentHash,
+                ObservedTime = Time,
+            };
+            Store.UpsertLocalObservation(Request.LocalObservation);
+        });
+
+        SyncExecutionApplyResult Result = await Session.ExecutePendingRequestsAsync(
+            SessionResult,
+            Executor,
+            Time,
+            CancellationToken.None);
+
+        Assert.Equal(2, Result.CommittedResults.Count);
+        Assert.Empty(Result.UncommittedResults);
+        Assert.Equal("folder-item", Executor.Requests[0].Decision.TrackedItemId);
+        Assert.Equal("file-item", Executor.Requests[1].Decision.TrackedItemId);
+        Assert.Equal("Folder/Nested.txt", Executor.Intents[1].LocalRelativePath);
+        Assert.Equal("Folder/Nested.txt", Store.GetBaseSnapshot("file-item").LocalRelativePath);
+    }
+    /// <summary>
     /// Verifies failed executor results are applied without committing base snapshots.
     /// </summary>
     [Fact]
