@@ -44,8 +44,7 @@ static public class Program
                     return SyncRootSettingsSynchronizer.EnsureSyncRoot(Store, Settings, DateTime.UtcNow);
                 });
                 Services.AddSingleton<MetadataSyncSession>();
-                Services.AddSingleton<MetadataSyncRunner>();
-                Services.AddSingleton<IMetadataSyncRunner>(Provider => Provider.GetRequiredService<MetadataSyncRunner>());
+                Services.AddSingleton<IMetadataSyncRunner, MetadataSyncRunner>();
                 Services.AddSingleton<MetadataSyncLoop>();
                 Services.AddSingleton<SyncPlanner>();
                 Services.AddSingleton<LocalScanner>();
