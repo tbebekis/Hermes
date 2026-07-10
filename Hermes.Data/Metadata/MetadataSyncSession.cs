@@ -80,6 +80,27 @@ public class MetadataSyncSession
             .Where(Item => !string.IsNullOrWhiteSpace(Item.LocalKey))
             .ToDictionary(Item => Item.LocalKey);
     }
+    Dictionary<string, TrackedItemRecord> GetTrackedItemsByObservedLocalKey(string SyncRootId)
+    {
+        Dictionary<string, TrackedItemRecord> Result = new();
+        Dictionary<string, int> Counts = new();
+
+        foreach (TrackedItemRecord Item in fStore.GetTrackedItems(SyncRootId).Where(Item => string.IsNullOrWhiteSpace(Item.LocalKey)))
+        {
+            string LocalKey = ExistingLocalPath(fStore.GetLocalObservation(Item.Id), fStore.GetBaseSnapshot(Item.Id));
+            if (string.IsNullOrWhiteSpace(LocalKey))
+                continue;
+
+            Counts.TryGetValue(LocalKey, out int Count);
+            Counts[LocalKey] = Count + 1;
+            Result[LocalKey] = Item;
+        }
+
+        foreach (string LocalKey in Counts.Where(Item => Item.Value > 1).Select(Item => Item.Key).ToList())
+            Result.Remove(LocalKey);
+
+        return Result;
+    }
     Dictionary<string, TrackedItemRecord> GetTrackedItemsByRemoteId(string SyncRootId)
     {
         return fStore.GetTrackedItems(SyncRootId)
@@ -351,6 +372,16 @@ public class MetadataSyncSession
         if (Result.Request.LocalObservation != null || string.IsNullOrWhiteSpace(Result.LocalRelativePath))
             return;
 
+        string ItemId = TrackedItemId(Result);
+        TrackedItemRecord TrackedItem = Result.Request.TrackedItem ?? fStore.GetTrackedItem(ItemId);
+
+        if (TrackedItem != null && string.IsNullOrWhiteSpace(TrackedItem.LocalKey))
+        {
+            TrackedItem.LocalKey = Result.LocalRelativePath;
+            fStore.UpdateTrackedItem(TrackedItem);
+            Result.Request.TrackedItem = TrackedItem;
+        }
+
         LocalObservedSnapshotRecord Observation = CreateLocalObservationFromExecution(Result, ObservedTime);
         fStore.UpsertLocalObservation(Observation);
         Result.Request.LocalObservation = Observation;
@@ -387,6 +418,7 @@ public class MetadataSyncSession
 
         LocalScanImportResult Result = new();
         Dictionary<string, TrackedItemRecord> TrackedItemsByLocalKey = GetTrackedItemsByLocalKey(SyncRootId);
+        Dictionary<string, TrackedItemRecord> TrackedItemsByObservedLocalKey = GetTrackedItemsByObservedLocalKey(SyncRootId);
         HashSet<string> ObservedLocalKeys = new();
 
         foreach (LocalScanItem Item in Items)
@@ -396,9 +428,18 @@ public class MetadataSyncSession
 
             if (!TrackedItemsByLocalKey.TryGetValue(Key, out TrackedItemRecord TrackedItem))
             {
-                TrackedItem = CreateLocalTrackedItem(SyncRootId, Item);
-                TrackedItemsByLocalKey[Key] = TrackedItem;
-                Result.CreatedTrackedItems.Add(TrackedItem);
+                if (TrackedItemsByObservedLocalKey.TryGetValue(Key, out TrackedItem))
+                {
+                    TrackedItem.LocalKey = Key;
+                    TrackedItemsByLocalKey[Key] = TrackedItem;
+                    fStore.UpdateTrackedItem(TrackedItem);
+                }
+                else
+                {
+                    TrackedItem = CreateLocalTrackedItem(SyncRootId, Item);
+                    TrackedItemsByLocalKey[Key] = TrackedItem;
+                    Result.CreatedTrackedItems.Add(TrackedItem);
+                }
             }
 
             Result.Observations.Add(LocalObservationMapper.FromScanItem(Item, TrackedItem.Id, ObservedTime, ScanId));

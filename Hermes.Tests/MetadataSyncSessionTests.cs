@@ -346,6 +346,56 @@ public class MetadataSyncSessionTests
         Assert.Equal("Local.txt", Store.GetLocalObservation(TrackedItem.Id).RelativePath);
     }
     /// <summary>
+    /// Verifies local scan import repairs a missing tracked item local key from existing observations.
+    /// </summary>
+    [Fact]
+    public void ImportLocalScanRepairsMissingTrackedLocalKey()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 6, 12, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", null));
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            ExistsFlag = true,
+            RelativePath = "RemoteOnly.txt",
+            Name = "RemoteOnly.txt",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-remote",
+            ObservedTime = Time,
+        });
+        Store.UpsertBaseSnapshot(new BaseSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            ExistsFlag = true,
+            ItemType = "File",
+            Name = "RemoteOnly.txt",
+            LocalRelativePath = "RemoteOnly.txt",
+            RemoteParentId = "remote-root",
+            Size = 42,
+            ContentHash = "hash-remote",
+            ProviderVersion = 1,
+            Trashed = false,
+            CommittedTime = Time,
+        });
+
+        LocalScanImportResult Result = Session.ImportLocalScan(
+            "root-1",
+            [CreateLocalScanItem("RemoteOnly.txt", "hash-remote", Time)],
+            Time,
+            "scan-repair");
+
+        Assert.Empty(Result.CreatedTrackedItems);
+        Assert.Single(Store.GetTrackedItems("root-1"));
+        Assert.Equal("RemoteOnly.txt", Store.GetTrackedItem("item-1").LocalKey);
+        Assert.Equal("scan-repair", Store.GetLocalObservation("item-1").ScanId);
+    }
+    /// <summary>
     /// Verifies metadata sync session imports remote snapshots.
     /// </summary>
     [Fact]
@@ -941,6 +991,7 @@ public class MetadataSyncSessionTests
         Assert.Single(Result.CommittedResults);
         Assert.Empty(Result.UncommittedResults);
         Assert.Single(Result.CommittedBaseSnapshots);
+        Assert.Equal("RemoteOnly.txt", Store.GetTrackedItem("item-1").LocalKey);
         Assert.Equal("RemoteOnly.txt", Store.GetLocalObservation("item-1").RelativePath);
         Assert.Equal("hash-remote", Store.GetBaseSnapshot("item-1").ContentHash);
     }
