@@ -81,6 +81,52 @@ public class SqlMetadataStore
     {
         ExecuteUpsert(Transaction, Sql.UpdateBaseSnapshot, Sql.InsertBaseSnapshot, ToParams(Record));
     }
+    SyncConflictRecord GetOpenConflict(DbTransaction Transaction, string TrackedItemId)
+    {
+        DataRow Row = FirstRow(fStore.Select(
+            Transaction,
+            "select * from SYNC_CONFLICT where TrackedItemId = :TrackedItemId and State = :State",
+            new Dictionary<string, object>()
+            {
+                ["TrackedItemId"] = TrackedItemId,
+                ["State"] = SyncConflictState.Open.ToString(),
+            }));
+        return Row == null ? null : ToSyncConflict(Row);
+    }
+    void StoreOpenConflict(DbTransaction Transaction, SyncConflictRecord Record)
+    {
+        SyncConflictRecord Existing = GetOpenConflict(Transaction, Record.TrackedItemId);
+        if (Existing == null)
+        {
+            if (string.IsNullOrWhiteSpace(Record.Id))
+                Record.Id = Sys.GenId();
+
+            if (Record.FirstObservedTime == default)
+                Record.FirstObservedTime = Record.LastObservedTime;
+        }
+        else
+        {
+            Record.Id = Existing.Id;
+            Record.FirstObservedTime = Existing.FirstObservedTime;
+        }
+
+        Record.State = SyncConflictState.Open;
+        Record.ResolvedTime = null;
+        ExecuteUpsert(Transaction, Sql.UpdateSyncConflict, Sql.InsertSyncConflict, ToParams(Record));
+    }
+    int ResolveOpenConflict(DbTransaction Transaction, string TrackedItemId, DateTime ResolvedTime)
+    {
+        return fStore.ExecSql(
+            Transaction,
+            Sql.ResolveSyncConflict,
+            new Dictionary<string, object>()
+            {
+                ["TrackedItemId"] = TrackedItemId,
+                ["ResolvedTime"] = ResolvedTime,
+                ["State"] = SyncConflictState.Resolved.ToString(),
+                ["OpenState"] = SyncConflictState.Open.ToString(),
+            });
+    }
     void StoreRemoteObservations(DbTransaction Transaction, IEnumerable<RemoteObservedSnapshotRecord> Observations)
     {
         foreach (RemoteObservedSnapshotRecord Observation in Observations)
@@ -480,6 +526,45 @@ where Id = :Id";
 
         return BaseSnapshots;
     }
+    /// <summary>
+    /// Applies metadata-only planning side effects in one transaction.
+    /// </summary>
+    public IReadOnlyList<BaseSnapshotRecord> SavePlanningSideEffects(
+        IEnumerable<string> CommitBaseTrackedItemIds,
+        IEnumerable<SyncConflictRecord> OpenConflicts,
+        IEnumerable<string> ResolvedConflictTrackedItemIds,
+        DateTime CommittedTime)
+    {
+        Guard.NotNull(CommitBaseTrackedItemIds, nameof(CommitBaseTrackedItemIds));
+        Guard.NotNull(OpenConflicts, nameof(OpenConflicts));
+        Guard.NotNull(ResolvedConflictTrackedItemIds, nameof(ResolvedConflictTrackedItemIds));
+
+        List<BaseSnapshotRecord> BaseSnapshots = new();
+
+        foreach (string TrackedItemId in CommitBaseTrackedItemIds)
+        {
+            Guard.NotNullOrWhiteSpace(TrackedItemId, nameof(CommitBaseTrackedItemIds));
+
+            LocalObservedSnapshotRecord LocalObservation = GetLocalObservation(TrackedItemId);
+            RemoteObservedSnapshotRecord RemoteObservation = GetRemoteObservation(TrackedItemId);
+            BaseSnapshots.Add(BaseSnapshotMapper.FromVerifiedObservations(LocalObservation, RemoteObservation, CommittedTime));
+        }
+
+        using SqlTransactionContext Context = fStore.BeginTransactionContext();
+
+        foreach (BaseSnapshotRecord BaseSnapshot in BaseSnapshots)
+            StoreBaseSnapshot(Context.Transaction, BaseSnapshot);
+
+        foreach (SyncConflictRecord Conflict in OpenConflicts)
+            StoreOpenConflict(Context.Transaction, Conflict);
+
+        foreach (string TrackedItemId in ResolvedConflictTrackedItemIds)
+            ResolveOpenConflict(Context.Transaction, TrackedItemId, CommittedTime);
+
+        Context.Commit();
+
+        return BaseSnapshots;
+    }
     // ● local observations
 
     /// <summary>
@@ -667,26 +752,21 @@ where Id = :Id";
         Guard.NotNullOrWhiteSpace(SyncRootId, nameof(SyncRootId));
         Guard.NotNull(Decision, nameof(Decision));
 
-        SyncConflictRecord Record = GetOpenConflict(Decision.TrackedItemId);
-        if (Record == null)
+        SyncConflictRecord Record = new()
         {
-            Record = new SyncConflictRecord()
-            {
-                Id = Sys.GenId(),
-                SyncRootId = SyncRootId,
-                TrackedItemId = Decision.TrackedItemId,
-                FirstObservedTime = ObservedTime,
-            };
-        }
+            SyncRootId = SyncRootId,
+            TrackedItemId = Decision.TrackedItemId,
+            DiffKind = Decision.DiffKind,
+            DecisionKind = Decision.DecisionKind,
+            State = SyncConflictState.Open,
+            Message = Message ?? string.Empty,
+            FirstObservedTime = ObservedTime,
+            LastObservedTime = ObservedTime,
+        };
 
-        Record.DiffKind = Decision.DiffKind;
-        Record.DecisionKind = Decision.DecisionKind;
-        Record.State = SyncConflictState.Open;
-        Record.Message = Message ?? string.Empty;
-        Record.LastObservedTime = ObservedTime;
-        Record.ResolvedTime = null;
-
-        ExecuteUpsert(Sql.UpdateSyncConflict, Sql.InsertSyncConflict, ToParams(Record));
+        using SqlTransactionContext Context = fStore.BeginTransactionContext();
+        StoreOpenConflict(Context.Transaction, Record);
+        Context.Commit();
 
         return Record;
     }
@@ -697,15 +777,9 @@ where Id = :Id";
     {
         Guard.NotNullOrWhiteSpace(TrackedItemId, nameof(TrackedItemId));
 
-        int Count = fStore.ExecSql(
-            Sql.ResolveSyncConflict,
-            new Dictionary<string, object>()
-            {
-                ["TrackedItemId"] = TrackedItemId,
-                ["ResolvedTime"] = ResolvedTime,
-                ["State"] = SyncConflictState.Resolved.ToString(),
-                ["OpenState"] = SyncConflictState.Open.ToString(),
-            });
+        using SqlTransactionContext Context = fStore.BeginTransactionContext();
+        int Count = ResolveOpenConflict(Context.Transaction, TrackedItemId, ResolvedTime);
+        Context.Commit();
 
         return Count > 0;
     }

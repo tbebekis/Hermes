@@ -43,18 +43,6 @@ public class MetadataSyncSession
 
         return Result;
     }
-    IReadOnlyList<BaseSnapshotRecord> CommitBaseSnapshotsForDecisions(IEnumerable<SyncPlanDecision> Decisions, DateTime CommittedTime)
-    {
-        List<string> TrackedItemIds = new();
-
-        foreach (SyncPlanDecision Decision in Decisions)
-        {
-            if (Decision.DecisionKind == SyncPlanDecisionKind.CommitBase)
-                TrackedItemIds.Add(Decision.TrackedItemId);
-        }
-
-        return fStore.CommitBaseSnapshotsFromObservations(TrackedItemIds, CommittedTime);
-    }
     static bool IsPendingExecutorDecision(SyncPlanDecision Decision)
     {
         return Decision.DecisionKind != SyncPlanDecisionKind.None
@@ -71,15 +59,35 @@ public class MetadataSyncSession
             ? "Synchronization is blocked by a namespace collision."
             : "Conflict resolution is required.";
     }
-    void StoreConflictDecisions(string SyncRootId, IEnumerable<SyncPlanDecision> Decisions, DateTime ObservedTime)
+    static SyncConflictRecord CreateOpenConflict(string SyncRootId, SyncPlanDecision Decision, DateTime ObservedTime) => new()
     {
+        SyncRootId = SyncRootId,
+        TrackedItemId = Decision.TrackedItemId,
+        DiffKind = Decision.DiffKind,
+        DecisionKind = Decision.DecisionKind,
+        State = SyncConflictState.Open,
+        Message = ConflictMessage(Decision),
+        FirstObservedTime = ObservedTime,
+        LastObservedTime = ObservedTime,
+    };
+    IReadOnlyList<BaseSnapshotRecord> SavePlanningSideEffects(string SyncRootId, IEnumerable<SyncPlanDecision> Decisions, DateTime CommittedTime)
+    {
+        List<string> CommitBaseTrackedItemIds = new();
+        List<SyncConflictRecord> OpenConflicts = new();
+        List<string> ResolvedConflictTrackedItemIds = new();
+
         foreach (SyncPlanDecision Decision in Decisions)
         {
+            if (Decision.DecisionKind == SyncPlanDecisionKind.CommitBase)
+                CommitBaseTrackedItemIds.Add(Decision.TrackedItemId);
+
             if (IsDurableConflictDecision(Decision))
-                fStore.UpsertOpenConflict(SyncRootId, Decision, ConflictMessage(Decision), ObservedTime);
+                OpenConflicts.Add(CreateOpenConflict(SyncRootId, Decision, CommittedTime));
             else
-                fStore.ResolveOpenConflict(Decision.TrackedItemId, ObservedTime);
+                ResolvedConflictTrackedItemIds.Add(Decision.TrackedItemId);
         }
+
+        return fStore.SavePlanningSideEffects(CommitBaseTrackedItemIds, OpenConflicts, ResolvedConflictTrackedItemIds, CommittedTime);
     }
     static void AddPlanningResult(MetadataSyncSessionResult Target, MetadataSyncSessionResult Source)
     {
@@ -924,8 +932,7 @@ public class MetadataSyncSession
     {
         MetadataSyncSessionResult Result = new();
         IReadOnlyList<SyncPlanDecision> Decisions = CreatePlanDecisions(SyncRootId);
-        IReadOnlyList<BaseSnapshotRecord> CommittedBaseSnapshots = CommitBaseSnapshotsForDecisions(Decisions, CommittedTime);
-        StoreConflictDecisions(SyncRootId, Decisions, CommittedTime);
+        IReadOnlyList<BaseSnapshotRecord> CommittedBaseSnapshots = SavePlanningSideEffects(SyncRootId, Decisions, CommittedTime);
 
         Result.Decisions.AddRange(Decisions);
         Result.CommittedBaseSnapshots.AddRange(CommittedBaseSnapshots);
