@@ -64,4 +64,15 @@ public class SyncPlannerTests
         Assert.Equal("item-2", Decisions[1].TrackedItemId);
         Assert.Equal(SyncPlanDecisionKind.DownloadToLocal, Decisions[1].DecisionKind);
     }
+    /// <summary>
+    /// Verifies planner rejects null inputs.
+    /// </summary>
+    [Fact]
+    public void PlannerRejectsNullInputs()
+    {
+        SyncPlanner Planner = new();
+
+        Assert.Throws<ArgumentNullException>(() => Planner.CreateDecision(null));
+        Assert.Throws<ArgumentNullException>(() => Planner.CreateDecisions(null));
+    }
 }
