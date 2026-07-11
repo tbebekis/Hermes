@@ -1671,6 +1671,48 @@ public class MetadataSyncSessionTests
         Assert.Equal("token-duplicate", Store.GetRemoteCheckpoint("root-1").StartPageToken);
     }
     /// <summary>
+    /// Verifies an incremental remote change that creates a duplicate sibling blocks planning.
+    /// </summary>
+    [Fact]
+    public void AdvanceWithRemoteChangesBlocksDuplicateRemoteSibling()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 7, 44, 30, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "DuplicateName.txt"));
+        AddBaseSnapshot(Store, "item-1", "DuplicateName.txt", "hash-1", Time);
+        AddObservedItem(Store, "item-1", "remote-1", "DuplicateName.txt", "hash-1", Time);
+
+        MetadataSyncSessionResult Result = Session.AdvanceWithRemoteChanges(
+            "root-1",
+            [CreateLocalScanItem("DuplicateName.txt", "hash-1", Time)],
+            [
+                new StorageChange(
+                    "remote-2",
+                    false,
+                    new DateTimeOffset(Time),
+                    CreateStorageItem("remote-2", "DuplicateName.txt", "hash-2", 1)),
+            ],
+            CreateCheckpoint("token-duplicate", Time),
+            Time,
+            Time,
+            Time,
+            "scan-duplicate");
+
+        Assert.Single(Result.CreatedTrackedItems);
+        Assert.Equal(2, Result.Decisions.Count);
+        Assert.All(Result.Decisions, Item => Assert.Equal(SyncDiffKind.NamespaceCollision, Item.DiffKind));
+        Assert.All(Result.Decisions, Item => Assert.Equal(SyncPlanDecisionKind.Blocked, Item.DecisionKind));
+        Assert.Empty(Result.CommittedBaseSnapshots);
+        Assert.Equal(2, Result.PendingExecutorDecisions.Count);
+        Assert.Equal(2, Result.PendingExecutionRequests.Count);
+        Assert.Equal("hash-1", Store.GetBaseSnapshot("item-1").ContentHash);
+        Assert.Equal("token-duplicate", Store.GetRemoteCheckpoint("root-1").StartPageToken);
+    }
+    /// <summary>
     /// Verifies an incremental changes session returns executor work after importing changes.
     /// </summary>
     [Fact]
