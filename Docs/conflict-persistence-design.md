@@ -2,13 +2,13 @@
 
 ## Purpose
 
-This document records the intended first durable conflict model after in-memory conflict classification.
+This document records the first durable conflict model after in-memory conflict classification.
 
 The goal is to persist unresolved conflict and namespace collision state without executing endpoint mutations.
 
 ## Scope
 
-The first persistence increment should store enough information to resume after restart and show blocked work later in the UI.
+The first persistence increment stores enough information to resume after restart and show blocked work later in the UI.
 
 Included:
 
@@ -41,11 +41,11 @@ Open conflicts are active blockers. Resolved conflicts are retained only long en
 
 ## Table Shape
 
-Draft table name:
+Table name:
 
 - `SYNC_CONFLICT`
 
-Draft fields:
+Fields:
 
 - `Id`
 - `SyncRootId`
@@ -58,7 +58,9 @@ Draft fields:
 - `LastObservedTime`
 - `ResolvedTime`
 
-The first implementation can key active conflicts by `TrackedItemId`. Namespace collision groups may create one row per affected tracked item, using the same bounded message shape exposed by run summaries.
+The first implementation keys active conflicts by `TrackedItemId`. Namespace collision groups create one row per affected tracked item, using the same bounded message shape exposed by run summaries.
+
+`SYNC_CONFLICT` is also registered as a Tripous metadata module named `SyncConflict`.
 
 ## Write Rules
 
@@ -83,8 +85,10 @@ Durable reads should be separate:
 - count open conflicts for service status.
 - eventually provide conflict details to desktop UI.
 
+`MetadataSyncRunResult.OpenConflictCount` exposes the durable open conflict count after a completed run.
+
 ## Transaction Boundary
 
-Conflict upserts should happen in the same transaction as the observations and planning result that produced them.
+Conflict upserts happen in the same metadata planning side-effect transaction as metadata-only base snapshot commits.
 
-Conflict resolution caused by a later clean plan should happen in the same transaction as that later classification pass.
+Conflict resolution caused by a later clean plan happens in the same metadata planning side-effect transaction.
