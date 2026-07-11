@@ -44,6 +44,8 @@ public class ServiceStatusResponseTests
         Assert.Equal("Connected", Response.IpcStatus);
         Assert.Equal(Environment.ProcessId, Response.ProcessId);
         Assert.False(string.IsNullOrWhiteSpace(Response.Version));
+        Assert.True(Response.StartedUtc <= DateTime.UtcNow);
+        Assert.True(Response.UptimeSeconds >= 0);
         Assert.Equal("default", Response.SyncRootId);
         Assert.Equal("GoogleDrive", Response.ProviderName);
         Assert.Equal("/tmp/hermes", Response.LocalRootPath);

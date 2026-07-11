@@ -31,6 +31,14 @@ public class LocalServiceStatus
     /// </summary>
     public string Version { get; set; } = string.Empty;
     /// <summary>
+    /// Gets or sets the service start time in UTC.
+    /// </summary>
+    public DateTime StartedUtc { get; set; }
+    /// <summary>
+    /// Gets or sets the service uptime in seconds.
+    /// </summary>
+    public int UptimeSeconds { get; set; }
+    /// <summary>
     /// Gets or sets the configured sync root id.
     /// </summary>
     public string SyncRootId { get; set; } = string.Empty;

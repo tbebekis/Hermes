@@ -76,6 +76,24 @@ public class ServicePage : UserControl
             HorizontalContentAlignment = HorizontalAlignment.Center,
         };
     }
+    static string FormatUptime(int UptimeSeconds)
+    {
+        if (UptimeSeconds < 0)
+            UptimeSeconds = 0;
+
+        TimeSpan Value = TimeSpan.FromSeconds(UptimeSeconds);
+
+        if (Value.TotalDays >= 1)
+            return ((int)Value.TotalDays).ToString() + "d " + Value.Hours.ToString() + "h " + Value.Minutes.ToString() + "m";
+
+        if (Value.TotalHours >= 1)
+            return Value.Hours.ToString() + "h " + Value.Minutes.ToString() + "m " + Value.Seconds.ToString() + "s";
+
+        if (Value.TotalMinutes >= 1)
+            return Value.Minutes.ToString() + "m " + Value.Seconds.ToString() + "s";
+
+        return Value.Seconds.ToString() + "s";
+    }
     void RefreshButton_Click(object Sender, RoutedEventArgs Args)
     {
         RefreshRequested?.Invoke(this, EventArgs.Empty);
@@ -160,7 +178,7 @@ public class ServicePage : UserControl
 
         fStatusText.Text = Status.ServiceStatus;
         fProcessIdText.Text = Status.ProcessId.ToString();
-        fUptimeText.Text = "-";
+        fUptimeText.Text = FormatUptime(Status.UptimeSeconds);
         fIpcText.Text = Status.IpcStatus;
         fVersionText.Text = Status.Version;
         fStartButton.IsEnabled = false;

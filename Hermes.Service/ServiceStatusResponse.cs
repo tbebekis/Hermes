@@ -8,6 +8,10 @@ namespace Hermes.Service;
 /// </summary>
 public class ServiceStatusResponse
 {
+    // ● fields
+
+    static readonly DateTime fStartedUtc = DateTime.UtcNow;
+
     // ● public
 
     /// <summary>
@@ -25,6 +29,8 @@ public class ServiceStatusResponse
             IpcStatus = "Connected",
             ProcessId = Environment.ProcessId,
             Version = typeof(Program).Assembly.GetName().Version?.ToString() ?? string.Empty,
+            StartedUtc = fStartedUtc,
+            UptimeSeconds = (int)(DateTime.UtcNow - fStartedUtc).TotalSeconds,
             SyncRootId = SyncRoot.Id,
             ProviderName = SyncRoot.ProviderName,
             LocalRootPath = SyncRoot.LocalRootPath,
@@ -59,6 +65,14 @@ public class ServiceStatusResponse
     /// Gets or sets the service version.
     /// </summary>
     public string Version { get; set; } = string.Empty;
+    /// <summary>
+    /// Gets or sets the service start time in UTC.
+    /// </summary>
+    public DateTime StartedUtc { get; set; }
+    /// <summary>
+    /// Gets or sets the service uptime in seconds.
+    /// </summary>
+    public int UptimeSeconds { get; set; }
     /// <summary>
     /// Gets or sets the configured sync root id.
     /// </summary>
