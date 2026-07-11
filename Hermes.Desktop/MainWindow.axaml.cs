@@ -239,27 +239,30 @@ public partial class MainWindow : Window
         fServicePage.SetStatus(Status);
         fFoldersPage.SetStatus(Status);
         fSettingsPage.SetStatus(Status);
-        IReadOnlyList<LocalRecentLog> RecentLogs = await fServiceClient.GetRecentLogsAsync();
-        if (RecentLogs == null && !string.IsNullOrWhiteSpace(fServiceClient.LastErrorMessage))
-            fServicePage.AppendMemo("Logs error: " + fServiceClient.LastErrorMessage);
-        fActivityPage.SetLogs(RecentLogs);
-        IReadOnlyList<LocalOpenConflict> OpenConflicts = await fServiceClient.GetOpenConflictsAsync();
-        if (OpenConflicts == null && !string.IsNullOrWhiteSpace(fServiceClient.LastErrorMessage))
-            fServicePage.AppendMemo("Conflicts error: " + fServiceClient.LastErrorMessage);
-        fConflictsPage.SetConflicts(OpenConflicts);
-        fLogsPage.SetLogs(RecentLogs);
 
         if (Status == null)
         {
             fServiceStatusText.Text = "Service: Stopped";
             fSyncStatusText.Text = "Sync: Unknown";
             fConnectionStatusText.Text = "HTTP API: Disconnected";
+            fActivityPage.SetLogs(null);
+            fConflictsPage.SetConflicts(null);
+            fLogsPage.SetLogs(null);
 
             if (!string.IsNullOrWhiteSpace(fServiceClient.LastErrorMessage))
-                fServicePage.AppendMemo("Status error: " + fServiceClient.LastErrorMessage);
+                fServicePage.AppendMemo("Service is not reachable: " + fServiceClient.LastErrorMessage);
         }
         else
         {
+            IReadOnlyList<LocalRecentLog> RecentLogs = await fServiceClient.GetRecentLogsAsync();
+            if (RecentLogs == null && !string.IsNullOrWhiteSpace(fServiceClient.LastErrorMessage))
+                fServicePage.AppendMemo("Logs error: " + fServiceClient.LastErrorMessage);
+            fActivityPage.SetLogs(RecentLogs);
+            IReadOnlyList<LocalOpenConflict> OpenConflicts = await fServiceClient.GetOpenConflictsAsync();
+            if (OpenConflicts == null && !string.IsNullOrWhiteSpace(fServiceClient.LastErrorMessage))
+                fServicePage.AppendMemo("Conflicts error: " + fServiceClient.LastErrorMessage);
+            fConflictsPage.SetConflicts(OpenConflicts);
+            fLogsPage.SetLogs(RecentLogs);
             fServiceStatusText.Text = "Service: " + Status.ServiceStatus;
             fSyncStatusText.Text = "Sync: " + Status.SynchronizationStatus;
             fConnectionStatusText.Text = "HTTP API: " + Status.IpcStatus;
