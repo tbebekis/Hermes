@@ -98,4 +98,20 @@ public class LocalScannerTests
         Assert.True(Result.Failed);
         Assert.Contains("does not exist", Result.ErrorText);
     }
+    /// <summary>
+    /// Verifies local scanner honors cancellation while enumerating.
+    /// </summary>
+    [Fact]
+    public async Task ScanAsyncHonorsCancellation()
+    {
+        using TempFolder Folder = new();
+        string NestedFolder = System.IO.Path.Combine(Folder.Path, "FolderA");
+        LocalScanner Scanner = new();
+
+        Directory.CreateDirectory(NestedFolder);
+        using CancellationTokenSource Cancellation = new();
+        Cancellation.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => Scanner.ScanAsync(Folder.Path, Cancellation.Token));
+    }
 }
