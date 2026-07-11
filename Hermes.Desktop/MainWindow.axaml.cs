@@ -69,6 +69,8 @@ public partial class MainWindow : Window
     readonly LogsPage fLogsPage;
     readonly SettingsPage fSettingsPage;
     readonly LocalServiceProcessController fServiceProcessController;
+    readonly DispatcherTimer fRefreshTimer;
+    bool fRefreshInProgress;
 
     static Image CreateLogo(double Size)
     {
@@ -232,50 +234,69 @@ public partial class MainWindow : Window
         fPageHost.Content = Page.Page;
         fUpdatedTimeText.Text = "Updated " + DateTime.Now.ToString("HH:mm:ss");
     }
-    async Task RefreshServiceStatusAsync()
+    async Task RefreshServiceStatusAsync(bool LogDiagnostics)
     {
-        fServicePage.AppendMemo("Refreshing service status.");
-        LocalServiceStatus Status = await fServiceClient.GetStatusAsync();
-        fDashboardPage.SetStatus(Status);
-        fSynchronizationPage.SetStatus(Status);
-        fConnectionsPage.SetStatus(Status);
-        fServicePage.SetStatus(Status);
-        fFoldersPage.SetStatus(Status);
-        fSettingsPage.SetStatus(Status);
+        if (fRefreshInProgress)
+            return;
 
-        if (Status == null)
+        fRefreshInProgress = true;
+
+        try
         {
-            fServiceStatusText.Text = "Service: Stopped";
-            fSyncStatusText.Text = "Sync: Unknown";
-            fConnectionStatusText.Text = "HTTP API: Disconnected";
-            fActivityPage.SetActivities(null);
-            fConflictsPage.SetConflicts(null);
-            fLogsPage.SetLogs(null);
+            if (LogDiagnostics)
+                fServicePage.AppendMemo("Refreshing service status.");
 
-            if (!string.IsNullOrWhiteSpace(fServiceClient.LastErrorMessage))
-                fServicePage.AppendMemo("Service is not reachable: " + fServiceClient.LastErrorMessage);
+            LocalServiceStatus Status = await fServiceClient.GetStatusAsync();
+            fDashboardPage.SetStatus(Status);
+            fSynchronizationPage.SetStatus(Status);
+            fConnectionsPage.SetStatus(Status);
+            fServicePage.SetStatus(Status);
+            fFoldersPage.SetStatus(Status);
+            fSettingsPage.SetStatus(Status);
+
+            if (Status == null)
+            {
+                fServiceStatusText.Text = "Service: Stopped";
+                fSyncStatusText.Text = "Sync: Unknown";
+                fConnectionStatusText.Text = "HTTP API: Disconnected";
+                fActivityPage.SetActivities(null);
+                fConflictsPage.SetConflicts(null);
+                fLogsPage.SetLogs(null);
+
+                if (!string.IsNullOrWhiteSpace(fServiceClient.LastErrorMessage))
+                {
+                    if (LogDiagnostics)
+                        fServicePage.AppendMemo("Service is not reachable: " + fServiceClient.LastErrorMessage);
+                }
+            }
+            else
+            {
+                IReadOnlyList<LocalRecentLog> RecentLogs = await fServiceClient.GetRecentLogsAsync();
+                if (LogDiagnostics && RecentLogs == null && !string.IsNullOrWhiteSpace(fServiceClient.LastErrorMessage))
+                    fServicePage.AppendMemo("Logs error: " + fServiceClient.LastErrorMessage);
+                IReadOnlyList<LocalSyncActivity> RecentActivity = await fServiceClient.GetRecentActivityAsync();
+                if (LogDiagnostics && RecentActivity == null && !string.IsNullOrWhiteSpace(fServiceClient.LastErrorMessage))
+                    fServicePage.AppendMemo("Activity error: " + fServiceClient.LastErrorMessage);
+                fActivityPage.SetActivities(RecentActivity);
+                IReadOnlyList<LocalOpenConflict> OpenConflicts = await fServiceClient.GetOpenConflictsAsync();
+                if (LogDiagnostics && OpenConflicts == null && !string.IsNullOrWhiteSpace(fServiceClient.LastErrorMessage))
+                    fServicePage.AppendMemo("Conflicts error: " + fServiceClient.LastErrorMessage);
+                fConflictsPage.SetConflicts(OpenConflicts);
+                fLogsPage.SetLogs(RecentLogs);
+                fServiceStatusText.Text = "Service: " + Status.ServiceStatus;
+                fSyncStatusText.Text = "Sync: " + Status.SynchronizationStatus;
+                fConnectionStatusText.Text = "HTTP API: " + Status.IpcStatus;
+
+                if (LogDiagnostics)
+                    fServicePage.AppendMemo("Service is " + Status.ServiceStatus + ". PID " + Status.ProcessId.ToString() + ".");
+            }
+
+            fUpdatedTimeText.Text = "Updated " + DateTime.Now.ToString("HH:mm:ss");
         }
-        else
+        finally
         {
-            IReadOnlyList<LocalRecentLog> RecentLogs = await fServiceClient.GetRecentLogsAsync();
-            if (RecentLogs == null && !string.IsNullOrWhiteSpace(fServiceClient.LastErrorMessage))
-                fServicePage.AppendMemo("Logs error: " + fServiceClient.LastErrorMessage);
-            IReadOnlyList<LocalSyncActivity> RecentActivity = await fServiceClient.GetRecentActivityAsync();
-            if (RecentActivity == null && !string.IsNullOrWhiteSpace(fServiceClient.LastErrorMessage))
-                fServicePage.AppendMemo("Activity error: " + fServiceClient.LastErrorMessage);
-            fActivityPage.SetActivities(RecentActivity);
-            IReadOnlyList<LocalOpenConflict> OpenConflicts = await fServiceClient.GetOpenConflictsAsync();
-            if (OpenConflicts == null && !string.IsNullOrWhiteSpace(fServiceClient.LastErrorMessage))
-                fServicePage.AppendMemo("Conflicts error: " + fServiceClient.LastErrorMessage);
-            fConflictsPage.SetConflicts(OpenConflicts);
-            fLogsPage.SetLogs(RecentLogs);
-            fServiceStatusText.Text = "Service: " + Status.ServiceStatus;
-            fSyncStatusText.Text = "Sync: " + Status.SynchronizationStatus;
-            fConnectionStatusText.Text = "HTTP API: " + Status.IpcStatus;
-            fServicePage.AppendMemo("Service is " + Status.ServiceStatus + ". PID " + Status.ProcessId.ToString() + ".");
+            fRefreshInProgress = false;
         }
-
-        fUpdatedTimeText.Text = "Updated " + DateTime.Now.ToString("HH:mm:ss");
     }
     void NavigationList_SelectionChanged(object Sender, SelectionChangedEventArgs Args)
     {
@@ -284,25 +305,30 @@ public partial class MainWindow : Window
     }
     async void MainWindow_Opened(object Sender, EventArgs Args)
     {
-        await RefreshServiceStatusAsync();
+        await RefreshServiceStatusAsync(true);
+        fRefreshTimer.Start();
     }
     async void ServicePage_RefreshRequested(object Sender, EventArgs Args)
     {
-        await RefreshServiceStatusAsync();
+        await RefreshServiceStatusAsync(true);
+    }
+    async void RefreshTimer_Tick(object Sender, EventArgs Args)
+    {
+        await RefreshServiceStatusAsync(false);
     }
     async void ServicePage_StartRequested(object Sender, EventArgs Args)
     {
         fServicePage.AppendMemo("Start requested.");
         fServicePage.SetCommandResult(fServiceProcessController.Start());
         await Task.Delay(750);
-        await RefreshServiceStatusAsync();
+        await RefreshServiceStatusAsync(true);
     }
     async void ServicePage_StopRequested(object Sender, EventArgs Args)
     {
         fServicePage.AppendMemo("Stop requested.");
         fServicePage.SetCommandResult(await fServiceClient.StopAsync());
         await Task.Delay(750);
-        await RefreshServiceStatusAsync();
+        await RefreshServiceStatusAsync(true);
     }
     async void ServicePage_RestartRequested(object Sender, EventArgs Args)
     {
@@ -311,7 +337,7 @@ public partial class MainWindow : Window
         await Task.Delay(1200);
         fServicePage.SetCommandResult(fServiceProcessController.Start());
         await Task.Delay(750);
-        await RefreshServiceStatusAsync();
+        await RefreshServiceStatusAsync(true);
     }
 
     // ● constructor
@@ -332,6 +358,11 @@ public partial class MainWindow : Window
         fUpdatedTimeText = CreateStatusText("Updated -");
         fServiceClient = new LocalServiceClient();
         fServiceProcessController = new LocalServiceProcessController();
+        fRefreshTimer = new DispatcherTimer()
+        {
+            Interval = TimeSpan.FromSeconds(10),
+        };
+        fRefreshTimer.Tick += RefreshTimer_Tick;
         fDashboardPage = new DashboardPage();
         fSynchronizationPage = new SynchronizationPage();
         fConnectionsPage = new ConnectionsPage();

@@ -11,6 +11,7 @@ global using Avalonia.Markup.Xaml;
 global using Avalonia.Media;
 global using Avalonia.Media.Imaging;
 global using Avalonia.Platform;
+global using Avalonia.Threading;
 global using Hermes.Data;
 global using System;
 global using System.Collections.Generic;
