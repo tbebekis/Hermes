@@ -1048,9 +1048,14 @@ Not included yet:
 - durable pending-operation storage.
 - retries.
 - conflict resolution UI.
+- automatic namespace disambiguation.
+
+Added after the first SQLite increment:
+
 - planner.
 - executor.
-- automatic namespace disambiguation.
+- conflict classification.
+- durable conflict persistence.
 
 ## Three-Way Diff Classifier
 

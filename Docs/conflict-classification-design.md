@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document records the current Hermes conflict classification rules before UI conflict resolution, operation queues, or conflict persistence are added.
+This document records the current Hermes conflict classification rules before UI conflict resolution or operation queues are added.
 
 The classifier describes state. It does not execute synchronization operations.
 
@@ -63,6 +63,8 @@ Conflicts plan as:
 
 Conflict execution requests validate as conflict results and are not passed to normal mutation execution.
 
+Conflict decisions are also persisted as open durable conflicts by the metadata planning side-effect step.
+
 ## Namespace Collisions
 
 Google Drive allows duplicate sibling names. A local filesystem mirror cannot materialize two active siblings at the same local path.
@@ -78,6 +80,8 @@ Namespace collisions are detected in:
 - incremental remote changes planning.
 
 Blocked namespace collision requests validate as blocked results and are not passed to normal mutation execution.
+
+Blocked namespace collision decisions are also persisted as open durable conflicts by the metadata planning side-effect step.
 
 ## Conservative Missing State
 
@@ -99,4 +103,3 @@ Run summaries expose:
 - blocked item samples.
 - uncommitted conflict result counts.
 - bounded conflict messages.
-

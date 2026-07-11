@@ -51,5 +51,4 @@ This document summarizes the Google Drive end-to-end findings validated before s
 - Remote observation updates and checkpoint advancement must be atomic.
 - Remote folder delete handling must commit descendant state when the remote folder delete is verified.
 - Planner logic must handle ancestor rename, move, trash, restore, and delete effects on descendants.
-- Conflict classification should start in memory before adding UI, operation queue, or conflict persistence.
-
+- Conflict classification starts in memory, and unresolved conflicts are now persisted before any UI or operation queue work.
