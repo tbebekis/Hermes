@@ -140,6 +140,19 @@ public class MetadataStoreTests
         Assert.Equal("remote-root", Loaded.RemoteRootItemId);
     }
     /// <summary>
+    /// Verifies recent log reads return an empty list when no logs exist.
+    /// </summary>
+    [Fact]
+    public void RecentLogsReturnEmptyWhenNoLogsExist()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+
+        IReadOnlyList<RecentLogRecord> Logs = Store.GetRecentLogs(20);
+
+        Assert.Empty(Logs);
+    }
+    /// <summary>
     /// Verifies tracked item insert behavior.
     /// </summary>
     [Fact]

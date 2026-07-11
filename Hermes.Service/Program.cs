@@ -26,6 +26,15 @@ static public class Program
 
             return Result;
         });
+        Endpoints.MapGet("/logs/recent", (SqlMetadataStore Store) =>
+        {
+            List<RecentLogResponse> Result = new();
+
+            foreach (RecentLogRecord Record in Store.GetRecentLogs(200))
+                Result.Add(RecentLogResponse.FromRecord(Record));
+
+            return Result;
+        });
     }
 
     // ● public

@@ -8,6 +8,17 @@ namespace Hermes.Desktop;
 /// </summary>
 public class LogsPage : UserControl
 {
+    // ● fields
+
+    readonly TextBox fTextBox;
+
+    // ● private
+
+    static string FormatLog(LocalRecentLog Log)
+    {
+        return Log.LogTime + " [" + Log.Level + "] " + Log.Source + " " + Log.EventId + " - " + Log.Message;
+    }
+
     // ● constructor
 
     /// <summary>
@@ -15,12 +26,40 @@ public class LogsPage : UserControl
     /// </summary>
     public LogsPage()
     {
-        Content = new TextBox()
+        fTextBox = new TextBox()
         {
             Text = "No log entries loaded.",
             AcceptsReturn = true,
             IsReadOnly = true,
             MinHeight = 280,
         };
+        Content = fTextBox;
+    }
+
+    // ● public
+
+    /// <summary>
+    /// Displays recent logs returned by the local service.
+    /// </summary>
+    public void SetLogs(IReadOnlyList<LocalRecentLog> Logs)
+    {
+        if (Logs == null)
+        {
+            fTextBox.Text = "The local service HTTP API is not reachable.";
+            return;
+        }
+
+        if (Logs.Count == 0)
+        {
+            fTextBox.Text = "No log entries.";
+            return;
+        }
+
+        List<string> Lines = new();
+
+        foreach (LocalRecentLog Log in Logs)
+            Lines.Add(FormatLog(Log));
+
+        fTextBox.Text = string.Join(Environment.NewLine, Lines);
     }
 }

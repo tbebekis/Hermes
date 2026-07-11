@@ -62,6 +62,7 @@ public partial class MainWindow : Window
     readonly ServicePage fServicePage;
     readonly FoldersPage fFoldersPage;
     readonly ConflictsPage fConflictsPage;
+    readonly LogsPage fLogsPage;
 
     static Image CreateLogo(double Size)
     {
@@ -229,6 +230,7 @@ public partial class MainWindow : Window
         fServicePage.SetStatus(Status);
         fFoldersPage.SetStatus(Status);
         fConflictsPage.SetConflicts(await fServiceClient.GetOpenConflictsAsync());
+        fLogsPage.SetLogs(await fServiceClient.GetRecentLogsAsync());
 
         if (Status == null)
         {
@@ -280,6 +282,7 @@ public partial class MainWindow : Window
         fServicePage = new ServicePage();
         fFoldersPage = new FoldersPage();
         fConflictsPage = new ConflictsPage();
+        fLogsPage = new LogsPage();
         fServicePage.RefreshRequested += ServicePage_RefreshRequested;
         fPages = new List<PageDescriptor>()
         {
@@ -287,7 +290,7 @@ public partial class MainWindow : Window
             new("Service", "Service", "Manage the Hermes background service.", fServicePage),
             new("Folders", "Folders", "Manage synchronization roots.", fFoldersPage),
             new("Conflicts", "Conflicts", "Review items that need attention.", fConflictsPage),
-            new("Logs", "Logs", "Inspect service and desktop log output.", new LogsPage()),
+            new("Logs", "Logs", "Inspect service and desktop log output.", fLogsPage),
             new("Settings", "Settings", "Configure Hermes desktop and synchronization behavior.", new SettingsPage()),
             new("About", "About", "Application version, runtime, and license information.", new AboutPage()),
         };

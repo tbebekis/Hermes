@@ -64,4 +64,20 @@ public class LocalServiceClient
             return null;
         }
     }
+    /// <summary>
+    /// Gets recent logs from the local service, or returns null when the service cannot be reached.
+    /// </summary>
+    public async Task<IReadOnlyList<LocalRecentLog>> GetRecentLogsAsync()
+    {
+        try
+        {
+            using Stream Stream = await fClient.GetStreamAsync("/logs/recent");
+            List<LocalRecentLog> Result = await JsonSerializer.DeserializeAsync<List<LocalRecentLog>>(Stream, fJsonOptions);
+            return Result ?? [];
+        }
+        catch
+        {
+            return null;
+        }
+    }
 }

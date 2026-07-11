@@ -334,6 +334,15 @@ public class SqlMetadataStore
         LastObservedTime = ReadDateTime(Row, "LastObservedTime"),
         ResolvedTime = ReadNullableDateTime(Row, "ResolvedTime"),
     };
+    static RecentLogRecord ToRecentLog(DataRow Row) => new()
+    {
+        Id = ReadString(Row, "Id"),
+        LogTime = ReadString(Row, "LogTime"),
+        Level = ReadString(Row, "Level"),
+        Source = ReadString(Row, "Source"),
+        EventId = ReadString(Row, "EventId"),
+        Message = ReadString(Row, "Message"),
+    };
 
     // ● namespace helpers
 
@@ -863,6 +872,27 @@ where Id = :Id";
                 ["State"] = SyncConflictState.Resolved.ToString(),
                 ["CutoffTime"] = CutoffTime,
             });
+    }
+    /// <summary>
+    /// Returns recent log rows ordered by log time descending.
+    /// </summary>
+    public IReadOnlyList<RecentLogRecord> GetRecentLogs(int Count)
+    {
+        if (Count <= 0)
+            return [];
+
+        MemTable Table = fStore.Select("select * from SYS_LOG order by LogTime desc");
+        List<RecentLogRecord> Result = new();
+
+        foreach (DataRow Row in Table.Rows)
+        {
+            if (Result.Count >= Count)
+                break;
+
+            Result.Add(ToRecentLog(Row));
+        }
+
+        return Result;
     }
 
     // ● private types
