@@ -136,7 +136,6 @@ public class ServicePage : UserControl
             IsReadOnly = true,
             FontFamily = new FontFamily("Cascadia Code, Consolas, Monospace"),
             FontSize = 12,
-            Height = 320,
             TextWrapping = TextWrapping.NoWrap,
         };
         ScrollViewer.SetHorizontalScrollBarVisibility(fMemoTextBox, ScrollBarVisibility.Auto);
@@ -150,9 +149,10 @@ public class ServicePage : UserControl
         fStopButton.Click += StopButton_Click;
         fRestartButton.Click += RestartButton_Click;
 
-        Content = new StackPanel()
+        Grid Layout = new()
         {
-            Spacing = 18,
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,*"),
+            RowSpacing = 18,
             Children =
             {
                 CreateInfoPanel(),
@@ -172,6 +172,10 @@ public class ServicePage : UserControl
                 fMemoTextBox
             }
         };
+        Grid.SetRow(Layout.Children[1], 1);
+        Grid.SetRow(Layout.Children[2], 2);
+        Grid.SetRow(Layout.Children[3], 3);
+        Content = Layout;
     }
 
     // ● public

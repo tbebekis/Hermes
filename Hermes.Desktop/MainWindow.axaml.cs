@@ -188,15 +188,18 @@ public partial class MainWindow : Window
     }
     Grid CreateMainArea()
     {
+        fPageHost.HorizontalAlignment = HorizontalAlignment.Stretch;
+        fPageHost.VerticalAlignment = VerticalAlignment.Stretch;
+
         Grid Result = new()
         {
             RowDefinitions = new RowDefinitions("Auto,*,Auto"),
             Children =
             {
                 CreateHeader(),
-                new ScrollViewer()
+                new Border()
                 {
-                    Content = fPageHost,
+                    Child = fPageHost,
                     Padding = new Thickness(24),
                 },
                 CreateStatusBar(),

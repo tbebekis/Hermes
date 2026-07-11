@@ -109,14 +109,19 @@ public class LogsPage : UserControl
             Text = "No log entries loaded.",
             AcceptsReturn = true,
             IsReadOnly = true,
-            MinHeight = 280,
+            FontFamily = new FontFamily("Cascadia Code, Consolas, Monospace"),
+            FontSize = 12,
+            TextWrapping = TextWrapping.NoWrap,
         };
+        ScrollViewer.SetHorizontalScrollBarVisibility(fTextBox, ScrollBarVisibility.Auto);
+        ScrollViewer.SetVerticalScrollBarVisibility(fTextBox, ScrollBarVisibility.Auto);
         fLevelBox.SelectionChanged += Filter_Changed;
         fSearchBox.TextChanged += Filter_Changed;
 
-        Content = new StackPanel()
+        Grid Layout = new()
         {
-            Spacing = 12,
+            RowDefinitions = new RowDefinitions("Auto,*"),
+            RowSpacing = 12,
             Children =
             {
                 new StackPanel()
@@ -132,6 +137,8 @@ public class LogsPage : UserControl
                 fTextBox,
             }
         };
+        Grid.SetRow(Layout.Children[1], 1);
+        Content = Layout;
     }
 
     // ● public
