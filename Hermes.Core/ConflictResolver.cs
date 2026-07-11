@@ -4,17 +4,27 @@
 namespace Hermes.Core;
 
 /// <summary>
-/// Detects and resolves synchronization conflicts.
+/// Detects synchronization conflicts.
 /// </summary>
 public class ConflictResolver
 {
     // ● public
 
     /// <summary>
-    /// Determines whether a conflict exists.
+    /// Determines whether a conflict exists for legacy boolean change flags.
     /// </summary>
     public bool HasConflict(bool LocalChanged, bool RemoteChanged)
     {
         return LocalChanged && RemoteChanged;
+    }
+    /// <summary>
+    /// Determines whether the specified diff input classifies as a conflict.
+    /// </summary>
+    public bool HasConflict(SyncDiffInput Input)
+    {
+        Guard.NotNull(Input, nameof(Input));
+
+        SyncDiffClassifier Classifier = new();
+        return Classifier.Classify(Input) == SyncDiffKind.Conflict;
     }
 }
