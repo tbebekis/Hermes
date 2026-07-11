@@ -15,7 +15,11 @@ public class ServicePage : UserControl
     readonly TextBlock fUptimeText;
     readonly TextBlock fIpcText;
     readonly TextBlock fVersionText;
+    readonly TextBlock fCommandText;
     readonly Button fRefreshButton;
+    readonly Button fStartButton;
+    readonly Button fStopButton;
+    readonly Button fRestartButton;
 
     // ● private
 
@@ -76,6 +80,18 @@ public class ServicePage : UserControl
     {
         RefreshRequested?.Invoke(this, EventArgs.Empty);
     }
+    void StartButton_Click(object Sender, RoutedEventArgs Args)
+    {
+        StartRequested?.Invoke(this, EventArgs.Empty);
+    }
+    void StopButton_Click(object Sender, RoutedEventArgs Args)
+    {
+        StopRequested?.Invoke(this, EventArgs.Empty);
+    }
+    void RestartButton_Click(object Sender, RoutedEventArgs Args)
+    {
+        RestartRequested?.Invoke(this, EventArgs.Empty);
+    }
 
     // ● constructor
 
@@ -89,8 +105,15 @@ public class ServicePage : UserControl
         fUptimeText = new TextBlock() { Text = "-" };
         fIpcText = new TextBlock() { Text = "localhost HTTP API not connected" };
         fVersionText = new TextBlock() { Text = "-" };
+        fCommandText = new TextBlock() { Text = "No service command has been requested.", Opacity = 0.72 };
         fRefreshButton = ActionButton("Refresh", true);
+        fStartButton = ActionButton("Start", true);
+        fStopButton = ActionButton("Stop", false);
+        fRestartButton = ActionButton("Restart", false);
         fRefreshButton.Click += RefreshButton_Click;
+        fStartButton.Click += StartButton_Click;
+        fStopButton.Click += StopButton_Click;
+        fRestartButton.Click += RestartButton_Click;
 
         Content = new StackPanel()
         {
@@ -105,16 +128,12 @@ public class ServicePage : UserControl
                     Children =
                     {
                         fRefreshButton,
-                        ActionButton("Start", false),
-                        ActionButton("Stop", false),
-                        ActionButton("Restart", false),
+                        fStartButton,
+                        fStopButton,
+                        fRestartButton,
                     }
                 },
-                new TextBlock()
-                {
-                    Text = "Service commands will be connected through the local HTTP API.",
-                    Opacity = 0.72,
-                }
+                fCommandText
             }
         };
     }
@@ -133,6 +152,9 @@ public class ServicePage : UserControl
             fUptimeText.Text = "-";
             fIpcText.Text = "localhost HTTP API not connected";
             fVersionText.Text = "-";
+            fStartButton.IsEnabled = true;
+            fStopButton.IsEnabled = false;
+            fRestartButton.IsEnabled = false;
             return;
         }
 
@@ -141,6 +163,19 @@ public class ServicePage : UserControl
         fUptimeText.Text = "-";
         fIpcText.Text = Status.IpcStatus;
         fVersionText.Text = Status.Version;
+        fStartButton.IsEnabled = false;
+        fStopButton.IsEnabled = true;
+        fRestartButton.IsEnabled = true;
+    }
+    /// <summary>
+    /// Displays the latest service command result.
+    /// </summary>
+    public void SetCommandResult(LocalServiceControlResult Result)
+    {
+        if (Result == null)
+            return;
+
+        fCommandText.Text = Result.Message;
     }
 
     // ● events
@@ -149,4 +184,16 @@ public class ServicePage : UserControl
     /// Occurs when the user requests a service status refresh.
     /// </summary>
     public event EventHandler RefreshRequested;
+    /// <summary>
+    /// Occurs when the user requests service start.
+    /// </summary>
+    public event EventHandler StartRequested;
+    /// <summary>
+    /// Occurs when the user requests service stop.
+    /// </summary>
+    public event EventHandler StopRequested;
+    /// <summary>
+    /// Occurs when the user requests service restart.
+    /// </summary>
+    public event EventHandler RestartRequested;
 }

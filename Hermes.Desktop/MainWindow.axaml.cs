@@ -67,6 +67,7 @@ public partial class MainWindow : Window
     readonly ConflictsPage fConflictsPage;
     readonly HistoryPage fHistoryPage;
     readonly LogsPage fLogsPage;
+    readonly LocalServiceProcessController fServiceProcessController;
 
     static Image CreateLogo(double Size)
     {
@@ -268,6 +269,26 @@ public partial class MainWindow : Window
     {
         await RefreshServiceStatusAsync();
     }
+    async void ServicePage_StartRequested(object Sender, EventArgs Args)
+    {
+        fServicePage.SetCommandResult(fServiceProcessController.Start());
+        await Task.Delay(750);
+        await RefreshServiceStatusAsync();
+    }
+    async void ServicePage_StopRequested(object Sender, EventArgs Args)
+    {
+        fServicePage.SetCommandResult(await fServiceClient.StopAsync());
+        await Task.Delay(750);
+        await RefreshServiceStatusAsync();
+    }
+    async void ServicePage_RestartRequested(object Sender, EventArgs Args)
+    {
+        fServicePage.SetCommandResult(await fServiceClient.StopAsync());
+        await Task.Delay(1200);
+        fServicePage.SetCommandResult(fServiceProcessController.Start());
+        await Task.Delay(750);
+        await RefreshServiceStatusAsync();
+    }
 
     // ● constructor
 
@@ -286,6 +307,7 @@ public partial class MainWindow : Window
         fConnectionStatusText = CreateStatusText("Google Drive: Unknown");
         fUpdatedTimeText = CreateStatusText("Updated -");
         fServiceClient = new LocalServiceClient();
+        fServiceProcessController = new LocalServiceProcessController();
         fDashboardPage = new DashboardPage();
         fSynchronizationPage = new SynchronizationPage();
         fConnectionsPage = new ConnectionsPage();
@@ -296,6 +318,9 @@ public partial class MainWindow : Window
         fHistoryPage = new HistoryPage();
         fLogsPage = new LogsPage();
         fServicePage.RefreshRequested += ServicePage_RefreshRequested;
+        fServicePage.StartRequested += ServicePage_StartRequested;
+        fServicePage.StopRequested += ServicePage_StopRequested;
+        fServicePage.RestartRequested += ServicePage_RestartRequested;
         fPages = new List<PageDescriptor>()
         {
             new("Dashboard", "Dashboard", "Overall service and synchronization status.", fDashboardPage),

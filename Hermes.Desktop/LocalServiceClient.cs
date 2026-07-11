@@ -80,4 +80,25 @@ public class LocalServiceClient
             return null;
         }
     }
+    /// <summary>
+    /// Requests the local service to stop.
+    /// </summary>
+    public async Task<LocalServiceControlResult> StopAsync()
+    {
+        try
+        {
+            using HttpResponseMessage Response = await fClient.PostAsync("/control/stop", new StringContent(string.Empty));
+            using Stream Stream = await Response.Content.ReadAsStreamAsync();
+            LocalServiceControlResult Result = await JsonSerializer.DeserializeAsync<LocalServiceControlResult>(Stream, fJsonOptions);
+
+            if (Result == null)
+                return LocalServiceControlResult.Failure("The local service returned an empty response.");
+
+            return Result;
+        }
+        catch (Exception Ex)
+        {
+            return LocalServiceControlResult.Failure(Ex.Message);
+        }
+    }
 }

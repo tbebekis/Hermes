@@ -35,6 +35,16 @@ static public class Program
 
             return Result;
         });
+        Endpoints.MapPost("/control/stop", (IHostApplicationLifetime Lifetime) =>
+        {
+            Task.Run(async () =>
+            {
+                await Task.Delay(150);
+                Lifetime.StopApplication();
+            });
+
+            return ServiceControlResponse.Success("Stop requested.");
+        });
     }
 
     // ● public
