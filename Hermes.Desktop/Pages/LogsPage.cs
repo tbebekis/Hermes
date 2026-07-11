@@ -10,13 +10,72 @@ public class LogsPage : UserControl
 {
     // ● fields
 
+    readonly ComboBox fLevelBox;
+    readonly TextBox fSearchBox;
     readonly TextBox fTextBox;
+    IReadOnlyList<LocalRecentLog> fLogs;
 
     // ● private
 
     static string FormatLog(LocalRecentLog Log)
     {
         return Log.LogTime + " [" + Log.Level + "] " + Log.Source + " " + Log.EventId + " - " + Log.Message;
+    }
+    static bool ContainsText(string Source, string Text)
+    {
+        return Source != null && Source.IndexOf(Text, StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+    string SelectedLevel()
+    {
+        if (fLevelBox.SelectedItem is ComboBoxItem Item && Item.Content != null)
+            return Item.Content.ToString();
+
+        return "All";
+    }
+    bool ShouldDisplay(LocalRecentLog Log)
+    {
+        string Level = SelectedLevel();
+        string SearchText = fSearchBox.Text ?? string.Empty;
+
+        if (Level != "All" && !string.Equals(Log.Level, Level, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (string.IsNullOrWhiteSpace(SearchText))
+            return true;
+
+        return ContainsText(Log.LogTime, SearchText)
+            || ContainsText(Log.Level, SearchText)
+            || ContainsText(Log.Source, SearchText)
+            || ContainsText(Log.EventId, SearchText)
+            || ContainsText(Log.Message, SearchText);
+    }
+    void RefreshText()
+    {
+        if (fLogs == null)
+        {
+            fTextBox.Text = "The local service HTTP API is not reachable.";
+            return;
+        }
+
+        if (fLogs.Count == 0)
+        {
+            fTextBox.Text = "No log entries.";
+            return;
+        }
+
+        List<string> Lines = new();
+
+        foreach (LocalRecentLog Log in fLogs)
+        {
+            if (ShouldDisplay(Log))
+                Lines.Add(FormatLog(Log));
+        }
+
+        fTextBox.Text = Lines.Count == 0 ? "No log entries match the current filters." : string.Join(Environment.NewLine, Lines);
+    }
+    void Filter_Changed(object Sender, EventArgs Args)
+    {
+        RefreshText();
     }
 
     // ● constructor
@@ -26,6 +85,25 @@ public class LogsPage : UserControl
     /// </summary>
     public LogsPage()
     {
+        fLogs = new List<LocalRecentLog>();
+        fLevelBox = new ComboBox()
+        {
+            MinWidth = 140,
+            SelectedIndex = 0,
+            Items =
+            {
+                new ComboBoxItem() { Content = "All" },
+                new ComboBoxItem() { Content = "Debug" },
+                new ComboBoxItem() { Content = "Information" },
+                new ComboBoxItem() { Content = "Warning" },
+                new ComboBoxItem() { Content = "Error" },
+            }
+        };
+        fSearchBox = new TextBox()
+        {
+            PlaceholderText = "Search logs",
+            MinWidth = 240,
+        };
         fTextBox = new TextBox()
         {
             Text = "No log entries loaded.",
@@ -33,7 +111,27 @@ public class LogsPage : UserControl
             IsReadOnly = true,
             MinHeight = 280,
         };
-        Content = fTextBox;
+        fLevelBox.SelectionChanged += Filter_Changed;
+        fSearchBox.TextChanged += Filter_Changed;
+
+        Content = new StackPanel()
+        {
+            Spacing = 12,
+            Children =
+            {
+                new StackPanel()
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    Children =
+                    {
+                        fLevelBox,
+                        fSearchBox,
+                    }
+                },
+                fTextBox,
+            }
+        };
     }
 
     // ● public
@@ -43,23 +141,7 @@ public class LogsPage : UserControl
     /// </summary>
     public void SetLogs(IReadOnlyList<LocalRecentLog> Logs)
     {
-        if (Logs == null)
-        {
-            fTextBox.Text = "The local service HTTP API is not reachable.";
-            return;
-        }
-
-        if (Logs.Count == 0)
-        {
-            fTextBox.Text = "No log entries.";
-            return;
-        }
-
-        List<string> Lines = new();
-
-        foreach (LocalRecentLog Log in Logs)
-            Lines.Add(FormatLog(Log));
-
-        fTextBox.Text = string.Join(Environment.NewLine, Lines);
+        fLogs = Logs;
+        RefreshText();
     }
 }
