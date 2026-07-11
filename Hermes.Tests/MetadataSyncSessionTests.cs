@@ -991,6 +991,85 @@ public class MetadataSyncSessionTests
         Assert.Equal(SyncPlanDecisionKind.CommitBase, Decision.DecisionKind);
     }
     /// <summary>
+    /// Verifies matching local and remote rename plus move observations can advance the base snapshot.
+    /// </summary>
+    [Fact]
+    public void CreatePlanDecisionsCommitsBaseWhenBothSidesRenameAndMoveToSamePath()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 6, 26, 55, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(new TrackedItemRecord()
+        {
+            Id = "target-item",
+            SyncRootId = "root-1",
+            RemoteItemId = "remote-target",
+            LocalKey = "Target",
+            ItemType = "Folder",
+        });
+        Store.UpsertBaseSnapshot(new BaseSnapshotRecord()
+        {
+            TrackedItemId = "target-item",
+            ExistsFlag = true,
+            ItemType = "Folder",
+            Name = "Target",
+            LocalRelativePath = "Target",
+            RemoteParentId = "remote-root",
+            CommittedTime = Time,
+        });
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "Folder/File1.txt"));
+        Store.UpsertBaseSnapshot(new BaseSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            ExistsFlag = true,
+            ItemType = "File",
+            Name = "File1.txt",
+            LocalRelativePath = "Folder/File1.txt",
+            RemoteParentId = "remote-folder",
+            Size = 42,
+            ContentHash = "hash-base",
+            ProviderVersion = 1,
+            Trashed = false,
+            CommittedTime = Time,
+        });
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            ExistsFlag = true,
+            RelativePath = "Target/Renamed.txt",
+            Name = "Renamed.txt",
+            ParentRelativePath = "Target",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-base",
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            RemoteItemId = "remote-1",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "Renamed.txt",
+            RemoteParentId = "remote-target",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-base",
+            ProviderVersion = 2,
+            Trashed = false,
+            ObservedTime = Time,
+        });
+
+        SyncPlanDecision Decision = Session.CreatePlanDecisions("root-1")
+            .Single(Item => string.Equals(Item.TrackedItemId, "item-1", StringComparison.Ordinal));
+
+        Assert.Equal(SyncDiffKind.BothChangedCompatible, Decision.DiffKind);
+        Assert.Equal(SyncPlanDecisionKind.CommitBase, Decision.DecisionKind);
+    }
+    /// <summary>
     /// Verifies metadata sync session creates planner inputs from tracked item diffs.
     /// </summary>
     [Fact]

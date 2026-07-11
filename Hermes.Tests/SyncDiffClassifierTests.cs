@@ -246,6 +246,27 @@ public class SyncDiffClassifierTests
         Assert.Equal(SyncDiffKind.BothChangedCompatible, Kind);
     }
     /// <summary>
+    /// Verifies matching local and remote rename plus move are classified as compatible when the remote projection matches.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsBothChangedCompatibleWhenBothSidesRenameAndMoveToSamePath()
+    {
+        SyncItemState BaseState = State();
+        BaseState.LocalRelativePath = "Folder/Report.txt";
+        BaseState.RemoteParentId = "remote-folder";
+        SyncItemState LocalState = State(Name: "Renamed.txt");
+        LocalState.LocalRelativePath = "Target/Renamed.txt";
+        LocalState.RemoteParentId = "remote-folder";
+        SyncItemState RemoteState = State(Name: "Renamed.txt");
+        RemoteState.LocalRelativePath = "Folder/Report.txt";
+        RemoteState.RemoteParentId = "remote-target";
+        RemoteState.ProjectedLocalRelativePath = "Target/Renamed.txt";
+
+        SyncDiffKind Kind = Classify(BaseState, LocalState, RemoteState);
+
+        Assert.Equal(SyncDiffKind.BothChangedCompatible, Kind);
+    }
+    /// <summary>
     /// Verifies local delete versus remote content modification is classified as a conflict.
     /// </summary>
     [Fact]
