@@ -112,6 +112,25 @@ public class LocalServiceClient
         }
     }
     /// <summary>
+    /// Gets recent synchronization activity from the local service, or returns null when the service cannot be reached.
+    /// </summary>
+    public async Task<IReadOnlyList<LocalSyncActivity>> GetRecentActivityAsync()
+    {
+        try
+        {
+            List<LocalSyncActivity> Result = await GetJsonAsync<List<LocalSyncActivity>>("/activity/recent");
+            if (Result == null && !string.IsNullOrWhiteSpace(LastErrorMessage))
+                return null;
+
+            return Result ?? [];
+        }
+        catch (Exception Ex)
+        {
+            SetError(Ex);
+            return null;
+        }
+    }
+    /// <summary>
     /// Requests the local service to stop.
     /// </summary>
     public async Task<LocalServiceControlResult> StopAsync()

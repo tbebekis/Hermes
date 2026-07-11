@@ -14,7 +14,7 @@ public class ActivityPage : UserControl
 
     // ● private
 
-    static Border CreateActivityRow(LocalRecentLog Log)
+    static Border CreateActivityRow(LocalSyncActivity Activity)
     {
         return new Border()
         {
@@ -28,9 +28,9 @@ public class ActivityPage : UserControl
                 ColumnSpacing = 10,
                 Children =
                 {
-                    new TextBlock() { Text = Log.LogTime, FontWeight = FontWeight.SemiBold },
-                    new TextBlock() { Text = Log.Level, Opacity = 0.72 },
-                    Field(Log.Message, 0, 2),
+                    new TextBlock() { Text = Activity.TimestampUtc.ToLocalTime().ToString("HH:mm:ss"), FontWeight = FontWeight.SemiBold },
+                    new TextBlock() { Text = Activity.Level, Opacity = 0.72 },
+                    Field(Activity.Title + " - " + Activity.Details, 0, 2),
                 }
             }
         };
@@ -74,15 +74,15 @@ public class ActivityPage : UserControl
     /// <summary>
     /// Displays recent activity returned by the local service.
     /// </summary>
-    public void SetLogs(IReadOnlyList<LocalRecentLog> Logs)
+    public void SetActivities(IReadOnlyList<LocalSyncActivity> Activities)
     {
-        if (Logs == null)
+        if (Activities == null)
         {
             SetMessage("The local service HTTP API is not reachable.");
             return;
         }
 
-        if (Logs.Count == 0)
+        if (Activities.Count == 0)
         {
             SetMessage("No recent activity.");
             return;
@@ -90,7 +90,7 @@ public class ActivityPage : UserControl
 
         fListPanel.Children.Clear();
 
-        foreach (LocalRecentLog Log in Logs)
-            fListPanel.Children.Add(CreateActivityRow(Log));
+        foreach (LocalSyncActivity Activity in Activities)
+            fListPanel.Children.Add(CreateActivityRow(Activity));
     }
 }

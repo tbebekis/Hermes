@@ -54,6 +54,7 @@ static public class ServiceRegistrations
             return SyncRootSettingsSynchronizer.EnsureSyncRoot(Store, Settings, DateTime.UtcNow);
         });
         Services.AddSingleton<MetadataSyncSession>();
+        Services.AddSingleton<SyncActivityStore>();
         Services.AddSingleton<IMetadataSyncRunner, MetadataSyncRunner>();
         Services.AddSingleton<MetadataSyncLoop>();
         Services.AddSingleton<SyncPlanner>();

@@ -35,6 +35,15 @@ static public class Program
 
             return Result;
         });
+        Endpoints.MapGet("/activity/recent", (SyncActivityStore Store) =>
+        {
+            List<SyncActivityResponse> Result = new();
+
+            foreach (SyncActivityRecord Record in Store.GetRecent())
+                Result.Add(SyncActivityResponse.FromRecord(Record));
+
+            return Result;
+        });
         Endpoints.MapPost("/control/stop", (IHostApplicationLifetime Lifetime) =>
         {
             Task.Run(async () =>

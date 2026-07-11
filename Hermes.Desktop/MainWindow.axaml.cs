@@ -248,7 +248,7 @@ public partial class MainWindow : Window
             fServiceStatusText.Text = "Service: Stopped";
             fSyncStatusText.Text = "Sync: Unknown";
             fConnectionStatusText.Text = "HTTP API: Disconnected";
-            fActivityPage.SetLogs(null);
+            fActivityPage.SetActivities(null);
             fConflictsPage.SetConflicts(null);
             fLogsPage.SetLogs(null);
 
@@ -260,7 +260,10 @@ public partial class MainWindow : Window
             IReadOnlyList<LocalRecentLog> RecentLogs = await fServiceClient.GetRecentLogsAsync();
             if (RecentLogs == null && !string.IsNullOrWhiteSpace(fServiceClient.LastErrorMessage))
                 fServicePage.AppendMemo("Logs error: " + fServiceClient.LastErrorMessage);
-            fActivityPage.SetLogs(RecentLogs);
+            IReadOnlyList<LocalSyncActivity> RecentActivity = await fServiceClient.GetRecentActivityAsync();
+            if (RecentActivity == null && !string.IsNullOrWhiteSpace(fServiceClient.LastErrorMessage))
+                fServicePage.AppendMemo("Activity error: " + fServiceClient.LastErrorMessage);
+            fActivityPage.SetActivities(RecentActivity);
             IReadOnlyList<LocalOpenConflict> OpenConflicts = await fServiceClient.GetOpenConflictsAsync();
             if (OpenConflicts == null && !string.IsNullOrWhiteSpace(fServiceClient.LastErrorMessage))
                 fServicePage.AppendMemo("Conflicts error: " + fServiceClient.LastErrorMessage);

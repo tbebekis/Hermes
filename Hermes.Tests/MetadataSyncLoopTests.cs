@@ -123,6 +123,7 @@ public class MetadataSyncLoopTests
             Runner,
             SyncRoot(),
             Options.Create(Settings()),
+            new SyncActivityStore(),
             Logger ?? NullLogger<MetadataSyncLoop>.Instance);
     }
     static MetadataSyncRunResult RunResult()

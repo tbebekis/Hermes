@@ -13,6 +13,7 @@ public class MetadataSyncLoop
     readonly IMetadataSyncRunner fRunner;
     readonly SyncRootRecord fSyncRoot;
     readonly SyncSettings fSettings;
+    readonly SyncActivityStore fActivityStore;
     readonly ILogger<MetadataSyncLoop> fLogger;
 
     // ● private
@@ -23,6 +24,7 @@ public class MetadataSyncLoop
     }
     void LogSuccess(MetadataSyncRunResult Result)
     {
+        fActivityStore.AddSuccess(fSyncRoot.Id, Result);
         fLogger.LogInformation(
             "Sync pass completed for root {SyncRootId}. Kind: {Kind}. Local items: {LocalObservedItemCount}. Remote items: {RemoteObservedItemCount}. Remote changes: {RemoteObservedChangeCount}. Decisions: {DecisionCount}. Pending executions: {PendingExecutionCount}. Open conflicts: {OpenConflictCount}. Pending summary: {PendingExecutionSummary}. Pending diffs: {PendingDiffSummary}. Namespace collisions: {NamespaceCollisionSummary}. Blocked items: {BlockedExecutionSummary}. Committed executions: {CommittedExecutionCount}. Uncommitted executions: {UncommittedExecutionCount}. Uncommitted summary: {UncommittedExecutionSummary}. Uncommitted messages: {UncommittedExecutionMessages}.",
             fSyncRoot.Id,
@@ -49,7 +51,10 @@ public class MetadataSyncLoop
             Result<MetadataSyncRunResult> Result = await fRunner.RunOnceAsync(fSyncRoot.Id, CancellationToken);
 
             if (Result.Failed)
+            {
+                fActivityStore.AddFailure(fSyncRoot.Id, Result.ErrorText);
                 fLogger.LogError("Sync pass failed for root {SyncRootId}. {Message}", fSyncRoot.Id, Result.ErrorText);
+            }
             else
                 LogSuccess(Result.Value);
         }
@@ -59,6 +64,7 @@ public class MetadataSyncLoop
         }
         catch (Exception Ex)
         {
+            fActivityStore.AddFailure(fSyncRoot.Id, Ex.Message);
             fLogger.LogError(Ex, "Sync pass failed unexpectedly for root {SyncRootId}.", fSyncRoot.Id);
         }
     }
@@ -72,11 +78,13 @@ public class MetadataSyncLoop
         IMetadataSyncRunner Runner,
         SyncRootRecord SyncRoot,
         IOptions<SyncSettings> Settings,
+        SyncActivityStore ActivityStore,
         ILogger<MetadataSyncLoop> Logger)
     {
         fRunner = Guard.NotNull(Runner, nameof(Runner));
         fSyncRoot = Guard.NotNull(SyncRoot, nameof(SyncRoot));
         fSettings = Guard.NotNull(Settings, nameof(Settings)).Value;
+        fActivityStore = Guard.NotNull(ActivityStore, nameof(ActivityStore));
         fLogger = Guard.NotNull(Logger, nameof(Logger));
     }
 
