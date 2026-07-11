@@ -24,13 +24,21 @@ public class ActivityPage : UserControl
             CornerRadius = new CornerRadius(6),
             Child = new Grid()
             {
-                ColumnDefinitions = new ColumnDefinitions("140,110,*"),
-                ColumnSpacing = 10,
+                ColumnDefinitions = new ColumnDefinitions("170,*"),
+                ColumnSpacing = 16,
                 Children =
                 {
-                    new TextBlock() { Text = Activity.TimestampUtc.ToLocalTime().ToString("HH:mm:ss"), FontWeight = FontWeight.SemiBold },
-                    new TextBlock() { Text = Activity.Level, Opacity = 0.72 },
-                    Field(Activity.Title + " - " + Activity.Details, 0, 2),
+                    new StackPanel()
+                    {
+                        Spacing = 4,
+                        Children =
+                        {
+                            new TextBlock() { Text = Activity.TimestampUtc.ToLocalTime().ToString("HH:mm:ss"), FontWeight = FontWeight.SemiBold },
+                            new TextBlock() { Text = Activity.Level, Opacity = 0.72 },
+                            new TextBlock() { Text = Activity.SyncRootId, Opacity = 0.72 },
+                        }
+                    },
+                    Field(Activity.Title + " - " + Activity.Details, 0, 1),
                 }
             }
         };

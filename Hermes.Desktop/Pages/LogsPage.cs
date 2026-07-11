@@ -99,6 +99,7 @@ public class LogsPage : UserControl
                 new ComboBoxItem() { Content = "Error" },
             }
         };
+        fLevelBox.SelectedIndex = 0;
         fSearchBox = new TextBox()
         {
             PlaceholderText = "Search logs",
