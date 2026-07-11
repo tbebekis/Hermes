@@ -866,6 +866,52 @@ public class MetadataSyncSessionTests
         Assert.Equal(SyncPlanDecisionKind.Conflict, Decision.DecisionKind);
     }
     /// <summary>
+    /// Verifies remote trash versus local modified state becomes a conflict decision.
+    /// </summary>
+    [Fact]
+    public void CreatePlanDecisionsReturnsConflictWhenRemoteTrashedAndLocalModified()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 6, 26, 40, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        AddBaseSnapshot(Store, "item-1", "File1.txt", "hash-base", Time);
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            ExistsFlag = true,
+            RelativePath = "File1.txt",
+            Name = "File1.txt",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-local",
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            RemoteItemId = "remote-1",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "File1.txt",
+            RemoteParentId = "remote-root",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-base",
+            ProviderVersion = 2,
+            Trashed = true,
+            ObservedTime = Time,
+        });
+
+        SyncPlanDecision Decision = Session.CreatePlanDecisions("root-1").Single();
+
+        Assert.Equal(SyncDiffKind.Conflict, Decision.DiffKind);
+        Assert.Equal(SyncPlanDecisionKind.Conflict, Decision.DecisionKind);
+    }
+    /// <summary>
     /// Verifies matching local and remote rename observations can advance the base snapshot.
     /// </summary>
     [Fact]

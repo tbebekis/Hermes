@@ -298,12 +298,64 @@ public class SyncDiffClassifierTests
         Assert.Equal(SyncDiffKind.Conflict, Kind);
     }
     /// <summary>
+    /// Verifies local delete versus remote rename is classified as a conflict.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsConflictWhenLocalMissingAndRemoteRenamed()
+    {
+        SyncItemState RemoteState = State(Name: "RemoteName.txt");
+        RemoteState.LocalRelativePath = "Report.txt";
+
+        SyncDiffKind Kind = Classify(State(), State(Exists: false), RemoteState);
+
+        Assert.Equal(SyncDiffKind.Conflict, Kind);
+    }
+    /// <summary>
+    /// Verifies local delete versus remote move is classified as a conflict.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsConflictWhenLocalMissingAndRemoteMoved()
+    {
+        SyncItemState RemoteState = State();
+        RemoteState.RemoteParentId = "remote-target";
+
+        SyncDiffKind Kind = Classify(State(), State(Exists: false), RemoteState);
+
+        Assert.Equal(SyncDiffKind.Conflict, Kind);
+    }
+    /// <summary>
     /// Verifies remote missing versus local content modification is classified as a conflict.
     /// </summary>
     [Fact]
     public void ClassifyReturnsConflictWhenRemoteMissingAndLocalModified()
     {
         SyncDiffKind Kind = Classify(State(), State(Hash: "hash-local"), State(Exists: false));
+
+        Assert.Equal(SyncDiffKind.Conflict, Kind);
+    }
+    /// <summary>
+    /// Verifies remote missing versus local rename is classified as a conflict.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsConflictWhenRemoteMissingAndLocalRenamed()
+    {
+        SyncItemState LocalState = State(Name: "LocalName.txt");
+        LocalState.LocalRelativePath = "LocalName.txt";
+
+        SyncDiffKind Kind = Classify(State(), LocalState, State(Exists: false));
+
+        Assert.Equal(SyncDiffKind.Conflict, Kind);
+    }
+    /// <summary>
+    /// Verifies remote trash versus local content modification is classified as a conflict.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsConflictWhenRemoteTrashedAndLocalModified()
+    {
+        SyncItemState RemoteState = State();
+        RemoteState.Trashed = true;
+
+        SyncDiffKind Kind = Classify(State(), State(Hash: "hash-local"), RemoteState);
 
         Assert.Equal(SyncDiffKind.Conflict, Kind);
     }
