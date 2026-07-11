@@ -52,6 +52,7 @@ public class LocalServiceProcessController
     static ProcessStartInfo CreateStartInfo(string ServicePath)
     {
         ProcessStartInfo Result;
+        string WorkingDirectory = Path.GetDirectoryName(ServicePath) ?? AppContext.BaseDirectory;
 
         if (Path.GetExtension(ServicePath).Equals(".dll", StringComparison.OrdinalIgnoreCase))
         {
@@ -62,10 +63,26 @@ public class LocalServiceProcessController
             Result = new ProcessStartInfo(ServicePath);
         }
 
-        Result.WorkingDirectory = Path.GetDirectoryName(ServicePath) ?? AppContext.BaseDirectory;
+        Result.WorkingDirectory = WorkingDirectory;
         Result.UseShellExecute = false;
         Result.CreateNoWindow = true;
+        ApplyDevelopmentEnvironment(Result, WorkingDirectory);
         return Result;
+    }
+    static void ApplyDevelopmentEnvironment(ProcessStartInfo StartInfo, string WorkingDirectory)
+    {
+        string DotNetEnvironment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? string.Empty;
+        string AspNetCoreEnvironment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? string.Empty;
+        string DevelopmentSettingsPath = Path.Combine(WorkingDirectory, "appsettings.Development.json");
+
+        if (!File.Exists(DevelopmentSettingsPath))
+            return;
+
+        if (string.IsNullOrWhiteSpace(DotNetEnvironment))
+            StartInfo.Environment["DOTNET_ENVIRONMENT"] = "Development";
+
+        if (string.IsNullOrWhiteSpace(AspNetCoreEnvironment))
+            StartInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
     }
 
     // ● public
