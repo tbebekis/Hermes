@@ -23,4 +23,8 @@
         <ProjectReference Include="..\Hermes.Data\Hermes.Data.csproj" />
         <ProjectReference Include="..\..\Tripous.Avalon\Tripous.Desktop\Tripous.Desktop.csproj" />
     </ItemGroup>
+
+    <ItemGroup>
+        <AvaloniaResource Include="Resources\Images\**" />
+    </ItemGroup>
 </Project>

@@ -62,6 +62,11 @@ static public partial class AppHost
     {
         DataLib.Initialize();
     }
+    static private async Task ShowProgress(string Status, int StepIndex, double Percent)
+    {
+        StartupWindow.SetProgress(Status, StepIndex, Percent);
+        await Task.Delay(80);
+    }
 
     // ● public
 
@@ -77,16 +82,21 @@ static public partial class AppHost
 
         try
         {
+            await ShowProgress("Loading settings...", 0, 12);
             InitializeConfigs();
             await LoadConnectionStrings();
+            await ShowProgress("Opening metadata store...", 1, 32);
             await CreateDatabase();
             Registry.RegisterSchemas();
             Schemas.Execute();
             Store = SqlStores.CreateDefaultSqlStore();
+            await ShowProgress("Loading synchronization jobs...", 2, 58);
             LoadLibraries();
             TypeStore.RegisterLoadedAssemblies();
             Registry.RegisterDescriptors();
             InitializeLibraries();
+            await ShowProgress("Connecting to service...", 3, 78);
+            await ShowProgress("Ready", 4, 100);
 
             MainWindow = new MainWindow();
             AvaloniaDesktop.MainWindow = MainWindow;
