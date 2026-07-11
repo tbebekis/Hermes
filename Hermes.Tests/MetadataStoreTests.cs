@@ -813,6 +813,61 @@ public class MetadataStoreTests
         Assert.Equal(1, Store.CountOpenConflicts("root-1"));
     }
     /// <summary>
+    /// Verifies open conflict details include tracked item and observation context.
+    /// </summary>
+    [Fact]
+    public void OpenConflictDetailsIncludeMetadataContext()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        DateTime ObservedTime = new(2026, 7, 11, 9, 5, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem());
+        Store.UpsertBaseSnapshot(new BaseSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            ExistsFlag = true,
+            ItemType = "File",
+            Name = "File1.txt",
+            LocalRelativePath = "File1.txt",
+            RemoteParentId = "remote-root",
+            ContentHash = "hash-base",
+            CommittedTime = ObservedTime,
+        });
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            ExistsFlag = true,
+            RelativePath = "File1.txt",
+            Name = "File1.txt",
+            ItemType = "File",
+            ContentHash = "hash-local",
+            ObservedTime = ObservedTime,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            RemoteItemId = "remote-1",
+            ExistsFlag = false,
+            Removed = true,
+            ObservedTime = ObservedTime,
+        });
+        Store.UpsertOpenConflict(
+            "root-1",
+            new SyncPlanDecision("item-1", SyncDiffKind.Conflict, SyncPlanDecisionKind.Conflict),
+            "Conflict resolution is required.",
+            ObservedTime);
+
+        SyncConflictDetailRecord Detail = Store.GetOpenConflictDetails("root-1").Single();
+
+        Assert.Equal("item-1", Detail.Conflict.TrackedItemId);
+        Assert.Equal("remote-1", Detail.TrackedItem.RemoteItemId);
+        Assert.Equal("hash-base", Detail.BaseSnapshot.ContentHash);
+        Assert.Equal("hash-local", Detail.LocalObservation.ContentHash);
+        Assert.True(Detail.RemoteObservation.Removed);
+    }
+    /// <summary>
     /// Verifies open conflict upsert refreshes the existing row.
     /// </summary>
     [Fact]

@@ -817,6 +817,27 @@ where Id = :Id";
         return Result;
     }
     /// <summary>
+    /// Returns open conflicts with tracked item and observation details for a sync root.
+    /// </summary>
+    public IReadOnlyList<SyncConflictDetailRecord> GetOpenConflictDetails(string SyncRootId)
+    {
+        List<SyncConflictDetailRecord> Result = new();
+
+        foreach (SyncConflictRecord Conflict in GetOpenConflicts(SyncRootId))
+        {
+            Result.Add(new SyncConflictDetailRecord()
+            {
+                Conflict = Conflict,
+                TrackedItem = GetTrackedItem(Conflict.TrackedItemId),
+                BaseSnapshot = GetBaseSnapshot(Conflict.TrackedItemId),
+                LocalObservation = GetLocalObservation(Conflict.TrackedItemId),
+                RemoteObservation = GetRemoteObservation(Conflict.TrackedItemId),
+            });
+        }
+
+        return Result;
+    }
+    /// <summary>
     /// Returns the number of open conflicts for a sync root.
     /// </summary>
     public int CountOpenConflicts(string SyncRootId)
