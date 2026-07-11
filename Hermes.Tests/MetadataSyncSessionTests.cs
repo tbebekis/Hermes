@@ -1713,6 +1713,45 @@ public class MetadataSyncSessionTests
         Assert.Equal("token-duplicate", Store.GetRemoteCheckpoint("root-1").StartPageToken);
     }
     /// <summary>
+    /// Verifies namespace collision requests are not passed to normal execution.
+    /// </summary>
+    [Fact]
+    public async Task ExecutePendingRequestsAsyncDoesNotExecuteNamespaceCollisions()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 7, 44, 45, DateTimeKind.Utc);
+        FakeSyncExecutor Executor = new(_ => throw new InvalidOperationException("Namespace collisions must not execute."));
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        MetadataSyncSessionResult SessionResult = Session.AdvanceWithRemoteSnapshot(
+            "root-1",
+            [],
+            [
+                CreateStorageItem("remote-1", "DuplicateName.txt", "hash-1", 1),
+                CreateStorageItem("remote-2", "DuplicateName.txt", "hash-2", 1),
+            ],
+            CreateCheckpoint("token-duplicate", Time),
+            Time,
+            Time,
+            Time,
+            "scan-duplicate");
+
+        SyncExecutionApplyResult Result = await Session.ExecutePendingRequestsAsync(
+            SessionResult,
+            Executor,
+            Time,
+            CancellationToken.None);
+
+        Assert.Empty(Executor.Intents);
+        Assert.Empty(Executor.Requests);
+        Assert.Equal(2, Result.UncommittedResults.Count);
+        Assert.All(Result.UncommittedResults, Item => Assert.Equal(SyncExecutionResultKind.Blocked, Item.ResultKind));
+        Assert.Empty(Result.CommittedResults);
+        Assert.Empty(Result.CommittedBaseSnapshots);
+    }
+    /// <summary>
     /// Verifies an incremental changes session returns executor work after importing changes.
     /// </summary>
     [Fact]
