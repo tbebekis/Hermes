@@ -166,4 +166,20 @@ public class SyncExecutorBaseTests
         Assert.Equal(SyncExecutionResultKind.FailedPermanent, Results[0].ResultKind);
         Assert.Contains("Remote item id is required.", Results[0].Message);
     }
+    /// <summary>
+    /// Verifies cancellation stops execution before dispatching intents.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsyncHonorsCancellationBeforeExecution()
+    {
+        TestSyncExecutor Executor = new();
+        using CancellationTokenSource Cancellation = new();
+        Cancellation.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => Executor.ExecuteAsync(
+            [Request(SyncPlanDecisionKind.UploadToRemote)],
+            Cancellation.Token));
+
+        Assert.Empty(Executor.Intents);
+    }
 }
