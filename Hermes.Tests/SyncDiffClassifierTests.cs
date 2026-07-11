@@ -339,6 +339,32 @@ public class SyncDiffClassifierTests
         Assert.Equal(SyncDiffKind.Conflict, Kind);
     }
     /// <summary>
+    /// Verifies local missing and remote permanent removal are classified as compatible endpoint removal.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsBothChangedCompatibleWhenLocalMissingAndRemoteRemoved()
+    {
+        SyncItemState RemoteState = State(Exists: false);
+        RemoteState.Removed = true;
+
+        SyncDiffKind Kind = Classify(State(), State(Exists: false), RemoteState);
+
+        Assert.Equal(SyncDiffKind.BothChangedCompatible, Kind);
+    }
+    /// <summary>
+    /// Verifies local missing and remote trash are classified as compatible endpoint removal.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsBothChangedCompatibleWhenLocalMissingAndRemoteTrashed()
+    {
+        SyncItemState RemoteState = State();
+        RemoteState.Trashed = true;
+
+        SyncDiffKind Kind = Classify(State(), State(Exists: false), RemoteState);
+
+        Assert.Equal(SyncDiffKind.BothChangedCompatible, Kind);
+    }
+    /// <summary>
     /// Verifies remote missing versus local content modification is classified as a conflict.
     /// </summary>
     [Fact]

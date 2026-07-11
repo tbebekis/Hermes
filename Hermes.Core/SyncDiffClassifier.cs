@@ -64,6 +64,14 @@ public class SyncDiffClassifier
             && !RemoteState.Removed
             && !RemoteState.Trashed;
     }
+    static bool IsCompatibleEndpointRemoval(SyncItemState BaseState, SyncItemState LocalState, SyncItemState RemoteState)
+    {
+        return BaseState != null
+            && BaseState.Exists
+            && IsMissing(LocalState)
+            && RemoteState != null
+            && (RemoteState.Removed || RemoteState.Trashed);
+    }
     static bool SameState(SyncItemState A, SyncItemState B)
     {
         if (A == null || B == null)
@@ -179,6 +187,9 @@ public class SyncDiffClassifier
 
         bool LocalChanged = HasChanged(Input.BaseState, LocalState);
         bool RemoteChanged = HasChanged(Input.BaseState, RemoteState);
+
+        if (IsCompatibleEndpointRemoval(Input.BaseState, LocalState, RemoteState))
+            return SyncDiffKind.BothChangedCompatible;
 
         if (RemoteState != null && RemoteState.Removed)
             return HasActiveChange(Input.BaseState, LocalState)

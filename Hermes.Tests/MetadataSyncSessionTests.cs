@@ -912,6 +912,45 @@ public class MetadataSyncSessionTests
         Assert.Equal(SyncPlanDecisionKind.Conflict, Decision.DecisionKind);
     }
     /// <summary>
+    /// Verifies local missing and remote permanent delete tombstone commit missing base without executor work.
+    /// </summary>
+    [Fact]
+    public void AdvanceMetadataOnlyCommitsBaseWhenLocalMissingAndRemoteRemoved()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 6, 26, 43, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        AddBaseSnapshot(Store, "item-1", "File1.txt", "hash-base", Time);
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            ExistsFlag = false,
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            RemoteItemId = "remote-1",
+            ExistsFlag = false,
+            Removed = true,
+            ObservedTime = Time,
+        });
+
+        MetadataSyncSessionResult Result = Session.AdvanceMetadataOnly("root-1", Time);
+
+        Assert.Single(Result.Decisions);
+        Assert.Equal(SyncDiffKind.BothChangedCompatible, Result.Decisions[0].DiffKind);
+        Assert.Equal(SyncPlanDecisionKind.CommitBase, Result.Decisions[0].DecisionKind);
+        Assert.Single(Result.CommittedBaseSnapshots);
+        Assert.Empty(Result.PendingExecutorDecisions);
+        Assert.Empty(Result.PendingExecutionRequests);
+        Assert.False(Store.GetBaseSnapshot("item-1").ExistsFlag);
+    }
+    /// <summary>
     /// Verifies matching local and remote rename observations can advance the base snapshot.
     /// </summary>
     [Fact]
