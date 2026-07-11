@@ -365,6 +365,16 @@ public class SyncDiffClassifierTests
         Assert.Equal(SyncDiffKind.BothChangedCompatible, Kind);
     }
     /// <summary>
+    /// Verifies local missing and remote missing without explicit provider removal remains local missing.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsLocalMissingWhenBothEndpointsMissingWithoutRemoteRemoval()
+    {
+        SyncDiffKind Kind = Classify(State(), State(Exists: false), State(Exists: false));
+
+        Assert.Equal(SyncDiffKind.LocalMissing, Kind);
+    }
+    /// <summary>
     /// Verifies remote missing versus local content modification is classified as a conflict.
     /// </summary>
     [Fact]
