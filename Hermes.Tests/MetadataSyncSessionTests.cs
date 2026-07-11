@@ -986,6 +986,41 @@ public class MetadataSyncSessionTests
         Assert.Equal("token-2", Store.GetRemoteCheckpoint("root-1").StartPageToken);
     }
     /// <summary>
+    /// Verifies remote tombstone and locally modified content stays a conflict in the remote changes flow.
+    /// </summary>
+    [Fact]
+    public void AdvanceWithRemoteChangesReturnsConflictWhenRemoteRemovedAndLocalModified()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 6, 26, 45, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        AddBaseSnapshot(Store, "item-1", "File1.txt", "hash-base", Time);
+        AddObservedItem(Store, "item-1", "remote-1", "File1.txt", "hash-base", Time);
+
+        MetadataSyncSessionResult Result = Session.AdvanceWithRemoteChanges(
+            "root-1",
+            [CreateLocalScanItem("File1.txt", "hash-local", Time)],
+            [new StorageChange("remote-1", true, new DateTimeOffset(Time), null)],
+            CreateCheckpoint("token-2", Time),
+            Time,
+            Time,
+            Time,
+            "scan-local-modified");
+
+        Assert.Single(Result.Decisions);
+        Assert.Equal(SyncDiffKind.Conflict, Result.Decisions[0].DiffKind);
+        Assert.Equal(SyncPlanDecisionKind.Conflict, Result.Decisions[0].DecisionKind);
+        Assert.Empty(Result.CommittedBaseSnapshots);
+        Assert.Single(Result.PendingExecutorDecisions);
+        Assert.Single(Result.PendingExecutionRequests);
+        Assert.Equal("hash-base", Store.GetBaseSnapshot("item-1").ContentHash);
+        Assert.Equal("token-2", Store.GetRemoteCheckpoint("root-1").StartPageToken);
+    }
+    /// <summary>
     /// Verifies matching local and remote rename observations can advance the base snapshot.
     /// </summary>
     [Fact]
