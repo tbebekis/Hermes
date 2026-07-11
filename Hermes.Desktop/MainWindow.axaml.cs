@@ -67,6 +67,7 @@ public partial class MainWindow : Window
     readonly ConflictsPage fConflictsPage;
     readonly HistoryPage fHistoryPage;
     readonly LogsPage fLogsPage;
+    readonly SettingsPage fSettingsPage;
     readonly LocalServiceProcessController fServiceProcessController;
 
     static Image CreateLogo(double Size)
@@ -236,6 +237,7 @@ public partial class MainWindow : Window
         fConnectionsPage.SetStatus(Status);
         fServicePage.SetStatus(Status);
         fFoldersPage.SetStatus(Status);
+        fSettingsPage.SetStatus(Status);
         IReadOnlyList<LocalRecentLog> RecentLogs = await fServiceClient.GetRecentLogsAsync();
         fActivityPage.SetLogs(RecentLogs);
         fConflictsPage.SetConflicts(await fServiceClient.GetOpenConflictsAsync());
@@ -317,6 +319,7 @@ public partial class MainWindow : Window
         fConflictsPage = new ConflictsPage();
         fHistoryPage = new HistoryPage();
         fLogsPage = new LogsPage();
+        fSettingsPage = new SettingsPage();
         fServicePage.RefreshRequested += ServicePage_RefreshRequested;
         fServicePage.StartRequested += ServicePage_StartRequested;
         fServicePage.StopRequested += ServicePage_StopRequested;
@@ -332,7 +335,7 @@ public partial class MainWindow : Window
             new("Conflicts", "Conflicts", "Review items that need attention.", fConflictsPage),
             new("History", "History", "Review completed synchronization runs.", fHistoryPage),
             new("Logs", "Logs", "Inspect service and desktop log output.", fLogsPage),
-            new("Settings", "Settings", "Configure Hermes desktop and synchronization behavior.", new SettingsPage()),
+            new("Settings", "Settings", "Configure Hermes desktop and synchronization behavior.", fSettingsPage),
             new("About", "About", "Application version, runtime, and license information.", new AboutPage()),
         };
 
