@@ -1636,6 +1636,41 @@ public class MetadataSyncSessionTests
         Assert.Equal("remote-folder", NestedRequest.LocalParentRemoteItemId);
     }
     /// <summary>
+    /// Verifies a full remote snapshot with duplicate siblings blocks planning.
+    /// </summary>
+    [Fact]
+    public void AdvanceWithRemoteSnapshotBlocksDuplicateRemoteSiblings()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 7, 44, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+
+        MetadataSyncSessionResult Result = Session.AdvanceWithRemoteSnapshot(
+            "root-1",
+            [],
+            [
+                CreateStorageItem("remote-1", "DuplicateName.txt", "hash-1", 1),
+                CreateStorageItem("remote-2", "DuplicateName.txt", "hash-2", 1),
+            ],
+            CreateCheckpoint("token-duplicate", Time),
+            Time,
+            Time,
+            Time,
+            "scan-duplicate");
+
+        Assert.Equal(2, Result.CreatedTrackedItems.Count);
+        Assert.Equal(2, Result.Decisions.Count);
+        Assert.All(Result.Decisions, Item => Assert.Equal(SyncDiffKind.NamespaceCollision, Item.DiffKind));
+        Assert.All(Result.Decisions, Item => Assert.Equal(SyncPlanDecisionKind.Blocked, Item.DecisionKind));
+        Assert.Empty(Result.CommittedBaseSnapshots);
+        Assert.Equal(2, Result.PendingExecutorDecisions.Count);
+        Assert.Equal(2, Result.PendingExecutionRequests.Count);
+        Assert.Equal("token-duplicate", Store.GetRemoteCheckpoint("root-1").StartPageToken);
+    }
+    /// <summary>
     /// Verifies an incremental changes session returns executor work after importing changes.
     /// </summary>
     [Fact]
