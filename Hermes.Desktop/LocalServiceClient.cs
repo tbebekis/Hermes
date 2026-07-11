@@ -13,6 +13,31 @@ public class LocalServiceClient
     readonly HttpClient fClient;
     readonly JsonSerializerOptions fJsonOptions;
 
+    // ● private
+
+    void ClearError()
+    {
+        LastErrorMessage = string.Empty;
+    }
+    void SetError(Exception Ex)
+    {
+        LastErrorMessage = Ex.GetType().Name + ": " + Ex.Message;
+    }
+    async Task<T> GetJsonAsync<T>(string Path)
+    {
+        ClearError();
+        using HttpResponseMessage Response = await fClient.GetAsync(Path);
+
+        if (!Response.IsSuccessStatusCode)
+        {
+            LastErrorMessage = ((int)Response.StatusCode).ToString() + " " + Response.ReasonPhrase + ": " + await Response.Content.ReadAsStringAsync();
+            return default;
+        }
+
+        using Stream Stream = await Response.Content.ReadAsStreamAsync();
+        return await JsonSerializer.DeserializeAsync<T>(Stream, fJsonOptions);
+    }
+
     // ● constructor
 
     /// <summary>
@@ -40,11 +65,11 @@ public class LocalServiceClient
     {
         try
         {
-            using Stream Stream = await fClient.GetStreamAsync("/status");
-            return await JsonSerializer.DeserializeAsync<LocalServiceStatus>(Stream, fJsonOptions);
+            return await GetJsonAsync<LocalServiceStatus>("/status");
         }
-        catch
+        catch (Exception Ex)
         {
+            SetError(Ex);
             return null;
         }
     }
@@ -55,12 +80,15 @@ public class LocalServiceClient
     {
         try
         {
-            using Stream Stream = await fClient.GetStreamAsync("/conflicts/open");
-            List<LocalOpenConflict> Result = await JsonSerializer.DeserializeAsync<List<LocalOpenConflict>>(Stream, fJsonOptions);
+            List<LocalOpenConflict> Result = await GetJsonAsync<List<LocalOpenConflict>>("/conflicts/open");
+            if (Result == null && !string.IsNullOrWhiteSpace(LastErrorMessage))
+                return null;
+
             return Result ?? [];
         }
-        catch
+        catch (Exception Ex)
         {
+            SetError(Ex);
             return null;
         }
     }
@@ -71,12 +99,15 @@ public class LocalServiceClient
     {
         try
         {
-            using Stream Stream = await fClient.GetStreamAsync("/logs/recent");
-            List<LocalRecentLog> Result = await JsonSerializer.DeserializeAsync<List<LocalRecentLog>>(Stream, fJsonOptions);
+            List<LocalRecentLog> Result = await GetJsonAsync<List<LocalRecentLog>>("/logs/recent");
+            if (Result == null && !string.IsNullOrWhiteSpace(LastErrorMessage))
+                return null;
+
             return Result ?? [];
         }
-        catch
+        catch (Exception Ex)
         {
+            SetError(Ex);
             return null;
         }
     }
@@ -87,6 +118,7 @@ public class LocalServiceClient
     {
         try
         {
+            ClearError();
             using HttpResponseMessage Response = await fClient.PostAsync("/control/stop", new StringContent(string.Empty));
             using Stream Stream = await Response.Content.ReadAsStreamAsync();
             LocalServiceControlResult Result = await JsonSerializer.DeserializeAsync<LocalServiceControlResult>(Stream, fJsonOptions);
@@ -98,7 +130,15 @@ public class LocalServiceClient
         }
         catch (Exception Ex)
         {
+            SetError(Ex);
             return LocalServiceControlResult.Failure(Ex.Message);
         }
     }
+
+    // ● properties
+
+    /// <summary>
+    /// Gets the latest HTTP API error message.
+    /// </summary>
+    public string LastErrorMessage { get; private set; } = string.Empty;
 }

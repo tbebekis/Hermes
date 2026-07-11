@@ -16,6 +16,7 @@ public class ServicePage : UserControl
     readonly TextBlock fIpcText;
     readonly TextBlock fVersionText;
     readonly TextBlock fCommandText;
+    readonly TextBox fMemoTextBox;
     readonly Button fRefreshButton;
     readonly Button fStartButton;
     readonly Button fStopButton;
@@ -94,6 +95,10 @@ public class ServicePage : UserControl
 
         return Value.Seconds.ToString() + "s";
     }
+    static string LogLine(string Message)
+    {
+        return DateTime.Now.ToString("HH:mm:ss") + "  " + Message;
+    }
     void RefreshButton_Click(object Sender, RoutedEventArgs Args)
     {
         RefreshRequested?.Invoke(this, EventArgs.Empty);
@@ -124,6 +129,13 @@ public class ServicePage : UserControl
         fIpcText = new TextBlock() { Text = "localhost HTTP API not connected" };
         fVersionText = new TextBlock() { Text = "-" };
         fCommandText = new TextBlock() { Text = "No service command has been requested.", Opacity = 0.72 };
+        fMemoTextBox = new TextBox()
+        {
+            Text = LogLine("Service page initialized."),
+            AcceptsReturn = true,
+            IsReadOnly = true,
+            MinHeight = 150,
+        };
         fRefreshButton = ActionButton("Refresh", true);
         fStartButton = ActionButton("Start", true);
         fStopButton = ActionButton("Stop", false);
@@ -151,7 +163,8 @@ public class ServicePage : UserControl
                         fRestartButton,
                     }
                 },
-                fCommandText
+                fCommandText,
+                fMemoTextBox
             }
         };
     }
@@ -194,6 +207,24 @@ public class ServicePage : UserControl
             return;
 
         fCommandText.Text = Result.Message;
+        AppendMemo((Result.Succeeded ? "OK: " : "ERROR: ") + Result.Message);
+    }
+    /// <summary>
+    /// Appends a service diagnostic message.
+    /// </summary>
+    public void AppendMemo(string Message)
+    {
+        if (string.IsNullOrWhiteSpace(Message))
+            return;
+
+        string Text = LogLine(Message);
+
+        if (string.IsNullOrWhiteSpace(fMemoTextBox.Text))
+            fMemoTextBox.Text = Text;
+        else
+            fMemoTextBox.Text += Environment.NewLine + Text;
+
+        fMemoTextBox.CaretIndex = fMemoTextBox.Text.Length;
     }
 
     // ● events

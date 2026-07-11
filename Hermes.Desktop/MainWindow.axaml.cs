@@ -231,6 +231,7 @@ public partial class MainWindow : Window
     }
     async Task RefreshServiceStatusAsync()
     {
+        fServicePage.AppendMemo("Refreshing service status.");
         LocalServiceStatus Status = await fServiceClient.GetStatusAsync();
         fDashboardPage.SetStatus(Status);
         fSynchronizationPage.SetStatus(Status);
@@ -239,8 +240,13 @@ public partial class MainWindow : Window
         fFoldersPage.SetStatus(Status);
         fSettingsPage.SetStatus(Status);
         IReadOnlyList<LocalRecentLog> RecentLogs = await fServiceClient.GetRecentLogsAsync();
+        if (RecentLogs == null && !string.IsNullOrWhiteSpace(fServiceClient.LastErrorMessage))
+            fServicePage.AppendMemo("Logs error: " + fServiceClient.LastErrorMessage);
         fActivityPage.SetLogs(RecentLogs);
-        fConflictsPage.SetConflicts(await fServiceClient.GetOpenConflictsAsync());
+        IReadOnlyList<LocalOpenConflict> OpenConflicts = await fServiceClient.GetOpenConflictsAsync();
+        if (OpenConflicts == null && !string.IsNullOrWhiteSpace(fServiceClient.LastErrorMessage))
+            fServicePage.AppendMemo("Conflicts error: " + fServiceClient.LastErrorMessage);
+        fConflictsPage.SetConflicts(OpenConflicts);
         fLogsPage.SetLogs(RecentLogs);
 
         if (Status == null)
@@ -248,12 +254,16 @@ public partial class MainWindow : Window
             fServiceStatusText.Text = "Service: Stopped";
             fSyncStatusText.Text = "Sync: Unknown";
             fConnectionStatusText.Text = "HTTP API: Disconnected";
+
+            if (!string.IsNullOrWhiteSpace(fServiceClient.LastErrorMessage))
+                fServicePage.AppendMemo("Status error: " + fServiceClient.LastErrorMessage);
         }
         else
         {
             fServiceStatusText.Text = "Service: " + Status.ServiceStatus;
             fSyncStatusText.Text = "Sync: " + Status.SynchronizationStatus;
             fConnectionStatusText.Text = "HTTP API: " + Status.IpcStatus;
+            fServicePage.AppendMemo("Service is " + Status.ServiceStatus + ". PID " + Status.ProcessId.ToString() + ".");
         }
 
         fUpdatedTimeText.Text = "Updated " + DateTime.Now.ToString("HH:mm:ss");
@@ -273,18 +283,21 @@ public partial class MainWindow : Window
     }
     async void ServicePage_StartRequested(object Sender, EventArgs Args)
     {
+        fServicePage.AppendMemo("Start requested.");
         fServicePage.SetCommandResult(fServiceProcessController.Start());
         await Task.Delay(750);
         await RefreshServiceStatusAsync();
     }
     async void ServicePage_StopRequested(object Sender, EventArgs Args)
     {
+        fServicePage.AppendMemo("Stop requested.");
         fServicePage.SetCommandResult(await fServiceClient.StopAsync());
         await Task.Delay(750);
         await RefreshServiceStatusAsync();
     }
     async void ServicePage_RestartRequested(object Sender, EventArgs Args)
     {
+        fServicePage.AppendMemo("Restart requested.");
         fServicePage.SetCommandResult(await fServiceClient.StopAsync());
         await Task.Delay(1200);
         fServicePage.SetCommandResult(fServiceProcessController.Start());

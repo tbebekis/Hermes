@@ -38,6 +38,19 @@ public class AboutPage : UserControl
         AssemblyInformationalVersionAttribute Attribute = typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
         return Attribute?.InformationalVersion ?? AssemblyVersion();
     }
+    static Image CreateLogo(double Size)
+    {
+        Uri Uri = new("avares://Hermes.Desktop/Resources/Images/Hermes_Coin.jpg");
+        using Stream Stream = AssetLoader.Open(Uri);
+
+        return new Image()
+        {
+            Source = new Bitmap(Stream),
+            Width = Size,
+            Height = Size,
+            Stretch = Stretch.UniformToFill,
+        };
+    }
     static Border CreateInfoPanel()
     {
         return new Border()
@@ -82,7 +95,22 @@ public class AboutPage : UserControl
             Spacing = 8,
             Children =
             {
-                new TextBlock() { Text = "Hermes", FontSize = 26, FontWeight = FontWeight.SemiBold },
+                new StackPanel()
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 12,
+                    Children =
+                    {
+                        CreateLogo(56),
+                        new TextBlock()
+                        {
+                            Text = "Hermes",
+                            FontSize = 26,
+                            FontWeight = FontWeight.SemiBold,
+                            VerticalAlignment = VerticalAlignment.Center,
+                        },
+                    }
+                },
                 new TextBlock() { Text = "Linux Google Drive synchronization service control center.", Opacity = 0.72 },
                 CreateInfoPanel(),
             }
