@@ -76,4 +76,17 @@ public class StorageErrorTests
         Assert.Equal("Invalid checkpoint.", Result.ErrorText);
         Assert.Same(Error, Result.Error);
     }
+    /// <summary>
+    /// Verifies successful storage results expose a value and no structured error.
+    /// </summary>
+    [Fact]
+    public void StorageResultStoresSuccessValue()
+    {
+        StorageResult<string> Result = StorageResult<string>.Success("value");
+
+        Assert.True(Result.Succeeded);
+        Assert.Equal("value", Result.Value);
+        Assert.Equal(string.Empty, Result.ErrorText);
+        Assert.Null(Result.Error);
+    }
 }
