@@ -13,10 +13,13 @@ public class SyncActivityStoreTests
     static MetadataSyncRunResult RunResult()
     {
         MetadataSyncSessionResult SessionResult = new();
-        SessionResult.PendingExecutionRequests.Add(new SyncExecutionRequest()
+        SyncExecutionRequest Request = new()
         {
             Decision = new SyncPlanDecision("item-1", SyncDiffKind.LocalChanged, SyncPlanDecisionKind.UploadToRemote),
-        });
+        };
+        SessionResult.PendingExecutionRequests.Add(Request);
+        SyncExecutionApplyResult ApplyResult = new();
+        ApplyResult.CommittedResults.Add(SyncExecutionResultFactory.Completed(Request));
 
         return new MetadataSyncRunResult()
         {
@@ -24,7 +27,7 @@ public class SyncActivityStoreTests
             LocalObservedItemCount = 1,
             RemoteObservedChangeCount = 0,
             SessionResult = SessionResult,
-            ExecutionApplyResult = new SyncExecutionApplyResult(),
+            ExecutionApplyResult = ApplyResult,
         };
     }
 
@@ -41,11 +44,13 @@ public class SyncActivityStoreTests
         Store.AddSuccess("default", RunResult());
 
         SyncActivityRecord Record = Assert.Single(Store.GetRecent());
-        Assert.Equal("Warning", Record.Level);
+        Assert.Equal("Information", Record.Level);
         Assert.Equal("default", Record.SyncRootId);
         Assert.Equal("Sync pass completed", Record.Title);
         Assert.Contains("Pending executions: 1", Record.Details);
         Assert.Contains("Pending summary: UploadToRemote=1", Record.Details);
+        Assert.Contains("Committed executions: 1", Record.Details);
+        Assert.Contains("Uncommitted executions: 0", Record.Details);
     }
     /// <summary>
     /// Verifies activity response maps records.

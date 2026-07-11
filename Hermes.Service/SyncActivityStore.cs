@@ -25,6 +25,16 @@ public class SyncActivityStore
                 fRecords.RemoveAt(fRecords.Count - 1);
         }
     }
+    static string ResolveLevel(MetadataSyncRunResult Result)
+    {
+        if (Result.UncommittedExecutionCount != 0)
+            return "Error";
+
+        if (Result.OpenConflictCount != 0)
+            return "Warning";
+
+        return "Information";
+    }
 
     // ● public
 
@@ -38,7 +48,7 @@ public class SyncActivityStore
         Add(new SyncActivityRecord()
         {
             TimestampUtc = DateTime.UtcNow,
-            Level = Result.PendingExecutionCount == 0 && Result.OpenConflictCount == 0 ? "Information" : "Warning",
+            Level = ResolveLevel(Result),
             SyncRootId = SyncRootId ?? string.Empty,
             Title = "Sync pass completed",
             Details = "Kind: " + Result.Kind
@@ -50,6 +60,8 @@ public class SyncActivityStore
                 + ". Open conflicts: " + Result.OpenConflictCount.ToString()
                 + ". Pending summary: " + Result.PendingExecutionSummary
                 + ". Pending diffs: " + Result.PendingDiffSummary
+                + ". Committed executions: " + Result.CommittedExecutionCount.ToString()
+                + ". Uncommitted executions: " + Result.UncommittedExecutionCount.ToString()
                 + ". Uncommitted summary: " + Result.UncommittedExecutionSummary
                 + ". Uncommitted messages: " + Result.UncommittedExecutionMessages + ".",
         });
