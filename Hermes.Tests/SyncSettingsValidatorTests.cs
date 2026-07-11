@@ -68,4 +68,17 @@ public class SyncSettingsValidatorTests
         Assert.True(Result.Failed);
         Assert.Contains("PollingIntervalSeconds must be greater than zero.", Result.Failures);
     }
+    /// <summary>
+    /// Verifies null settings fail validation.
+    /// </summary>
+    [Fact]
+    public void ValidateRejectsNullSettings()
+    {
+        SyncSettingsValidator Validator = new();
+
+        ValidateOptionsResult Result = Validator.Validate(string.Empty, null);
+
+        Assert.True(Result.Failed);
+        Assert.Contains("Sync settings are required.", Result.Failures);
+    }
 }
