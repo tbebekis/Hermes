@@ -165,6 +165,89 @@ public class SyncDiffClassifierTests
         Assert.Equal(SyncDiffKind.Conflict, Kind);
     }
     /// <summary>
+    /// Verifies differing local and remote renames are classified as a conflict.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsConflictWhenLocalAndRemoteRenameDiffer()
+    {
+        SyncItemState LocalState = State(Name: "LocalName.txt");
+        LocalState.LocalRelativePath = "LocalName.txt";
+        SyncItemState RemoteState = State(Name: "RemoteName.txt");
+        RemoteState.LocalRelativePath = "Report.txt";
+
+        SyncDiffKind Kind = Classify(State(), LocalState, RemoteState);
+
+        Assert.Equal(SyncDiffKind.Conflict, Kind);
+    }
+    /// <summary>
+    /// Verifies differing local and remote moves are classified as a conflict.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsConflictWhenLocalAndRemoteMoveDiffer()
+    {
+        SyncItemState LocalState = State();
+        LocalState.LocalRelativePath = "LocalFolder/Report.txt";
+        SyncItemState RemoteState = State();
+        RemoteState.RemoteParentId = "remote-folder";
+
+        SyncDiffKind Kind = Classify(State(), LocalState, RemoteState);
+
+        Assert.Equal(SyncDiffKind.Conflict, Kind);
+    }
+    /// <summary>
+    /// Verifies local delete versus remote content modification is classified as a conflict.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsConflictWhenLocalMissingAndRemoteModified()
+    {
+        SyncDiffKind Kind = Classify(State(), State(Exists: false), State(Hash: "hash-remote"));
+
+        Assert.Equal(SyncDiffKind.Conflict, Kind);
+    }
+    /// <summary>
+    /// Verifies remote missing versus local content modification is classified as a conflict.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsConflictWhenRemoteMissingAndLocalModified()
+    {
+        SyncDiffKind Kind = Classify(State(), State(Hash: "hash-local"), State(Exists: false));
+
+        Assert.Equal(SyncDiffKind.Conflict, Kind);
+    }
+    /// <summary>
+    /// Verifies remote permanent delete versus local content modification is classified as a conflict.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsConflictWhenRemoteRemovedAndLocalModified()
+    {
+        SyncItemState RemoteState = State(Exists: false);
+        RemoteState.Removed = true;
+
+        SyncDiffKind Kind = Classify(State(), State(Hash: "hash-local"), RemoteState);
+
+        Assert.Equal(SyncDiffKind.Conflict, Kind);
+    }
+    /// <summary>
+    /// Verifies remote folder delete tombstone versus modified descendant state is classified as a conflict.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsConflictWhenRemoteDescendantRemovedAndLocalDescendantModified()
+    {
+        SyncItemState BaseState = State(Name: "Nested.txt");
+        BaseState.LocalRelativePath = "Folder/Nested.txt";
+        BaseState.RemoteParentId = "remote-folder";
+        SyncItemState LocalState = State(Name: "Nested.txt", Hash: "hash-local");
+        LocalState.LocalRelativePath = "Folder/Nested.txt";
+        LocalState.RemoteParentId = "remote-folder";
+        SyncItemState RemoteState = State(Name: "Nested.txt", Exists: false);
+        RemoteState.RemoteParentId = "remote-folder";
+        RemoteState.Removed = true;
+
+        SyncDiffKind Kind = Classify(BaseState, LocalState, RemoteState);
+
+        Assert.Equal(SyncDiffKind.Conflict, Kind);
+    }
+    /// <summary>
     /// Verifies local missing classification.
     /// </summary>
     [Fact]

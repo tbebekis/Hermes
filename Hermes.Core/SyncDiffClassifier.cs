@@ -78,6 +78,10 @@ public class SyncDiffClassifier
 
         return !SameState(BaseState, ObservedState);
     }
+    static bool HasActiveChange(SyncItemState BaseState, SyncItemState ObservedState)
+    {
+        return !IsMissing(ObservedState) && HasChanged(BaseState, ObservedState);
+    }
     static bool HasOnlyRemoteNamespaceChanged(SyncItemState BaseState, SyncItemState LocalState, SyncItemState RemoteState)
     {
         return BaseState != null
@@ -137,14 +141,21 @@ public class SyncDiffClassifier
         if (IsRemoteRestore(Input.BaseState, LocalState, RemoteState))
             return SyncDiffKind.RemoteChanged;
 
-        if (RemoteState != null && RemoteState.Removed)
-            return SyncDiffKind.RemoteRemoved;
-
-        if (RemoteState != null && RemoteState.Exists && RemoteState.Trashed)
-            return SyncDiffKind.RemoteTrashed;
-
         if (Input.BaseState == null)
             return ClassifyWithoutBase(LocalState, RemoteState);
+
+        bool LocalChanged = HasChanged(Input.BaseState, LocalState);
+        bool RemoteChanged = HasChanged(Input.BaseState, RemoteState);
+
+        if (RemoteState != null && RemoteState.Removed)
+            return HasActiveChange(Input.BaseState, LocalState)
+                ? SyncDiffKind.Conflict
+                : SyncDiffKind.RemoteRemoved;
+
+        if (RemoteState != null && RemoteState.Exists && RemoteState.Trashed)
+            return HasActiveChange(Input.BaseState, LocalState)
+                ? SyncDiffKind.Conflict
+                : SyncDiffKind.RemoteTrashed;
 
         if (HasOnlyRemoteNamespaceChanged(Input.BaseState, LocalState, RemoteState))
             return SyncDiffKind.RemoteNamespaceChanged;
@@ -156,13 +167,17 @@ public class SyncDiffClassifier
         bool RemoteMissing = IsMissing(RemoteState);
 
         if (LocalMissing && !RemoteMissing)
-            return SyncDiffKind.LocalMissing;
+            return RemoteChanged
+                ? SyncDiffKind.Conflict
+                : SyncDiffKind.LocalMissing;
 
         if (RemoteMissing && !LocalMissing)
-            return SyncDiffKind.RemoteMissing;
+            return LocalChanged
+                ? SyncDiffKind.Conflict
+                : SyncDiffKind.RemoteMissing;
 
-        bool LocalChanged = HasChanged(Input.BaseState, LocalState);
-        bool RemoteChanged = HasChanged(Input.BaseState, RemoteState);
+        if (LocalMissing)
+            return SyncDiffKind.LocalMissing;
 
         if (!LocalChanged && !RemoteChanged)
             return SyncDiffKind.NoChange;
