@@ -63,7 +63,9 @@ public partial class MainWindow : Window
     readonly ConnectionsPage fConnectionsPage;
     readonly ServicePage fServicePage;
     readonly FoldersPage fFoldersPage;
+    readonly ActivityPage fActivityPage;
     readonly ConflictsPage fConflictsPage;
+    readonly HistoryPage fHistoryPage;
     readonly LogsPage fLogsPage;
 
     static Image CreateLogo(double Size)
@@ -233,8 +235,10 @@ public partial class MainWindow : Window
         fConnectionsPage.SetStatus(Status);
         fServicePage.SetStatus(Status);
         fFoldersPage.SetStatus(Status);
+        IReadOnlyList<LocalRecentLog> RecentLogs = await fServiceClient.GetRecentLogsAsync();
+        fActivityPage.SetLogs(RecentLogs);
         fConflictsPage.SetConflicts(await fServiceClient.GetOpenConflictsAsync());
-        fLogsPage.SetLogs(await fServiceClient.GetRecentLogsAsync());
+        fLogsPage.SetLogs(RecentLogs);
 
         if (Status == null)
         {
@@ -287,7 +291,9 @@ public partial class MainWindow : Window
         fConnectionsPage = new ConnectionsPage();
         fServicePage = new ServicePage();
         fFoldersPage = new FoldersPage();
+        fActivityPage = new ActivityPage();
         fConflictsPage = new ConflictsPage();
+        fHistoryPage = new HistoryPage();
         fLogsPage = new LogsPage();
         fServicePage.RefreshRequested += ServicePage_RefreshRequested;
         fPages = new List<PageDescriptor>()
@@ -297,7 +303,9 @@ public partial class MainWindow : Window
             new("Connections", "Connections", "Inspect configured storage provider connectivity.", fConnectionsPage),
             new("Service", "Service", "Manage the Hermes background service.", fServicePage),
             new("Folders", "Folders", "Manage synchronization roots.", fFoldersPage),
+            new("Activity", "Activity", "Watch recent service activity.", fActivityPage),
             new("Conflicts", "Conflicts", "Review items that need attention.", fConflictsPage),
+            new("History", "History", "Review completed synchronization runs.", fHistoryPage),
             new("Logs", "Logs", "Inspect service and desktop log output.", fLogsPage),
             new("Settings", "Settings", "Configure Hermes desktop and synchronization behavior.", new SettingsPage()),
             new("About", "About", "Application version, runtime, and license information.", new AboutPage()),
