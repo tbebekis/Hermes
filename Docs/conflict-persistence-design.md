@@ -39,6 +39,8 @@ Initial states:
 
 Open conflicts are active blockers. Resolved conflicts are retained only long enough for later cleanup policy.
 
+Resolved conflict rows can be deleted by cutoff time after they are no longer needed for diagnostics.
+
 ## Table Shape
 
 Table name:
@@ -87,6 +89,8 @@ Durable reads should be separate:
 - eventually provide conflict details to desktop UI.
 
 `MetadataSyncRunResult.OpenConflictCount` exposes the durable open conflict count after a completed run.
+
+`SqlMetadataStore.DeleteResolvedConflictsBefore()` deletes resolved rows older than a cutoff without touching open conflicts.
 
 ## Transaction Boundary
 
