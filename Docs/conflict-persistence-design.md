@@ -83,6 +83,7 @@ Durable reads should be separate:
 
 - list open conflicts for a sync root.
 - count open conflicts for service status.
+- list open conflict details with tracked item, base snapshot, local observation, and remote observation context.
 - eventually provide conflict details to desktop UI.
 
 `MetadataSyncRunResult.OpenConflictCount` exposes the durable open conflict count after a completed run.
