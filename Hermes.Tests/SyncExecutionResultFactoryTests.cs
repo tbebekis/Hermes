@@ -30,6 +30,7 @@ public class SyncExecutionResultFactoryTests
             string.Empty,
             null);
     }
+    static StorageItem RemoteItem() => new("remote-1", "remote-root", "File.txt", "/File.txt", StorageItemKind.File);
 
     // ● public
 
@@ -45,6 +46,51 @@ public class SyncExecutionResultFactoryTests
 
         Assert.Same(ExecutionRequest, Result.Request);
         Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Result.ResultKind);
+    }
+    /// <summary>
+    /// Verifies completed execution result creation with a local relative path.
+    /// </summary>
+    [Fact]
+    public void CompletedStoresLocalRelativePath()
+    {
+        SyncExecutionRequest ExecutionRequest = Request();
+
+        SyncExecutionResult Result = SyncExecutionResultFactory.Completed(ExecutionRequest, "Folder/File.txt");
+
+        Assert.Same(ExecutionRequest, Result.Request);
+        Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Result.ResultKind);
+        Assert.Equal("Folder/File.txt", Result.LocalRelativePath);
+    }
+    /// <summary>
+    /// Verifies completed execution result creation with a remote item.
+    /// </summary>
+    [Fact]
+    public void CompletedStoresRemoteItem()
+    {
+        SyncExecutionRequest ExecutionRequest = Request();
+        StorageItem Item = RemoteItem();
+
+        SyncExecutionResult Result = SyncExecutionResultFactory.Completed(ExecutionRequest, Item);
+
+        Assert.Same(ExecutionRequest, Result.Request);
+        Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Result.ResultKind);
+        Assert.Same(Item, Result.RemoteItem);
+    }
+    /// <summary>
+    /// Verifies completed execution result creation with a remote item and local relative path.
+    /// </summary>
+    [Fact]
+    public void CompletedStoresRemoteItemAndLocalRelativePath()
+    {
+        SyncExecutionRequest ExecutionRequest = Request();
+        StorageItem Item = RemoteItem();
+
+        SyncExecutionResult Result = SyncExecutionResultFactory.Completed(ExecutionRequest, Item, "Folder/File.txt");
+
+        Assert.Same(ExecutionRequest, Result.Request);
+        Assert.Equal(SyncExecutionResultKind.CompletedAndVerified, Result.ResultKind);
+        Assert.Same(Item, Result.RemoteItem);
+        Assert.Equal("Folder/File.txt", Result.LocalRelativePath);
     }
 
     /// <summary>
@@ -86,6 +132,26 @@ public class SyncExecutionResultFactoryTests
     }
 
     /// <summary>
+    /// Verifies rate limit storage errors create retryable execution results.
+    /// </summary>
+    [Fact]
+    public void FromStorageErrorMapsRateLimitedAsRetryable()
+    {
+        SyncExecutionResult Result = SyncExecutionResultFactory.FromStorageError(Request(), Error(StorageErrorKind.RateLimited));
+
+        Assert.Equal(SyncExecutionResultKind.FailedRetryable, Result.ResultKind);
+    }
+    /// <summary>
+    /// Verifies temporary storage errors create retryable execution results.
+    /// </summary>
+    [Fact]
+    public void FromStorageErrorMapsTemporarilyUnavailableAsRetryable()
+    {
+        SyncExecutionResult Result = SyncExecutionResultFactory.FromStorageError(Request(), Error(StorageErrorKind.TemporarilyUnavailable));
+
+        Assert.Equal(SyncExecutionResultKind.FailedRetryable, Result.ResultKind);
+    }
+    /// <summary>
     /// Verifies permission errors create blocked execution results.
     /// </summary>
     [Fact]
@@ -96,6 +162,26 @@ public class SyncExecutionResultFactoryTests
         Assert.Equal(SyncExecutionResultKind.Blocked, Result.ResultKind);
     }
 
+    /// <summary>
+    /// Verifies invalid checkpoint storage errors create blocked execution results.
+    /// </summary>
+    [Fact]
+    public void FromStorageErrorMapsCheckpointInvalidAsBlocked()
+    {
+        SyncExecutionResult Result = SyncExecutionResultFactory.FromStorageError(Request(), Error(StorageErrorKind.CheckpointInvalid));
+
+        Assert.Equal(SyncExecutionResultKind.Blocked, Result.ResultKind);
+    }
+    /// <summary>
+    /// Verifies not found storage errors create permanent failure execution results.
+    /// </summary>
+    [Fact]
+    public void FromStorageErrorMapsNotFoundAsPermanent()
+    {
+        SyncExecutionResult Result = SyncExecutionResultFactory.FromStorageError(Request(), Error(StorageErrorKind.NotFound));
+
+        Assert.Equal(SyncExecutionResultKind.FailedPermanent, Result.ResultKind);
+    }
     /// <summary>
     /// Verifies invalid requests create permanent failure execution results.
     /// </summary>
