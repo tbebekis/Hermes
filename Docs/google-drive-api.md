@@ -1284,9 +1284,9 @@ Observed result:
 
 Sync implication:
 
-- Invalid or expired page tokens need provider-neutral handling.
-- The Google provider should eventually map this case to a checkpoint-invalid error.
-- Recovery will likely require a full remote rescan and a fresh start page token.
+- Invalid or expired page tokens use provider-neutral handling.
+- The Google provider maps this case to `StorageErrorKind.CheckpointInvalid`.
+- Recovery clears the stored token, fails the current pass visibly, then bootstraps with a full remote snapshot and a fresh start page token on the next pass.
 - Hermes must not silently replace a bad checkpoint without deciding how to reconcile missed changes.
 
 ## Sync-Relevant Conclusions
