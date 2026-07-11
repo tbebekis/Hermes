@@ -248,6 +248,10 @@ public partial class MainWindow : Window
     {
         await RefreshServiceStatusAsync();
     }
+    async void ServicePage_RefreshRequested(object Sender, EventArgs Args)
+    {
+        await RefreshServiceStatusAsync();
+    }
 
     // ● constructor
 
@@ -267,6 +271,7 @@ public partial class MainWindow : Window
         fUpdatedTimeText = CreateStatusText("Updated -");
         fServiceClient = new LocalServiceClient();
         fServicePage = new ServicePage();
+        fServicePage.RefreshRequested += ServicePage_RefreshRequested;
         fPages = new List<PageDescriptor>()
         {
             new("Dashboard", "Dashboard", "Overall service and synchronization status.", new DashboardPage()),

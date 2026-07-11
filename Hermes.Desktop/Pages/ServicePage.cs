@@ -15,6 +15,7 @@ public class ServicePage : UserControl
     readonly TextBlock fUptimeText;
     readonly TextBlock fIpcText;
     readonly TextBlock fVersionText;
+    readonly Button fRefreshButton;
 
     // ● private
 
@@ -61,14 +62,19 @@ public class ServicePage : UserControl
         Grid.SetColumn(TextBlock, Column);
         return TextBlock;
     }
-    static Button ActionButton(string Text)
+    static Button ActionButton(string Text, bool IsEnabled)
     {
         return new Button()
         {
             Content = Text,
             MinWidth = 96,
+            IsEnabled = IsEnabled,
             HorizontalContentAlignment = HorizontalAlignment.Center,
         };
+    }
+    void RefreshButton_Click(object Sender, RoutedEventArgs Args)
+    {
+        RefreshRequested?.Invoke(this, EventArgs.Empty);
     }
 
     // ● constructor
@@ -83,6 +89,8 @@ public class ServicePage : UserControl
         fUptimeText = new TextBlock() { Text = "-" };
         fIpcText = new TextBlock() { Text = "localhost HTTP API not connected" };
         fVersionText = new TextBlock() { Text = "-" };
+        fRefreshButton = ActionButton("Refresh", true);
+        fRefreshButton.Click += RefreshButton_Click;
 
         Content = new StackPanel()
         {
@@ -96,9 +104,10 @@ public class ServicePage : UserControl
                     Spacing = 8,
                     Children =
                     {
-                        ActionButton("Start"),
-                        ActionButton("Stop"),
-                        ActionButton("Restart"),
+                        fRefreshButton,
+                        ActionButton("Start", false),
+                        ActionButton("Stop", false),
+                        ActionButton("Restart", false),
                     }
                 },
                 new TextBlock()
@@ -133,4 +142,11 @@ public class ServicePage : UserControl
         fIpcText.Text = Status.IpcStatus;
         fVersionText.Text = Status.Version;
     }
+
+    // ● events
+
+    /// <summary>
+    /// Occurs when the user requests a service status refresh.
+    /// </summary>
+    public event EventHandler RefreshRequested;
 }
