@@ -821,7 +821,14 @@ where Id = :Id";
     /// </summary>
     public int CountOpenConflicts(string SyncRootId)
     {
-        return GetOpenConflicts(SyncRootId).Count;
+        return fStore.IntegerResult(
+            "select count(*) from SYNC_CONFLICT where SyncRootId = :SyncRootId and State = :State",
+            0,
+            new Dictionary<string, object>()
+            {
+                ["SyncRootId"] = SyncRootId,
+                ["State"] = SyncConflictState.Open.ToString(),
+            });
     }
 
     // ● private types
