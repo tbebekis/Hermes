@@ -13,6 +13,14 @@ public class SyncDiffClassifier
     static bool IsMissing(SyncItemState State) => State == null || !State.Exists;
     static bool IsCommittedMissing(SyncItemState State) => State != null && !State.Exists;
     static bool SameText(string A, string B) => string.Equals(A ?? string.Empty, B ?? string.Empty, StringComparison.Ordinal);
+    static string ParentLocalPath(string LocalRelativePath)
+    {
+        if (string.IsNullOrWhiteSpace(LocalRelativePath))
+            return string.Empty;
+
+        int Index = LocalRelativePath.LastIndexOf('/');
+        return Index < 0 ? string.Empty : LocalRelativePath[..Index];
+    }
     static bool SameContent(SyncItemState A, SyncItemState B)
     {
         if (A == null || B == null)
@@ -110,6 +118,7 @@ public class SyncDiffClassifier
             && SameContent(BaseState, RemoteState)
             && SameText(LocalState.Name, RemoteState.Name)
             && SameText(BaseState.RemoteParentId, RemoteState.RemoteParentId)
+            && SameText(ParentLocalPath(BaseState.LocalRelativePath), ParentLocalPath(LocalState.LocalRelativePath))
             && !SameText(BaseState.Name, LocalState.Name)
             && !SameText(BaseState.Name, RemoteState.Name);
     }

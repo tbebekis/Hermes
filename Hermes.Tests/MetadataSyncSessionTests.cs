@@ -1116,6 +1116,53 @@ public class MetadataSyncSessionTests
         Assert.Equal(SyncPlanDecisionKind.CommitBase, Decision.DecisionKind);
     }
     /// <summary>
+    /// Verifies local rename plus move and remote rename-only to the same name becomes a conflict decision.
+    /// </summary>
+    [Fact]
+    public void CreatePlanDecisionsReturnsConflictWhenLocalMovesButRemoteOnlyRenamesToSameName()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 6, 26, 58, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        AddBaseSnapshot(Store, "item-1", "File1.txt", "hash-base", Time);
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            ExistsFlag = true,
+            RelativePath = "Target/Renamed.txt",
+            Name = "Renamed.txt",
+            ParentRelativePath = "Target",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-base",
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            RemoteItemId = "remote-1",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "Renamed.txt",
+            RemoteParentId = "remote-root",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-base",
+            ProviderVersion = 2,
+            Trashed = false,
+            ObservedTime = Time,
+        });
+
+        SyncPlanDecision Decision = Session.CreatePlanDecisions("root-1").Single();
+
+        Assert.Equal(SyncDiffKind.Conflict, Decision.DiffKind);
+        Assert.Equal(SyncPlanDecisionKind.Conflict, Decision.DecisionKind);
+    }
+    /// <summary>
     /// Verifies metadata sync session creates planner inputs from tracked item diffs.
     /// </summary>
     [Fact]

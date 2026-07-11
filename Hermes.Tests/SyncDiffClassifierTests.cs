@@ -183,6 +183,21 @@ public class SyncDiffClassifierTests
         Assert.Equal(SyncDiffKind.Conflict, Kind);
     }
     /// <summary>
+    /// Verifies local rename plus move and remote rename-only to the same name are classified as a conflict.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsConflictWhenLocalMovesButRemoteOnlyRenamesToSameName()
+    {
+        SyncItemState LocalState = State(Name: "Renamed.txt");
+        LocalState.LocalRelativePath = "Target/Renamed.txt";
+        SyncItemState RemoteState = State(Name: "Renamed.txt");
+        RemoteState.LocalRelativePath = "Report.txt";
+
+        SyncDiffKind Kind = Classify(State(), LocalState, RemoteState);
+
+        Assert.Equal(SyncDiffKind.Conflict, Kind);
+    }
+    /// <summary>
     /// Verifies conflicting two-sided change classification.
     /// </summary>
     [Fact]
