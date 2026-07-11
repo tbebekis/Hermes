@@ -321,7 +321,9 @@ Pending operation persistence will matter for crash recovery and retry behavior.
 
 ## Conflicts
 
-Conflicts should be represented explicitly, but the first metadata store increment does not need full conflict tables.
+Conflicts are represented explicitly by the durable `SYNC_CONFLICT` table added after the first metadata store increment.
+
+The table stores active blockers and later resolved rows. It is not an operation queue and it does not model the user resolution workflow.
 
 Expected conflict classes:
 
@@ -356,7 +358,7 @@ Initial v1 collision policy:
 - Do not overwrite local files.
 - Do not silently rename remote items.
 - Do not automatically invent disambiguated local names as the default behavior.
-- Create an explicit conflict.
+- Create a durable open conflict.
 - Pause operations affecting the colliding namespace.
 - Require user resolution.
 
