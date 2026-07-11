@@ -101,6 +101,18 @@ public class SyncDiffClassifier
             && SameContent(BaseState, LocalState)
             && !SameLocalNamespace(BaseState, LocalState);
     }
+    static bool HasCompatibleRename(SyncItemState BaseState, SyncItemState LocalState, SyncItemState RemoteState)
+    {
+        return BaseState != null
+            && !IsMissing(LocalState)
+            && !IsMissing(RemoteState)
+            && SameContent(BaseState, LocalState)
+            && SameContent(BaseState, RemoteState)
+            && SameText(LocalState.Name, RemoteState.Name)
+            && SameText(BaseState.RemoteParentId, RemoteState.RemoteParentId)
+            && !SameText(BaseState.Name, LocalState.Name)
+            && !SameText(BaseState.Name, RemoteState.Name);
+    }
     static SyncDiffKind ClassifyWithoutBase(SyncItemState LocalState, SyncItemState RemoteState)
     {
         bool LocalMissing = IsMissing(LocalState);
@@ -156,6 +168,9 @@ public class SyncDiffClassifier
             return HasActiveChange(Input.BaseState, LocalState)
                 ? SyncDiffKind.Conflict
                 : SyncDiffKind.RemoteTrashed;
+
+        if (HasCompatibleRename(Input.BaseState, LocalState, RemoteState))
+            return SyncDiffKind.BothChangedCompatible;
 
         if (HasOnlyRemoteNamespaceChanged(Input.BaseState, LocalState, RemoteState))
             return SyncDiffKind.RemoteNamespaceChanged;

@@ -153,6 +153,36 @@ public class SyncDiffClassifierTests
         Assert.Equal(SyncDiffKind.BothChangedCompatible, Kind);
     }
     /// <summary>
+    /// Verifies matching local and remote renames are classified as compatible.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsBothChangedCompatibleWhenBothSidesRenameToSameName()
+    {
+        SyncItemState LocalState = State(Name: "Renamed.txt");
+        LocalState.LocalRelativePath = "Renamed.txt";
+        SyncItemState RemoteState = State(Name: "Renamed.txt");
+        RemoteState.LocalRelativePath = "Report.txt";
+
+        SyncDiffKind Kind = Classify(State(), LocalState, RemoteState);
+
+        Assert.Equal(SyncDiffKind.BothChangedCompatible, Kind);
+    }
+    /// <summary>
+    /// Verifies matching local and remote renames still conflict when content differs.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsConflictWhenBothSidesRenameToSameNameButContentDiffers()
+    {
+        SyncItemState LocalState = State(Name: "Renamed.txt", Hash: "hash-local");
+        LocalState.LocalRelativePath = "Renamed.txt";
+        SyncItemState RemoteState = State(Name: "Renamed.txt", Hash: "hash-remote");
+        RemoteState.LocalRelativePath = "Report.txt";
+
+        SyncDiffKind Kind = Classify(State(), LocalState, RemoteState);
+
+        Assert.Equal(SyncDiffKind.Conflict, Kind);
+    }
+    /// <summary>
     /// Verifies conflicting two-sided change classification.
     /// </summary>
     [Fact]
