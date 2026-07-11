@@ -186,6 +186,21 @@ public class LocalSyncMutationEndpointTests
         Assert.True(Directory.Exists(TargetPath));
         Assert.True(System.IO.File.Exists(System.IO.Path.Combine(TargetPath, "File.txt")));
     }
+    /// <summary>
+    /// Verifies cancelled local mutations do not execute.
+    /// </summary>
+    [Fact]
+    public async Task CreateDirectoryAsyncHonorsCancellation()
+    {
+        using TempFolder Folder = new();
+        LocalSyncMutationEndpoint Endpoint = new(Folder.Path);
+        using CancellationTokenSource Cancellation = new();
+        Cancellation.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => Endpoint.CreateDirectoryAsync("Folder", Cancellation.Token));
+
+        Assert.False(Directory.Exists(System.IO.Path.Combine(Folder.Path, "Folder")));
+    }
 
     /// <summary>
     /// Verifies escaped relative paths fail as mutation results.
