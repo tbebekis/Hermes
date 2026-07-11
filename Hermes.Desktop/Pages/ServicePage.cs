@@ -134,8 +134,13 @@ public class ServicePage : UserControl
             Text = LogLine("Service page initialized."),
             AcceptsReturn = true,
             IsReadOnly = true,
-            MinHeight = 150,
+            FontFamily = new FontFamily("Cascadia Code, Consolas, Monospace"),
+            FontSize = 12,
+            Height = 320,
+            TextWrapping = TextWrapping.NoWrap,
         };
+        ScrollViewer.SetHorizontalScrollBarVisibility(fMemoTextBox, ScrollBarVisibility.Auto);
+        ScrollViewer.SetVerticalScrollBarVisibility(fMemoTextBox, ScrollBarVisibility.Auto);
         fRefreshButton = ActionButton("Refresh", true);
         fStartButton = ActionButton("Start", true);
         fStopButton = ActionButton("Stop", false);
@@ -225,6 +230,7 @@ public class ServicePage : UserControl
             fMemoTextBox.Text += Environment.NewLine + Text;
 
         fMemoTextBox.CaretIndex = fMemoTextBox.Text.Length;
+        fMemoTextBox.Focus();
     }
 
     // ● events
