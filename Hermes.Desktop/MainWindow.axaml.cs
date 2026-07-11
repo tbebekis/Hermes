@@ -59,6 +59,8 @@ public partial class MainWindow : Window
     readonly List<PageDescriptor> fPages;
     readonly LocalServiceClient fServiceClient;
     readonly DashboardPage fDashboardPage;
+    readonly SynchronizationPage fSynchronizationPage;
+    readonly ConnectionsPage fConnectionsPage;
     readonly ServicePage fServicePage;
     readonly FoldersPage fFoldersPage;
     readonly ConflictsPage fConflictsPage;
@@ -227,6 +229,8 @@ public partial class MainWindow : Window
     {
         LocalServiceStatus Status = await fServiceClient.GetStatusAsync();
         fDashboardPage.SetStatus(Status);
+        fSynchronizationPage.SetStatus(Status);
+        fConnectionsPage.SetStatus(Status);
         fServicePage.SetStatus(Status);
         fFoldersPage.SetStatus(Status);
         fConflictsPage.SetConflicts(await fServiceClient.GetOpenConflictsAsync());
@@ -279,6 +283,8 @@ public partial class MainWindow : Window
         fUpdatedTimeText = CreateStatusText("Updated -");
         fServiceClient = new LocalServiceClient();
         fDashboardPage = new DashboardPage();
+        fSynchronizationPage = new SynchronizationPage();
+        fConnectionsPage = new ConnectionsPage();
         fServicePage = new ServicePage();
         fFoldersPage = new FoldersPage();
         fConflictsPage = new ConflictsPage();
@@ -287,6 +293,8 @@ public partial class MainWindow : Window
         fPages = new List<PageDescriptor>()
         {
             new("Dashboard", "Dashboard", "Overall service and synchronization status.", fDashboardPage),
+            new("Synchronization", "Synchronization", "Monitor the current synchronization state.", fSynchronizationPage),
+            new("Connections", "Connections", "Inspect configured storage provider connectivity.", fConnectionsPage),
             new("Service", "Service", "Manage the Hermes background service.", fServicePage),
             new("Folders", "Folders", "Manage synchronization roots.", fFoldersPage),
             new("Conflicts", "Conflicts", "Review items that need attention.", fConflictsPage),
