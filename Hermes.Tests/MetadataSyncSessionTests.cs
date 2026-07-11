@@ -1021,6 +1021,114 @@ public class MetadataSyncSessionTests
         Assert.Equal("token-2", Store.GetRemoteCheckpoint("root-1").StartPageToken);
     }
     /// <summary>
+    /// Verifies remote trash and local missing state commit missing base without executor work.
+    /// </summary>
+    [Fact]
+    public void AdvanceWithRemoteChangesCommitsCompatibleRemoteTrash()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 6, 26, 46, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        AddBaseSnapshot(Store, "item-1", "File1.txt", "hash-base", Time);
+        AddObservedItem(Store, "item-1", "remote-1", "File1.txt", "hash-base", Time);
+
+        MetadataSyncSessionResult Result = Session.AdvanceWithRemoteChanges(
+            "root-1",
+            [],
+            [
+                new StorageChange(
+                    "remote-1",
+                    false,
+                    new DateTimeOffset(Time),
+                    new StorageItem(
+                        "remote-1",
+                        "remote-root",
+                        "File1.txt",
+                        "/File1.txt",
+                        StorageItemKind.File,
+                        "text/plain",
+                        42,
+                        "hash-base",
+                        default,
+                        default,
+                        2,
+                        true)),
+            ],
+            CreateCheckpoint("token-2", Time),
+            Time,
+            Time,
+            Time,
+            "scan-delete");
+
+        Assert.Single(Result.Decisions);
+        Assert.Equal(SyncDiffKind.BothChangedCompatible, Result.Decisions[0].DiffKind);
+        Assert.Equal(SyncPlanDecisionKind.CommitBase, Result.Decisions[0].DecisionKind);
+        Assert.Single(Result.CommittedBaseSnapshots);
+        Assert.Empty(Result.PendingExecutorDecisions);
+        Assert.Empty(Result.PendingExecutionRequests);
+        Assert.False(Store.GetBaseSnapshot("item-1").ExistsFlag);
+        Assert.True(Store.GetRemoteObservation("item-1").Trashed);
+        Assert.Equal("token-2", Store.GetRemoteCheckpoint("root-1").StartPageToken);
+    }
+    /// <summary>
+    /// Verifies remote trash and locally modified content stays a conflict in the remote changes flow.
+    /// </summary>
+    [Fact]
+    public void AdvanceWithRemoteChangesReturnsConflictWhenRemoteTrashedAndLocalModified()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 6, 26, 47, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        AddBaseSnapshot(Store, "item-1", "File1.txt", "hash-base", Time);
+        AddObservedItem(Store, "item-1", "remote-1", "File1.txt", "hash-base", Time);
+
+        MetadataSyncSessionResult Result = Session.AdvanceWithRemoteChanges(
+            "root-1",
+            [CreateLocalScanItem("File1.txt", "hash-local", Time)],
+            [
+                new StorageChange(
+                    "remote-1",
+                    false,
+                    new DateTimeOffset(Time),
+                    new StorageItem(
+                        "remote-1",
+                        "remote-root",
+                        "File1.txt",
+                        "/File1.txt",
+                        StorageItemKind.File,
+                        "text/plain",
+                        42,
+                        "hash-base",
+                        default,
+                        default,
+                        2,
+                        true)),
+            ],
+            CreateCheckpoint("token-2", Time),
+            Time,
+            Time,
+            Time,
+            "scan-local-modified");
+
+        Assert.Single(Result.Decisions);
+        Assert.Equal(SyncDiffKind.Conflict, Result.Decisions[0].DiffKind);
+        Assert.Equal(SyncPlanDecisionKind.Conflict, Result.Decisions[0].DecisionKind);
+        Assert.Empty(Result.CommittedBaseSnapshots);
+        Assert.Single(Result.PendingExecutorDecisions);
+        Assert.Single(Result.PendingExecutionRequests);
+        Assert.Equal("hash-base", Store.GetBaseSnapshot("item-1").ContentHash);
+        Assert.True(Store.GetRemoteObservation("item-1").Trashed);
+        Assert.Equal("token-2", Store.GetRemoteCheckpoint("root-1").StartPageToken);
+    }
+    /// <summary>
     /// Verifies matching local and remote rename observations can advance the base snapshot.
     /// </summary>
     [Fact]
