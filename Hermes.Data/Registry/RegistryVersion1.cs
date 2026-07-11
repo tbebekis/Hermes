@@ -423,6 +423,61 @@ from
         SelectDef.ColumnTypes["ProviderChangeTime"] = DataColumnType.DateTime;
         SelectDef.ColumnTypes["ObservedTime"] = DataColumnType.DateTime;
     }
+    static void RegisterModuleSyncConflict()
+    {
+        string SqlText = @"
+select
+   SYNC_CONFLICT.Id,
+   SYNC_CONFLICT.SyncRootId,
+   SYNC_CONFLICT.TrackedItemId,
+   SYNC_CONFLICT.DiffKind,
+   SYNC_CONFLICT.DecisionKind,
+   SYNC_CONFLICT.State,
+   SYNC_CONFLICT.Message,
+   SYNC_CONFLICT.FirstObservedTime,
+   SYNC_CONFLICT.LastObservedTime,
+   SYNC_CONFLICT.ResolvedTime
+from
+  SYNC_CONFLICT
+";
+        ModuleDef Module = DataRegistry.AddOrUpdateModule("SyncConflict", ClassName: "SyncConflictDataModule", ListSelectSql: SqlText);
+        if (Module.Table.Fields.Count > 0)
+            return;
+
+        TableDef Table = Module.Table;
+        Table.Name = "SYNC_CONFLICT";
+        Table.KeyField = "Id";
+        Table.AddId("Id").SetNullable(false);
+        Table.AddString("SyncRootId", MaxLength: 40, Flags: FieldFlags.Required).SetNullable(false);
+        Table.AddString("TrackedItemId", MaxLength: 40, Flags: FieldFlags.Required).SetNullable(false);
+        Table.AddString("DiffKind", MaxLength: 64, Flags: FieldFlags.Required).SetNullable(false);
+        Table.AddString("DecisionKind", MaxLength: 64, Flags: FieldFlags.Required).SetNullable(false);
+        Table.AddString("State", MaxLength: 32, Flags: FieldFlags.Required).SetNullable(false);
+        Table.AddTextBlob("Message", Flags: FieldFlags.None).SetNullable(true).SetLargeMemo();
+        Table.AddDateTime("FirstObservedTime", Flags: FieldFlags.Required).SetNullable(false);
+        Table.AddDateTime("LastObservedTime", Flags: FieldFlags.Required).SetNullable(false);
+        Table.AddDateTime("ResolvedTime", Flags: FieldFlags.None).SetNullable(true);
+
+        SelectDef SelectDef = Module.SelectList[0];
+        SelectDef.AddFilter("SyncRootId", FieldName: "SyncRootId", FilterDataType: DataFieldType.String);
+        SelectDef.AddFilter("TrackedItemId", FieldName: "TrackedItemId", FilterDataType: DataFieldType.String);
+        SelectDef.AddFilter("DiffKind", FieldName: "DiffKind", FilterDataType: DataFieldType.String);
+        SelectDef.AddFilter("DecisionKind", FieldName: "DecisionKind", FilterDataType: DataFieldType.String);
+        SelectDef.AddFilter("State", FieldName: "State", FilterDataType: DataFieldType.String);
+        SelectDef.AddFilter("FirstObservedTime", FieldName: "FirstObservedTime", FilterDataType: DataFieldType.DateTime);
+        SelectDef.AddFilter("LastObservedTime", FieldName: "LastObservedTime", FilterDataType: DataFieldType.DateTime);
+        SelectDef.AddFilter("ResolvedTime", FieldName: "ResolvedTime", FilterDataType: DataFieldType.DateTime);
+        SelectDef.ColumnTypes["Id"] = DataColumnType.Text;
+        SelectDef.ColumnTypes["SyncRootId"] = DataColumnType.Text;
+        SelectDef.ColumnTypes["TrackedItemId"] = DataColumnType.Text;
+        SelectDef.ColumnTypes["DiffKind"] = DataColumnType.Text;
+        SelectDef.ColumnTypes["DecisionKind"] = DataColumnType.Text;
+        SelectDef.ColumnTypes["State"] = DataColumnType.Text;
+        SelectDef.ColumnTypes["Message"] = DataColumnType.Memo;
+        SelectDef.ColumnTypes["FirstObservedTime"] = DataColumnType.DateTime;
+        SelectDef.ColumnTypes["LastObservedTime"] = DataColumnType.DateTime;
+        SelectDef.ColumnTypes["ResolvedTime"] = DataColumnType.DateTime;
+    }
 
     // ● constructor
 
@@ -446,6 +501,7 @@ from
         RegisterModuleBaseSnapshot();
         RegisterModuleLocalObservedSnapshot();
         RegisterModuleRemoteObservedSnapshot();
+        RegisterModuleSyncConflict();
     }
 
     // ● properties
