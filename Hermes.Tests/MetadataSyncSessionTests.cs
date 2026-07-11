@@ -3413,4 +3413,57 @@ public class MetadataSyncSessionTests
         Assert.Equal(SyncExecutionResultKind.Conflict, Result.UncommittedResults[0].ResultKind);
         Assert.Contains("Conflict resolution is required.", Result.UncommittedResults[0].Message);
     }
+    /// <summary>
+    /// Verifies delete-modify conflicts are not passed to normal execution.
+    /// </summary>
+    [Fact]
+    public async Task ExecutePendingRequestsAsyncDoesNotExecuteDeleteModifyConflicts()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 8, 45, 0, DateTimeKind.Utc);
+        FakeSyncExecutor Executor = new(_ => throw new InvalidOperationException("Delete-modify conflicts must not execute."));
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        AddBaseSnapshot(Store, "item-1", "File1.txt", "hash-base", Time);
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            ExistsFlag = false,
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            RemoteItemId = "remote-1",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "File1.txt",
+            RemoteParentId = "remote-root",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-remote",
+            ProviderVersion = 2,
+            Trashed = false,
+            ObservedTime = Time,
+        });
+        MetadataSyncSessionResult SessionResult = Session.AdvanceMetadataOnly("root-1", Time);
+
+        SyncExecutionApplyResult Result = await Session.ExecutePendingRequestsAsync(
+            SessionResult.PendingExecutionRequests,
+            Executor,
+            Time,
+            CancellationToken.None);
+
+        Assert.Empty(Executor.Intents);
+        Assert.Empty(Executor.Requests);
+        Assert.Single(SessionResult.PendingExecutionRequests);
+        Assert.Equal(SyncPlanDecisionKind.Conflict, SessionResult.PendingExecutionRequests[0].Decision.DecisionKind);
+        Assert.Empty(Result.CommittedResults);
+        Assert.Single(Result.UncommittedResults);
+        Assert.Equal(SyncExecutionResultKind.Conflict, Result.UncommittedResults[0].ResultKind);
+        Assert.Contains("Conflict resolution is required.", Result.UncommittedResults[0].Message);
+    }
 }
