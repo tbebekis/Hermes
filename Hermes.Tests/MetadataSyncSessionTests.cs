@@ -951,6 +951,41 @@ public class MetadataSyncSessionTests
         Assert.False(Store.GetBaseSnapshot("item-1").ExistsFlag);
     }
     /// <summary>
+    /// Verifies remote change processing commits compatible local missing and remote tombstone state without executor work.
+    /// </summary>
+    [Fact]
+    public void AdvanceWithRemoteChangesCommitsCompatibleEndpointRemoval()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 6, 26, 44, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        AddBaseSnapshot(Store, "item-1", "File1.txt", "hash-base", Time);
+        AddObservedItem(Store, "item-1", "remote-1", "File1.txt", "hash-base", Time);
+
+        MetadataSyncSessionResult Result = Session.AdvanceWithRemoteChanges(
+            "root-1",
+            [],
+            [new StorageChange("remote-1", true, new DateTimeOffset(Time), null)],
+            CreateCheckpoint("token-2", Time),
+            Time,
+            Time,
+            Time,
+            "scan-delete");
+
+        Assert.Single(Result.Decisions);
+        Assert.Equal(SyncDiffKind.BothChangedCompatible, Result.Decisions[0].DiffKind);
+        Assert.Equal(SyncPlanDecisionKind.CommitBase, Result.Decisions[0].DecisionKind);
+        Assert.Single(Result.CommittedBaseSnapshots);
+        Assert.Empty(Result.PendingExecutorDecisions);
+        Assert.Empty(Result.PendingExecutionRequests);
+        Assert.False(Store.GetBaseSnapshot("item-1").ExistsFlag);
+        Assert.Equal("token-2", Store.GetRemoteCheckpoint("root-1").StartPageToken);
+    }
+    /// <summary>
     /// Verifies matching local and remote rename observations can advance the base snapshot.
     /// </summary>
     [Fact]
