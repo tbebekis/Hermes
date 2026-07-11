@@ -48,4 +48,20 @@ public class LocalServiceClient
             return null;
         }
     }
+    /// <summary>
+    /// Gets open conflicts from the local service, or returns null when the service cannot be reached.
+    /// </summary>
+    public async Task<IReadOnlyList<LocalOpenConflict>> GetOpenConflictsAsync()
+    {
+        try
+        {
+            using Stream Stream = await fClient.GetStreamAsync("/conflicts/open");
+            List<LocalOpenConflict> Result = await JsonSerializer.DeserializeAsync<List<LocalOpenConflict>>(Stream, fJsonOptions);
+            return Result ?? [];
+        }
+        catch
+        {
+            return null;
+        }
+    }
 }

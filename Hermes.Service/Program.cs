@@ -17,6 +17,15 @@ static public class Program
             int OpenConflictCount = Store.CountOpenConflicts(SyncRoot.Id);
             return ServiceStatusResponse.Create(SyncRoot, Settings.Value, OpenConflictCount);
         });
+        Endpoints.MapGet("/conflicts/open", (SyncRootRecord SyncRoot, SqlMetadataStore Store) =>
+        {
+            List<OpenConflictResponse> Result = new();
+
+            foreach (SyncConflictDetailRecord Detail in Store.GetOpenConflictDetails(SyncRoot.Id))
+                Result.Add(OpenConflictResponse.FromDetail(Detail));
+
+            return Result;
+        });
     }
 
     // ● public
