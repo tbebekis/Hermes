@@ -8,9 +8,17 @@ namespace Hermes.Desktop;
 /// </summary>
 public class DashboardPage : UserControl
 {
+    // ● fields
+
+    readonly TextBlock fServiceText;
+    readonly TextBlock fSyncText;
+    readonly TextBlock fConflictText;
+    readonly TextBlock fLastUpdateText;
+    readonly TextBlock fCurrentActivityText;
+
     // ● private
 
-    static Border CreateStatusTile(string Caption, string Value)
+    static Border CreateStatusTile(string Caption, TextBlock ValueText)
     {
         return new Border()
         {
@@ -24,7 +32,7 @@ public class DashboardPage : UserControl
                 Children =
                 {
                     new TextBlock() { Text = Caption, Opacity = 0.72 },
-                    new TextBlock() { Text = Value, FontSize = 22, FontWeight = FontWeight.SemiBold },
+                    ValueText,
                 }
             }
         };
@@ -37,6 +45,12 @@ public class DashboardPage : UserControl
     /// </summary>
     public DashboardPage()
     {
+        fServiceText = new TextBlock() { Text = "Unknown", FontSize = 22, FontWeight = FontWeight.SemiBold };
+        fSyncText = new TextBlock() { Text = "Idle", FontSize = 22, FontWeight = FontWeight.SemiBold };
+        fConflictText = new TextBlock() { Text = "0", FontSize = 22, FontWeight = FontWeight.SemiBold };
+        fLastUpdateText = new TextBlock() { Text = "Never", FontSize = 22, FontWeight = FontWeight.SemiBold };
+        fCurrentActivityText = new TextBlock() { Text = "No active synchronization run.", Opacity = 0.72 };
+
         Grid Tiles = new()
         {
             ColumnDefinitions = new ColumnDefinitions("*,*,*,*"),
@@ -44,10 +58,10 @@ public class DashboardPage : UserControl
             ColumnSpacing = 12,
         };
 
-        Tiles.Children.Add(CreateStatusTile("Service", "Unknown"));
-        Tiles.Children.Add(CreateStatusTile("Synchronization", "Idle"));
-        Tiles.Children.Add(CreateStatusTile("Open conflicts", "0"));
-        Tiles.Children.Add(CreateStatusTile("Last update", "Never"));
+        Tiles.Children.Add(CreateStatusTile("Service", fServiceText));
+        Tiles.Children.Add(CreateStatusTile("Synchronization", fSyncText));
+        Tiles.Children.Add(CreateStatusTile("Open conflicts", fConflictText));
+        Tiles.Children.Add(CreateStatusTile("Last update", fLastUpdateText));
 
         Grid.SetColumn(Tiles.Children[1], 1);
         Grid.SetColumn(Tiles.Children[2], 2);
@@ -71,11 +85,35 @@ public class DashboardPage : UserControl
                         Children =
                         {
                             new TextBlock() { Text = "Current activity", FontSize = 18, FontWeight = FontWeight.SemiBold },
-                            new TextBlock() { Text = "No active synchronization run.", Opacity = 0.72 },
+                            fCurrentActivityText,
                         }
                     }
                 }
             }
         };
+    }
+
+    // ● public
+
+    /// <summary>
+    /// Displays the latest local service status.
+    /// </summary>
+    public void SetStatus(LocalServiceStatus Status)
+    {
+        if (Status == null)
+        {
+            fServiceText.Text = "Stopped";
+            fSyncText.Text = "Unknown";
+            fConflictText.Text = "-";
+            fLastUpdateText.Text = "Disconnected";
+            fCurrentActivityText.Text = "The local service HTTP API is not reachable.";
+            return;
+        }
+
+        fServiceText.Text = Status.ServiceStatus;
+        fSyncText.Text = Status.SynchronizationStatus;
+        fConflictText.Text = Status.OpenConflictCount.ToString();
+        fLastUpdateText.Text = Status.TimestampUtc.ToLocalTime().ToString("HH:mm:ss");
+        fCurrentActivityText.Text = Status.SyncRootId + " - " + Status.LocalRootPath;
     }
 }

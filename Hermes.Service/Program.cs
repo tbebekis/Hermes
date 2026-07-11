@@ -12,7 +12,11 @@ static public class Program
 
     static void MapServiceApi(IEndpointRouteBuilder Endpoints)
     {
-        Endpoints.MapGet("/status", () => ServiceStatusResponse.Create());
+        Endpoints.MapGet("/status", (SyncRootRecord SyncRoot, IOptions<SyncSettings> Settings, SqlMetadataStore Store) =>
+        {
+            int OpenConflictCount = Store.CountOpenConflicts(SyncRoot.Id);
+            return ServiceStatusResponse.Create(SyncRoot, Settings.Value, OpenConflictCount);
+        });
     }
 
     // ● public

@@ -31,6 +31,38 @@ public class LocalServiceStatus
     /// </summary>
     public string Version { get; set; } = string.Empty;
     /// <summary>
+    /// Gets or sets the configured sync root id.
+    /// </summary>
+    public string SyncRootId { get; set; } = string.Empty;
+    /// <summary>
+    /// Gets or sets the provider name.
+    /// </summary>
+    public string ProviderName { get; set; } = string.Empty;
+    /// <summary>
+    /// Gets or sets the local root path.
+    /// </summary>
+    public string LocalRootPath { get; set; } = string.Empty;
+    /// <summary>
+    /// Gets or sets the remote root item id.
+    /// </summary>
+    public string RemoteRootItemId { get; set; } = string.Empty;
+    /// <summary>
+    /// Gets or sets a value indicating whether the sync root is enabled.
+    /// </summary>
+    public bool SyncRootEnabled { get; set; }
+    /// <summary>
+    /// Gets or sets a value indicating whether endpoint mutations are enabled.
+    /// </summary>
+    public bool MutationsEnabled { get; set; }
+    /// <summary>
+    /// Gets or sets the polling interval in seconds.
+    /// </summary>
+    public int PollingIntervalSeconds { get; set; }
+    /// <summary>
+    /// Gets or sets the current durable open conflict count.
+    /// </summary>
+    public int OpenConflictCount { get; set; }
+    /// <summary>
     /// Gets or sets the response timestamp in UTC.
     /// </summary>
     public DateTime TimestampUtc { get; set; }

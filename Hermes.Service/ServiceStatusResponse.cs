@@ -13,8 +13,11 @@ public class ServiceStatusResponse
     /// <summary>
     /// Creates the current service status response.
     /// </summary>
-    static public ServiceStatusResponse Create()
+    static public ServiceStatusResponse Create(SyncRootRecord SyncRoot, SyncSettings Settings, int OpenConflictCount)
     {
+        Guard.NotNull(SyncRoot, nameof(SyncRoot));
+        Guard.NotNull(Settings, nameof(Settings));
+
         return new ServiceStatusResponse()
         {
             ServiceStatus = "Running",
@@ -22,6 +25,14 @@ public class ServiceStatusResponse
             IpcStatus = "Connected",
             ProcessId = Environment.ProcessId,
             Version = typeof(Program).Assembly.GetName().Version?.ToString() ?? string.Empty,
+            SyncRootId = SyncRoot.Id,
+            ProviderName = SyncRoot.ProviderName,
+            LocalRootPath = SyncRoot.LocalRootPath,
+            RemoteRootItemId = SyncRoot.RemoteRootItemId ?? string.Empty,
+            SyncRootEnabled = SyncRoot.IsEnabled,
+            MutationsEnabled = Settings.EnableMutations,
+            PollingIntervalSeconds = Settings.PollingIntervalSeconds,
+            OpenConflictCount = OpenConflictCount,
             TimestampUtc = DateTime.UtcNow,
         };
     }
@@ -48,6 +59,38 @@ public class ServiceStatusResponse
     /// Gets or sets the service version.
     /// </summary>
     public string Version { get; set; } = string.Empty;
+    /// <summary>
+    /// Gets or sets the configured sync root id.
+    /// </summary>
+    public string SyncRootId { get; set; } = string.Empty;
+    /// <summary>
+    /// Gets or sets the provider name.
+    /// </summary>
+    public string ProviderName { get; set; } = string.Empty;
+    /// <summary>
+    /// Gets or sets the local root path.
+    /// </summary>
+    public string LocalRootPath { get; set; } = string.Empty;
+    /// <summary>
+    /// Gets or sets the remote root item id.
+    /// </summary>
+    public string RemoteRootItemId { get; set; } = string.Empty;
+    /// <summary>
+    /// Gets or sets a value indicating whether the sync root is enabled.
+    /// </summary>
+    public bool SyncRootEnabled { get; set; }
+    /// <summary>
+    /// Gets or sets a value indicating whether endpoint mutations are enabled.
+    /// </summary>
+    public bool MutationsEnabled { get; set; }
+    /// <summary>
+    /// Gets or sets the polling interval in seconds.
+    /// </summary>
+    public int PollingIntervalSeconds { get; set; }
+    /// <summary>
+    /// Gets or sets the current durable open conflict count.
+    /// </summary>
+    public int OpenConflictCount { get; set; }
     /// <summary>
     /// Gets or sets the response timestamp in UTC.
     /// </summary>

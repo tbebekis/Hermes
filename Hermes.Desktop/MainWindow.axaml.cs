@@ -58,7 +58,9 @@ public partial class MainWindow : Window
     readonly TextBlock fUpdatedTimeText;
     readonly List<PageDescriptor> fPages;
     readonly LocalServiceClient fServiceClient;
+    readonly DashboardPage fDashboardPage;
     readonly ServicePage fServicePage;
+    readonly FoldersPage fFoldersPage;
 
     static Image CreateLogo(double Size)
     {
@@ -222,7 +224,9 @@ public partial class MainWindow : Window
     async Task RefreshServiceStatusAsync()
     {
         LocalServiceStatus Status = await fServiceClient.GetStatusAsync();
+        fDashboardPage.SetStatus(Status);
         fServicePage.SetStatus(Status);
+        fFoldersPage.SetStatus(Status);
 
         if (Status == null)
         {
@@ -270,13 +274,15 @@ public partial class MainWindow : Window
         fConnectionStatusText = CreateStatusText("Google Drive: Unknown");
         fUpdatedTimeText = CreateStatusText("Updated -");
         fServiceClient = new LocalServiceClient();
+        fDashboardPage = new DashboardPage();
         fServicePage = new ServicePage();
+        fFoldersPage = new FoldersPage();
         fServicePage.RefreshRequested += ServicePage_RefreshRequested;
         fPages = new List<PageDescriptor>()
         {
-            new("Dashboard", "Dashboard", "Overall service and synchronization status.", new DashboardPage()),
+            new("Dashboard", "Dashboard", "Overall service and synchronization status.", fDashboardPage),
             new("Service", "Service", "Manage the Hermes background service.", fServicePage),
-            new("Folders", "Folders", "Manage synchronization roots.", new FoldersPage()),
+            new("Folders", "Folders", "Manage synchronization roots.", fFoldersPage),
             new("Conflicts", "Conflicts", "Review items that need attention.", new ConflictsPage()),
             new("Logs", "Logs", "Inspect service and desktop log output.", new LogsPage()),
             new("Settings", "Settings", "Configure Hermes desktop and synchronization behavior.", new SettingsPage()),
