@@ -8,4 +8,5 @@
         Width="1120"
         Height="720"
         MinWidth="980"
-        MinHeight="620" />
+        MinHeight="620"
+        WindowStartupLocation="CenterScreen" />
