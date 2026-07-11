@@ -78,3 +78,15 @@ The first version targets:
 - Basic conflict handling with keep-both behavior.
 
 Push notifications, cloud relay infrastructure, advanced merge tools, and selective sync are planned as later concerns.
+
+## Silk Icons
+
+The Hermes user interface includes icons from the Silk icon set 1.3.
+
+Author: Mark James
+
+Project: https://github.com/legacy-icons/famfamfam-silk
+
+License: Creative Commons Attribution 2.5
+
+License URL: http://creativecommons.org/licenses/by/2.5/

@@ -38,6 +38,22 @@ public class AboutPage : UserControl
         AssemblyInformationalVersionAttribute Attribute = typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
         return Attribute?.InformationalVersion ?? AssemblyVersion();
     }
+    static TextBlock LinkField(string Text, int Row, int Column)
+    {
+        TextBlock Result = Field(Text, Row, Column);
+        Result.Foreground = Brushes.DodgerBlue;
+        Result.TextDecorations = TextDecorations.Underline;
+        Result.Cursor = new Cursor(StandardCursorType.Hand);
+        Result.PointerPressed += (Sender, Args) => OpenUrl(Text);
+        return Result;
+    }
+    static void OpenUrl(string Url)
+    {
+        Process.Start(new ProcessStartInfo(Url)
+        {
+            UseShellExecute = true,
+        });
+    }
     static Image CreateLogo(double Size)
     {
         Uri Uri = new("avares://Hermes.Desktop/Resources/Images/Hermes_Coin.jpg");
@@ -61,7 +77,7 @@ public class AboutPage : UserControl
             CornerRadius = new CornerRadius(6),
             Child = new Grid()
             {
-                RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto"),
+                RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"),
                 ColumnDefinitions = new ColumnDefinitions("160,*"),
                 RowSpacing = 10,
                 Children =
@@ -78,6 +94,12 @@ public class AboutPage : UserControl
                     Field(RuntimeInformation.ProcessArchitecture.ToString(), 4, 1),
                     Label("License", 5, 0),
                     Field("MIT License", 5, 1),
+                    Label("Author", 6, 0),
+                    Field("Theodoros Bebekis", 6, 1),
+                    Label("Repository", 7, 0),
+                    LinkField("https://github.com/tbebekis/Hermes", 7, 1),
+                    Label("Icons", 8, 0),
+                    Field("Includes Silk Icons by Mark James, licensed under CC BY 2.5.", 8, 1),
                 }
             }
         };

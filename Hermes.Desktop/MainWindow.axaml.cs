@@ -20,11 +20,12 @@ public partial class MainWindow : Window
         /// <summary>
         /// Initializes a new instance of the <see cref="PageDescriptor"/> class.
         /// </summary>
-        public PageDescriptor(string Key, string Title, string Subtitle, UserControl Page)
+        public PageDescriptor(string Key, string Title, string Subtitle, string IconName, UserControl Page)
         {
             this.Key = Key;
             this.Title = Title;
             this.Subtitle = Subtitle;
+            this.IconName = IconName;
             this.Page = Page;
         }
 
@@ -42,6 +43,10 @@ public partial class MainWindow : Window
         /// Gets the page subtitle.
         /// </summary>
         public string Subtitle { get; }
+        /// <summary>
+        /// Gets the page icon name.
+        /// </summary>
+        public string IconName { get; }
         /// <summary>
         /// Gets the page control.
         /// </summary>
@@ -94,11 +99,38 @@ public partial class MainWindow : Window
             FontSize = 12,
         };
     }
+    static Image CreateSidebarIcon(string IconName)
+    {
+        Uri Uri = new("avares://Hermes.Desktop/Resources/Images/Sidebar/" + IconName);
+        using Stream Stream = AssetLoader.Open(Uri);
+
+        return new Image()
+        {
+            Source = new Bitmap(Stream),
+            Width = 20,
+            Height = 20,
+            Stretch = Stretch.Uniform,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+    }
     static ListBoxItem CreateNavigationItem(PageDescriptor Page)
     {
         return new ListBoxItem()
         {
-            Content = Page.Title,
+            Content = new StackPanel()
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 10,
+                Children =
+                {
+                    CreateSidebarIcon(Page.IconName),
+                    new TextBlock()
+                    {
+                        Text = Page.Title,
+                        VerticalAlignment = VerticalAlignment.Center,
+                    }
+                }
+            },
             Tag = Page,
             Padding = new Thickness(12, 9),
         };
@@ -379,17 +411,17 @@ public partial class MainWindow : Window
         fServicePage.RestartRequested += ServicePage_RestartRequested;
         fPages = new List<PageDescriptor>()
         {
-            new("Dashboard", "Dashboard", "Overall service and synchronization status.", fDashboardPage),
-            new("Synchronization", "Synchronization", "Monitor the current synchronization state.", fSynchronizationPage),
-            new("Connections", "Connections", "Inspect configured storage provider connectivity.", fConnectionsPage),
-            new("Service", "Service", "Manage the Hermes background service.", fServicePage),
-            new("Folders", "Folders", "Manage synchronization roots.", fFoldersPage),
-            new("Activity", "Activity", "Watch recent service activity.", fActivityPage),
-            new("Conflicts", "Conflicts", "Review items that need attention.", fConflictsPage),
-            new("History", "History", "Review completed synchronization runs.", fHistoryPage),
-            new("Logs", "Logs", "Inspect service and desktop log output.", fLogsPage),
-            new("Settings", "Settings", "Configure Hermes desktop and synchronization behavior.", fSettingsPage),
-            new("About", "About", "Application version, runtime, and license information.", new AboutPage()),
+            new("Dashboard", "Dashboard", "Overall service and synchronization status.", "dashboard.png", fDashboardPage),
+            new("Synchronization", "Synchronization", "Monitor the current synchronization state.", "sync.png", fSynchronizationPage),
+            new("Connections", "Connections", "Inspect configured storage provider connectivity.", "connections.png", fConnectionsPage),
+            new("Service", "Service", "Manage the Hermes background service.", "service.png", fServicePage),
+            new("Folders", "Folders", "Manage synchronization roots.", "folders.png", fFoldersPage),
+            new("Activity", "Activity", "Watch recent service activity.", "activity.png", fActivityPage),
+            new("Conflicts", "Conflicts", "Review items that need attention.", "conflicts.png", fConflictsPage),
+            new("History", "History", "Review completed synchronization runs.", "history.png", fHistoryPage),
+            new("Logs", "Logs", "Inspect service and desktop log output.", "logs.png", fLogsPage),
+            new("Settings", "Settings", "Configure Hermes desktop and synchronization behavior.", "settings.png", fSettingsPage),
+            new("About", "About", "Application version, runtime, and license information.", "about.png", new AboutPage()),
         };
 
         Content = CreateLayout();
