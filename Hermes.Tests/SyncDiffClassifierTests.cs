@@ -267,6 +267,27 @@ public class SyncDiffClassifierTests
         Assert.Equal(SyncDiffKind.BothChangedCompatible, Kind);
     }
     /// <summary>
+    /// Verifies matching projected namespace still conflicts when local and remote content differ.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsConflictWhenBothSidesMoveToSamePathButContentDiffers()
+    {
+        SyncItemState BaseState = State();
+        BaseState.LocalRelativePath = "Folder/Report.txt";
+        BaseState.RemoteParentId = "remote-folder";
+        SyncItemState LocalState = State(Hash: "hash-local");
+        LocalState.LocalRelativePath = "Target/Report.txt";
+        LocalState.RemoteParentId = "remote-folder";
+        SyncItemState RemoteState = State(Hash: "hash-remote");
+        RemoteState.LocalRelativePath = "Folder/Report.txt";
+        RemoteState.RemoteParentId = "remote-target";
+        RemoteState.ProjectedLocalRelativePath = "Target/Report.txt";
+
+        SyncDiffKind Kind = Classify(BaseState, LocalState, RemoteState);
+
+        Assert.Equal(SyncDiffKind.Conflict, Kind);
+    }
+    /// <summary>
     /// Verifies local delete versus remote content modification is classified as a conflict.
     /// </summary>
     [Fact]
