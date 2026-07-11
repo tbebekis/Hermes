@@ -57,6 +57,8 @@ public partial class MainWindow : Window
     readonly TextBlock fConnectionStatusText;
     readonly TextBlock fUpdatedTimeText;
     readonly List<PageDescriptor> fPages;
+    readonly LocalServiceClient fServiceClient;
+    readonly ServicePage fServicePage;
 
     static Image CreateLogo(double Size)
     {
@@ -217,10 +219,34 @@ public partial class MainWindow : Window
         fPageHost.Content = Page.Page;
         fUpdatedTimeText.Text = "Updated " + DateTime.Now.ToString("HH:mm:ss");
     }
+    async Task RefreshServiceStatusAsync()
+    {
+        LocalServiceStatus Status = await fServiceClient.GetStatusAsync();
+        fServicePage.SetStatus(Status);
+
+        if (Status == null)
+        {
+            fServiceStatusText.Text = "Service: Stopped";
+            fSyncStatusText.Text = "Sync: Unknown";
+            fConnectionStatusText.Text = "HTTP API: Disconnected";
+        }
+        else
+        {
+            fServiceStatusText.Text = "Service: " + Status.ServiceStatus;
+            fSyncStatusText.Text = "Sync: " + Status.SynchronizationStatus;
+            fConnectionStatusText.Text = "HTTP API: " + Status.IpcStatus;
+        }
+
+        fUpdatedTimeText.Text = "Updated " + DateTime.Now.ToString("HH:mm:ss");
+    }
     void NavigationList_SelectionChanged(object Sender, SelectionChangedEventArgs Args)
     {
         if (fNavigationList.SelectedItem is ListBoxItem Item && Item.Tag is PageDescriptor Page)
             Navigate(Page);
+    }
+    async void MainWindow_Opened(object Sender, EventArgs Args)
+    {
+        await RefreshServiceStatusAsync();
     }
 
     // ● constructor
@@ -239,10 +265,12 @@ public partial class MainWindow : Window
         fSyncStatusText = CreateStatusText("Sync: Idle");
         fConnectionStatusText = CreateStatusText("Google Drive: Unknown");
         fUpdatedTimeText = CreateStatusText("Updated -");
+        fServiceClient = new LocalServiceClient();
+        fServicePage = new ServicePage();
         fPages = new List<PageDescriptor>()
         {
             new("Dashboard", "Dashboard", "Overall service and synchronization status.", new DashboardPage()),
-            new("Service", "Service", "Manage the Hermes background service.", new ServicePage()),
+            new("Service", "Service", "Manage the Hermes background service.", fServicePage),
             new("Folders", "Folders", "Manage synchronization roots.", new FoldersPage()),
             new("Conflicts", "Conflicts", "Review items that need attention.", new ConflictsPage()),
             new("Logs", "Logs", "Inspect service and desktop log output.", new LogsPage()),
@@ -251,6 +279,7 @@ public partial class MainWindow : Window
         };
 
         Content = CreateLayout();
+        Opened += MainWindow_Opened;
         fNavigationList.SelectedIndex = 0;
     }
 }

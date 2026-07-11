@@ -8,9 +8,17 @@ namespace Hermes.Desktop;
 /// </summary>
 public class ServicePage : UserControl
 {
+    // ● fields
+
+    readonly TextBlock fStatusText;
+    readonly TextBlock fProcessIdText;
+    readonly TextBlock fUptimeText;
+    readonly TextBlock fIpcText;
+    readonly TextBlock fVersionText;
+
     // ● private
 
-    static Border CreateInfoPanel()
+    Border CreateInfoPanel()
     {
         return new Border()
         {
@@ -20,19 +28,21 @@ public class ServicePage : UserControl
             CornerRadius = new CornerRadius(6),
             Child = new Grid()
             {
-                RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto"),
+                RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto"),
                 ColumnDefinitions = new ColumnDefinitions("180,*"),
                 RowSpacing = 10,
                 Children =
                 {
                     Label("Status", 0, 0),
-                    Value("Unknown", 0, 1),
+                    Field(fStatusText, 0, 1),
                     Label("Process id", 1, 0),
-                    Value("-", 1, 1),
+                    Field(fProcessIdText, 1, 1),
                     Label("Uptime", 2, 0),
-                    Value("-", 2, 1),
+                    Field(fUptimeText, 2, 1),
                     Label("IPC", 3, 0),
-                    Value("localhost HTTP API not connected", 3, 1),
+                    Field(fIpcText, 3, 1),
+                    Label("Version", 4, 0),
+                    Field(fVersionText, 4, 1),
                 }
             }
         };
@@ -44,12 +54,12 @@ public class ServicePage : UserControl
         Grid.SetColumn(Result, Column);
         return Result;
     }
-    static TextBlock Value(string Text, int Row, int Column)
+    static TextBlock Field(TextBlock TextBlock, int Row, int Column)
     {
-        TextBlock Result = new() { Text = Text, FontWeight = FontWeight.SemiBold };
-        Grid.SetRow(Result, Row);
-        Grid.SetColumn(Result, Column);
-        return Result;
+        TextBlock.FontWeight = FontWeight.SemiBold;
+        Grid.SetRow(TextBlock, Row);
+        Grid.SetColumn(TextBlock, Column);
+        return TextBlock;
     }
     static Button ActionButton(string Text)
     {
@@ -68,6 +78,12 @@ public class ServicePage : UserControl
     /// </summary>
     public ServicePage()
     {
+        fStatusText = new TextBlock() { Text = "Unknown" };
+        fProcessIdText = new TextBlock() { Text = "-" };
+        fUptimeText = new TextBlock() { Text = "-" };
+        fIpcText = new TextBlock() { Text = "localhost HTTP API not connected" };
+        fVersionText = new TextBlock() { Text = "-" };
+
         Content = new StackPanel()
         {
             Spacing = 18,
@@ -92,5 +108,29 @@ public class ServicePage : UserControl
                 }
             }
         };
+    }
+
+    // ● public
+
+    /// <summary>
+    /// Displays the latest local service status.
+    /// </summary>
+    public void SetStatus(LocalServiceStatus Status)
+    {
+        if (Status == null)
+        {
+            fStatusText.Text = "Stopped";
+            fProcessIdText.Text = "-";
+            fUptimeText.Text = "-";
+            fIpcText.Text = "localhost HTTP API not connected";
+            fVersionText.Text = "-";
+            return;
+        }
+
+        fStatusText.Text = Status.ServiceStatus;
+        fProcessIdText.Text = Status.ProcessId.ToString();
+        fUptimeText.Text = "-";
+        fIpcText.Text = Status.IpcStatus;
+        fVersionText.Text = Status.Version;
     }
 }

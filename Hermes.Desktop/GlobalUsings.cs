@@ -14,6 +14,8 @@ global using Hermes.Data;
 global using System;
 global using System.Collections.Generic;
 global using System.IO;
+global using System.Net.Http;
+global using System.Text.Json;
 global using System.Threading.Tasks;
 global using Tripous;
 global using Tripous.Data;
