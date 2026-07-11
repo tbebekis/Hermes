@@ -128,6 +128,64 @@ public class LocalSyncMutationEndpointTests
         Assert.True(Result.Succeeded);
         Assert.False(System.IO.File.Exists(FilePath));
     }
+    /// <summary>
+    /// Verifies local directory deletion is recursive.
+    /// </summary>
+    [Fact]
+    public async Task DeleteItemAsyncDeletesDirectoryRecursively()
+    {
+        using TempFolder Folder = new();
+        LocalSyncMutationEndpoint Endpoint = new(Folder.Path);
+        string DirectoryPath = System.IO.Path.Combine(Folder.Path, "Folder");
+        string FilePath = System.IO.Path.Combine(DirectoryPath, "File.txt");
+        Directory.CreateDirectory(DirectoryPath);
+        await System.IO.File.WriteAllTextAsync(FilePath, "content");
+
+        Result Result = await Endpoint.DeleteItemAsync("Folder", CancellationToken.None);
+
+        Assert.True(Result.Succeeded);
+        Assert.False(Directory.Exists(DirectoryPath));
+    }
+    /// <summary>
+    /// Verifies local file moves create the target parent directory.
+    /// </summary>
+    [Fact]
+    public async Task MoveFileAsyncMovesFile()
+    {
+        using TempFolder Folder = new();
+        LocalSyncMutationEndpoint Endpoint = new(Folder.Path);
+        string SourcePath = System.IO.Path.Combine(Folder.Path, "File.txt");
+        string TargetPath = System.IO.Path.Combine(Folder.Path, "Folder", "Moved.txt");
+        await System.IO.File.WriteAllTextAsync(SourcePath, "content");
+
+        Result Result = await Endpoint.MoveFileAsync("File.txt", "Folder/Moved.txt", CancellationToken.None);
+
+        Assert.True(Result.Succeeded);
+        Assert.False(System.IO.File.Exists(SourcePath));
+        Assert.True(System.IO.File.Exists(TargetPath));
+        Assert.Equal("content", await System.IO.File.ReadAllTextAsync(TargetPath));
+    }
+    /// <summary>
+    /// Verifies local directory moves create the target parent directory.
+    /// </summary>
+    [Fact]
+    public async Task MoveDirectoryAsyncMovesDirectory()
+    {
+        using TempFolder Folder = new();
+        LocalSyncMutationEndpoint Endpoint = new(Folder.Path);
+        string SourcePath = System.IO.Path.Combine(Folder.Path, "Folder");
+        string NestedFilePath = System.IO.Path.Combine(SourcePath, "File.txt");
+        string TargetPath = System.IO.Path.Combine(Folder.Path, "Target", "Folder");
+        Directory.CreateDirectory(SourcePath);
+        await System.IO.File.WriteAllTextAsync(NestedFilePath, "content");
+
+        Result Result = await Endpoint.MoveDirectoryAsync("Folder", "Target/Folder", CancellationToken.None);
+
+        Assert.True(Result.Succeeded);
+        Assert.False(Directory.Exists(SourcePath));
+        Assert.True(Directory.Exists(TargetPath));
+        Assert.True(System.IO.File.Exists(System.IO.Path.Combine(TargetPath, "File.txt")));
+    }
 
     /// <summary>
     /// Verifies escaped relative paths fail as mutation results.
