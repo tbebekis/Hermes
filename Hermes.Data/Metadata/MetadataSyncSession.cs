@@ -60,6 +60,27 @@ public class MetadataSyncSession
         return Decision.DecisionKind != SyncPlanDecisionKind.None
             && Decision.DecisionKind != SyncPlanDecisionKind.CommitBase;
     }
+    static bool IsDurableConflictDecision(SyncPlanDecision Decision)
+    {
+        return Decision.DecisionKind == SyncPlanDecisionKind.Conflict
+            || Decision.DecisionKind == SyncPlanDecisionKind.Blocked;
+    }
+    static string ConflictMessage(SyncPlanDecision Decision)
+    {
+        return Decision.DecisionKind == SyncPlanDecisionKind.Blocked
+            ? "Synchronization is blocked by a namespace collision."
+            : "Conflict resolution is required.";
+    }
+    void StoreConflictDecisions(string SyncRootId, IEnumerable<SyncPlanDecision> Decisions, DateTime ObservedTime)
+    {
+        foreach (SyncPlanDecision Decision in Decisions)
+        {
+            if (IsDurableConflictDecision(Decision))
+                fStore.UpsertOpenConflict(SyncRootId, Decision, ConflictMessage(Decision), ObservedTime);
+            else
+                fStore.ResolveOpenConflict(Decision.TrackedItemId, ObservedTime);
+        }
+    }
     static void AddPlanningResult(MetadataSyncSessionResult Target, MetadataSyncSessionResult Source)
     {
         Target.Decisions.AddRange(Source.Decisions);
@@ -904,6 +925,7 @@ public class MetadataSyncSession
         MetadataSyncSessionResult Result = new();
         IReadOnlyList<SyncPlanDecision> Decisions = CreatePlanDecisions(SyncRootId);
         IReadOnlyList<BaseSnapshotRecord> CommittedBaseSnapshots = CommitBaseSnapshotsForDecisions(Decisions, CommittedTime);
+        StoreConflictDecisions(SyncRootId, Decisions, CommittedTime);
 
         Result.Decisions.AddRange(Decisions);
         Result.CommittedBaseSnapshots.AddRange(CommittedBaseSnapshots);

@@ -912,6 +912,114 @@ public class MetadataSyncSessionTests
         Assert.Equal(SyncPlanDecisionKind.Conflict, Decision.DecisionKind);
     }
     /// <summary>
+    /// Verifies metadata advancement stores durable conflicts for conflict decisions.
+    /// </summary>
+    [Fact]
+    public void AdvanceMetadataOnlyStoresOpenConflictWhenDecisionConflicts()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 6, 26, 41, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        AddBaseSnapshot(Store, "item-1", "File1.txt", "hash-base", Time);
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            ExistsFlag = true,
+            RelativePath = "File1.txt",
+            Name = "File1.txt",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-local",
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            RemoteItemId = "remote-1",
+            ExistsFlag = false,
+            Removed = true,
+            ObservedTime = Time,
+        });
+
+        Session.AdvanceMetadataOnly("root-1", Time);
+        SyncConflictRecord Conflict = Store.GetOpenConflict("item-1");
+
+        Assert.NotNull(Conflict);
+        Assert.Equal(SyncDiffKind.Conflict, Conflict.DiffKind);
+        Assert.Equal(SyncPlanDecisionKind.Conflict, Conflict.DecisionKind);
+        Assert.Equal("Conflict resolution is required.", Conflict.Message);
+    }
+    /// <summary>
+    /// Verifies metadata advancement stores durable conflicts for namespace collision blockers.
+    /// </summary>
+    [Fact]
+    public void AdvanceMetadataOnlyStoresOpenConflictsWhenNamespaceCollisionBlocks()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 6, 26, 42, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "DuplicateName.txt"));
+        Store.InsertTrackedItem(CreateTrackedItem("item-2", "remote-2", "DuplicateName.txt"));
+        AddObservedItem(Store, "item-1", "remote-1", "DuplicateName.txt", "hash-1", Time);
+        AddObservedItem(Store, "item-2", "remote-2", "DuplicateName.txt", "hash-2", Time);
+
+        Session.AdvanceMetadataOnly("root-1", Time);
+        IReadOnlyList<SyncConflictRecord> Conflicts = Store.GetOpenConflicts("root-1");
+
+        Assert.Equal(2, Conflicts.Count);
+        Assert.All(Conflicts, Item => Assert.Equal(SyncDiffKind.NamespaceCollision, Item.DiffKind));
+        Assert.All(Conflicts, Item => Assert.Equal(SyncPlanDecisionKind.Blocked, Item.DecisionKind));
+    }
+    /// <summary>
+    /// Verifies metadata advancement resolves durable conflicts when planning becomes clean.
+    /// </summary>
+    [Fact]
+    public void AdvanceMetadataOnlyResolvesOpenConflictWhenDecisionBecomesClean()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime ConflictTime = new(2026, 7, 11, 6, 26, 43, DateTimeKind.Utc);
+        DateTime CleanTime = new(2026, 7, 11, 6, 26, 44, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem("item-1", "remote-1", "File1.txt"));
+        AddBaseSnapshot(Store, "item-1", "File1.txt", "hash-base", ConflictTime);
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            ExistsFlag = true,
+            RelativePath = "File1.txt",
+            Name = "File1.txt",
+            ItemType = "File",
+            Size = 42,
+            ContentHash = "hash-local",
+            ObservedTime = ConflictTime,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "item-1",
+            RemoteItemId = "remote-1",
+            ExistsFlag = false,
+            Removed = true,
+            ObservedTime = ConflictTime,
+        });
+        Session.AdvanceMetadataOnly("root-1", ConflictTime);
+        AddObservedItem(Store, "item-1", "remote-1", "File1.txt", "hash-base", CleanTime);
+
+        Session.AdvanceMetadataOnly("root-1", CleanTime);
+
+        Assert.Null(Store.GetOpenConflict("item-1"));
+        Assert.Empty(Store.GetOpenConflicts("root-1"));
+    }
+    /// <summary>
     /// Verifies local missing and remote permanent delete tombstone commit missing base without executor work.
     /// </summary>
     [Fact]

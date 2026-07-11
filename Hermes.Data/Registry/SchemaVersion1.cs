@@ -132,6 +132,22 @@ CREATE TABLE REMOTE_OBSERVED_SNAPSHOT (
     )
 ";
         Version.AddTable(SqlText);
+
+        SqlText = @"
+CREATE TABLE SYNC_CONFLICT (
+    Id @NVARCHAR(40) @NOT_NULL primary key
+    ,SyncRootId @NVARCHAR(40) @NOT_NULL
+    ,TrackedItemId @NVARCHAR(40) @NOT_NULL
+    ,DiffKind @NVARCHAR(64) @NOT_NULL
+    ,DecisionKind @NVARCHAR(64) @NOT_NULL
+    ,State @NVARCHAR(32) @NOT_NULL
+    ,Message @NBLOB_TEXT @NULL
+    ,FirstObservedTime @DATE_TIME @NOT_NULL
+    ,LastObservedTime @DATE_TIME @NOT_NULL
+    ,ResolvedTime @DATE_TIME @NULL
+    )
+";
+        Version.AddTable(SqlText);
     }
 
     // ● constructor

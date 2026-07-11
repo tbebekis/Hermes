@@ -37,6 +37,10 @@ public class SqlMetadataStore
         object Value = Row[FieldName];
         return Value == DBNull.Value ? null : Convert.ToDateTime(Value);
     }
+    static T ReadEnum<T>(DataRow Row, string FieldName) where T : struct
+    {
+        return Enum.Parse<T>(ReadString(Row, FieldName));
+    }
     static DataRow FirstRow(MemTable Table) => Table.Rows.Count == 0 ? null : Table.Rows[0];
     static DataRow SingleOptionalRow(MemTable Table, string Description)
     {
@@ -180,6 +184,19 @@ public class SqlMetadataStore
         ["StartPageToken"] = DbValue(Record.StartPageToken),
         ["UpdatedTime"] = DbValue(Record.UpdatedTime),
     };
+    static Dictionary<string, object> ToParams(SyncConflictRecord Record) => new()
+    {
+        ["Id"] = Record.Id,
+        ["SyncRootId"] = Record.SyncRootId,
+        ["TrackedItemId"] = Record.TrackedItemId,
+        ["DiffKind"] = Record.DiffKind.ToString(),
+        ["DecisionKind"] = Record.DecisionKind.ToString(),
+        ["State"] = Record.State.ToString(),
+        ["Message"] = DbValue(Record.Message),
+        ["FirstObservedTime"] = Record.FirstObservedTime,
+        ["LastObservedTime"] = Record.LastObservedTime,
+        ["ResolvedTime"] = DbValue(Record.ResolvedTime),
+    };
 
     // ● row mapping
 
@@ -257,6 +274,19 @@ public class SqlMetadataStore
         ConnectionId = ReadString(Row, "ConnectionId"),
         StartPageToken = ReadString(Row, "StartPageToken"),
         UpdatedTime = ReadNullableDateTime(Row, "UpdatedTime"),
+    };
+    static SyncConflictRecord ToSyncConflict(DataRow Row) => new()
+    {
+        Id = ReadString(Row, "Id"),
+        SyncRootId = ReadString(Row, "SyncRootId"),
+        TrackedItemId = ReadString(Row, "TrackedItemId"),
+        DiffKind = ReadEnum<SyncDiffKind>(Row, "DiffKind"),
+        DecisionKind = ReadEnum<SyncPlanDecisionKind>(Row, "DecisionKind"),
+        State = ReadEnum<SyncConflictState>(Row, "State"),
+        Message = ReadString(Row, "Message"),
+        FirstObservedTime = ReadDateTime(Row, "FirstObservedTime"),
+        LastObservedTime = ReadDateTime(Row, "LastObservedTime"),
+        ResolvedTime = ReadNullableDateTime(Row, "ResolvedTime"),
     };
 
     // ● namespace helpers
@@ -627,6 +657,92 @@ where Id = :Id";
             .ToList();
     }
 
+    // ● conflicts
+
+    /// <summary>
+    /// Inserts or updates an open conflict.
+    /// </summary>
+    public SyncConflictRecord UpsertOpenConflict(string SyncRootId, SyncPlanDecision Decision, string Message, DateTime ObservedTime)
+    {
+        Guard.NotNullOrWhiteSpace(SyncRootId, nameof(SyncRootId));
+        Guard.NotNull(Decision, nameof(Decision));
+
+        SyncConflictRecord Record = GetOpenConflict(Decision.TrackedItemId);
+        if (Record == null)
+        {
+            Record = new SyncConflictRecord()
+            {
+                Id = Sys.GenId(),
+                SyncRootId = SyncRootId,
+                TrackedItemId = Decision.TrackedItemId,
+                FirstObservedTime = ObservedTime,
+            };
+        }
+
+        Record.DiffKind = Decision.DiffKind;
+        Record.DecisionKind = Decision.DecisionKind;
+        Record.State = SyncConflictState.Open;
+        Record.Message = Message ?? string.Empty;
+        Record.LastObservedTime = ObservedTime;
+        Record.ResolvedTime = null;
+
+        ExecuteUpsert(Sql.UpdateSyncConflict, Sql.InsertSyncConflict, ToParams(Record));
+
+        return Record;
+    }
+    /// <summary>
+    /// Resolves an open conflict for a tracked item.
+    /// </summary>
+    public bool ResolveOpenConflict(string TrackedItemId, DateTime ResolvedTime)
+    {
+        Guard.NotNullOrWhiteSpace(TrackedItemId, nameof(TrackedItemId));
+
+        int Count = fStore.ExecSql(
+            Sql.ResolveSyncConflict,
+            new Dictionary<string, object>()
+            {
+                ["TrackedItemId"] = TrackedItemId,
+                ["ResolvedTime"] = ResolvedTime,
+                ["State"] = SyncConflictState.Resolved.ToString(),
+                ["OpenState"] = SyncConflictState.Open.ToString(),
+            });
+
+        return Count > 0;
+    }
+    /// <summary>
+    /// Returns an open conflict by tracked item id.
+    /// </summary>
+    public SyncConflictRecord GetOpenConflict(string TrackedItemId)
+    {
+        DataRow Row = FirstRow(fStore.Select(
+            "select * from SYNC_CONFLICT where TrackedItemId = :TrackedItemId and State = :State",
+            new Dictionary<string, object>()
+            {
+                ["TrackedItemId"] = TrackedItemId,
+                ["State"] = SyncConflictState.Open.ToString(),
+            }));
+        return Row == null ? null : ToSyncConflict(Row);
+    }
+    /// <summary>
+    /// Returns open conflicts for a sync root.
+    /// </summary>
+    public IReadOnlyList<SyncConflictRecord> GetOpenConflicts(string SyncRootId)
+    {
+        MemTable Table = fStore.Select(
+            "select * from SYNC_CONFLICT where SyncRootId = :SyncRootId and State = :State order by TrackedItemId",
+            new Dictionary<string, object>()
+            {
+                ["SyncRootId"] = SyncRootId,
+                ["State"] = SyncConflictState.Open.ToString(),
+            });
+        List<SyncConflictRecord> Result = new();
+
+        foreach (DataRow Row in Table.Rows)
+            Result.Add(ToSyncConflict(Row));
+
+        return Result;
+    }
+
     // ● private types
 
     /// <summary>
@@ -721,5 +837,25 @@ insert into REMOTE_CHECKPOINT
     (SyncRootId, ProviderName, ConnectionId, StartPageToken, UpdatedTime)
 values
     (:SyncRootId, :ProviderName, :ConnectionId, :StartPageToken, :UpdatedTime)";
+        public const string UpdateSyncConflict = @"
+update SYNC_CONFLICT set
+    SyncRootId = :SyncRootId,
+    DiffKind = :DiffKind,
+    DecisionKind = :DecisionKind,
+    State = :State,
+    Message = :Message,
+    LastObservedTime = :LastObservedTime,
+    ResolvedTime = :ResolvedTime
+where TrackedItemId = :TrackedItemId and State = :State";
+        public const string InsertSyncConflict = @"
+insert into SYNC_CONFLICT
+    (Id, SyncRootId, TrackedItemId, DiffKind, DecisionKind, State, Message, FirstObservedTime, LastObservedTime, ResolvedTime)
+values
+    (:Id, :SyncRootId, :TrackedItemId, :DiffKind, :DecisionKind, :State, :Message, :FirstObservedTime, :LastObservedTime, :ResolvedTime)";
+        public const string ResolveSyncConflict = @"
+update SYNC_CONFLICT set
+    State = :State,
+    ResolvedTime = :ResolvedTime
+where TrackedItemId = :TrackedItemId and State = :OpenState";
     }
 }

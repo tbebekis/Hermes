@@ -783,6 +783,94 @@ public class MetadataStoreTests
         Assert.All(Decisions, Item => Assert.Equal(SyncPlanDecisionKind.Blocked, Item.DecisionKind));
     }
     /// <summary>
+    /// Verifies open conflicts can be inserted and listed.
+    /// </summary>
+    [Fact]
+    public void OpenConflictCanBeInsertedAndListed()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        DateTime ObservedTime = new(2026, 7, 11, 9, 0, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem());
+        Store.UpsertOpenConflict(
+            "root-1",
+            new SyncPlanDecision("item-1", SyncDiffKind.Conflict, SyncPlanDecisionKind.Conflict),
+            "Conflict resolution is required.",
+            ObservedTime);
+
+        IReadOnlyList<SyncConflictRecord> Conflicts = Store.GetOpenConflicts("root-1");
+
+        Assert.Single(Conflicts);
+        Assert.Equal("item-1", Conflicts[0].TrackedItemId);
+        Assert.Equal(SyncDiffKind.Conflict, Conflicts[0].DiffKind);
+        Assert.Equal(SyncPlanDecisionKind.Conflict, Conflicts[0].DecisionKind);
+        Assert.Equal(SyncConflictState.Open, Conflicts[0].State);
+        Assert.Equal(ObservedTime.ToLocalTime(), Conflicts[0].FirstObservedTime);
+        Assert.Equal(ObservedTime.ToLocalTime(), Conflicts[0].LastObservedTime);
+        Assert.Null(Conflicts[0].ResolvedTime);
+    }
+    /// <summary>
+    /// Verifies open conflict upsert refreshes the existing row.
+    /// </summary>
+    [Fact]
+    public void OpenConflictUpsertRefreshesExistingRow()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        DateTime FirstObservedTime = new(2026, 7, 11, 9, 10, 0, DateTimeKind.Utc);
+        DateTime LastObservedTime = new(2026, 7, 11, 9, 15, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem());
+        SyncConflictRecord First = Store.UpsertOpenConflict(
+            "root-1",
+            new SyncPlanDecision("item-1", SyncDiffKind.Conflict, SyncPlanDecisionKind.Conflict),
+            "First message.",
+            FirstObservedTime);
+        SyncConflictRecord Second = Store.UpsertOpenConflict(
+            "root-1",
+            new SyncPlanDecision("item-1", SyncDiffKind.NamespaceCollision, SyncPlanDecisionKind.Blocked),
+            "Blocked by namespace collision.",
+            LastObservedTime);
+
+        IReadOnlyList<SyncConflictRecord> Conflicts = Store.GetOpenConflicts("root-1");
+
+        Assert.Equal(First.Id, Second.Id);
+        Assert.Single(Conflicts);
+        Assert.Equal(FirstObservedTime.ToLocalTime(), Conflicts[0].FirstObservedTime);
+        Assert.Equal(LastObservedTime.ToLocalTime(), Conflicts[0].LastObservedTime);
+        Assert.Equal(SyncDiffKind.NamespaceCollision, Conflicts[0].DiffKind);
+        Assert.Equal(SyncPlanDecisionKind.Blocked, Conflicts[0].DecisionKind);
+        Assert.Equal("Blocked by namespace collision.", Conflicts[0].Message);
+    }
+    /// <summary>
+    /// Verifies open conflicts can be resolved.
+    /// </summary>
+    [Fact]
+    public void OpenConflictCanBeResolved()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        DateTime ObservedTime = new(2026, 7, 11, 9, 20, 0, DateTimeKind.Utc);
+        DateTime ResolvedTime = new(2026, 7, 11, 9, 25, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem());
+        Store.UpsertOpenConflict(
+            "root-1",
+            new SyncPlanDecision("item-1", SyncDiffKind.Conflict, SyncPlanDecisionKind.Conflict),
+            "Conflict resolution is required.",
+            ObservedTime);
+
+        bool Resolved = Store.ResolveOpenConflict("item-1", ResolvedTime);
+
+        Assert.True(Resolved);
+        Assert.Null(Store.GetOpenConflict("item-1"));
+        Assert.Empty(Store.GetOpenConflicts("root-1"));
+    }
+    /// <summary>
     /// Verifies a local-only item without base state plans as upload.
     /// </summary>
     [Fact]
