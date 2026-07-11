@@ -8,6 +8,13 @@ namespace Hermes.Service;
 /// </summary>
 static public class Program
 {
+    // ● private
+
+    static void MapServiceApi(IEndpointRouteBuilder Endpoints)
+    {
+        Endpoints.MapGet("/status", () => ServiceStatusResponse.Create());
+    }
+
     // ● public
 
     /// <summary>
@@ -27,6 +34,15 @@ static public class Program
     {
         return Microsoft.Extensions.Hosting.Host.CreateDefaultBuilder(Args)
             .UseSystemd()
+            .ConfigureWebHostDefaults(WebBuilder =>
+            {
+                WebBuilder.UseUrls("http://127.0.0.1:8765");
+                WebBuilder.Configure(App =>
+                {
+                    App.UseRouting();
+                    App.UseEndpoints(MapServiceApi);
+                });
+            })
             .ConfigureServices((Context, Services) =>
             {
                 Services.AddHermesServiceServices(Context.Configuration);
