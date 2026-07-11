@@ -742,6 +742,13 @@ where Id = :Id";
 
         return Result;
     }
+    /// <summary>
+    /// Returns the number of open conflicts for a sync root.
+    /// </summary>
+    public int CountOpenConflicts(string SyncRootId)
+    {
+        return GetOpenConflicts(SyncRootId).Count;
+    }
 
     // ● private types
 

@@ -810,6 +810,7 @@ public class MetadataStoreTests
         Assert.Equal(ObservedTime.ToLocalTime(), Conflicts[0].FirstObservedTime);
         Assert.Equal(ObservedTime.ToLocalTime(), Conflicts[0].LastObservedTime);
         Assert.Null(Conflicts[0].ResolvedTime);
+        Assert.Equal(1, Store.CountOpenConflicts("root-1"));
     }
     /// <summary>
     /// Verifies open conflict upsert refreshes the existing row.
@@ -869,6 +870,7 @@ public class MetadataStoreTests
         Assert.True(Resolved);
         Assert.Null(Store.GetOpenConflict("item-1"));
         Assert.Empty(Store.GetOpenConflicts("root-1"));
+        Assert.Equal(0, Store.CountOpenConflicts("root-1"));
     }
     /// <summary>
     /// Verifies a local-only item without base state plans as upload.

@@ -179,6 +179,11 @@ public class MetadataSyncRunResult
     public int RemoteObservedChangeCount { get; set; }
 
     /// <summary>
+    /// Gets or sets the number of durable open conflicts after the run.
+    /// </summary>
+    public int OpenConflictCount { get; set; }
+
+    /// <summary>
     /// Gets the number of planner decisions produced by the run.
     /// </summary>
     public int DecisionCount => SessionResult?.Decisions.Count ?? 0;

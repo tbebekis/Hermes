@@ -24,7 +24,7 @@ public class MetadataSyncLoop
     void LogSuccess(MetadataSyncRunResult Result)
     {
         fLogger.LogInformation(
-            "Sync pass completed for root {SyncRootId}. Kind: {Kind}. Local items: {LocalObservedItemCount}. Remote items: {RemoteObservedItemCount}. Remote changes: {RemoteObservedChangeCount}. Decisions: {DecisionCount}. Pending executions: {PendingExecutionCount}. Pending summary: {PendingExecutionSummary}. Pending diffs: {PendingDiffSummary}. Namespace collisions: {NamespaceCollisionSummary}. Blocked items: {BlockedExecutionSummary}. Committed executions: {CommittedExecutionCount}. Uncommitted executions: {UncommittedExecutionCount}. Uncommitted summary: {UncommittedExecutionSummary}. Uncommitted messages: {UncommittedExecutionMessages}.",
+            "Sync pass completed for root {SyncRootId}. Kind: {Kind}. Local items: {LocalObservedItemCount}. Remote items: {RemoteObservedItemCount}. Remote changes: {RemoteObservedChangeCount}. Decisions: {DecisionCount}. Pending executions: {PendingExecutionCount}. Open conflicts: {OpenConflictCount}. Pending summary: {PendingExecutionSummary}. Pending diffs: {PendingDiffSummary}. Namespace collisions: {NamespaceCollisionSummary}. Blocked items: {BlockedExecutionSummary}. Committed executions: {CommittedExecutionCount}. Uncommitted executions: {UncommittedExecutionCount}. Uncommitted summary: {UncommittedExecutionSummary}. Uncommitted messages: {UncommittedExecutionMessages}.",
             fSyncRoot.Id,
             Result.Kind,
             Result.LocalObservedItemCount,
@@ -32,6 +32,7 @@ public class MetadataSyncLoop
             Result.RemoteObservedChangeCount,
             Result.DecisionCount,
             Result.PendingExecutionCount,
+            Result.OpenConflictCount,
             Result.PendingExecutionSummary,
             Result.PendingDiffSummary,
             Result.NamespaceCollisionSummary,

@@ -314,6 +314,31 @@ public class MetadataSyncRunnerTests
         Assert.Equal("remote-root", Store.GetSyncRoot("root-1").RemoteRootItemId);
         Assert.NotNull(Store.GetTrackedItemByRemoteId("root-1", "remote-file"));
     }
+    /// <summary>
+    /// Verifies runner results include durable open conflict counts.
+    /// </summary>
+    [Fact]
+    public async Task RunOnceAsyncReturnsOpenConflictCount()
+    {
+        using TestDatabase Database = new();
+        using TempFolder Folder = new();
+        SqlMetadataStore Store = new(Database.Store);
+        Store.InsertSyncRoot(CreateSyncRoot(Folder.Path));
+        FakeStorageProvider Provider = new();
+        StorageItem RemoteFile1 = FileItem("remote-file-1", "remote-root", "Duplicate.txt");
+        StorageItem RemoteFile2 = FileItem("remote-file-2", "remote-root", "Duplicate.txt");
+        Provider.FolderItems["remote-root"] = [RemoteFile1, RemoteFile2];
+        Provider.ItemsById[RemoteFile1.Id] = RemoteFile1;
+        Provider.ItemsById[RemoteFile2.Id] = RemoteFile2;
+        CompletingExecutor Executor = new();
+        MetadataSyncRunner Runner = CreateRunner(Store, Provider, Executor);
+
+        Result<MetadataSyncRunResult> Result = await Runner.RunOnceAsync("root-1", CancellationToken.None);
+
+        Assert.True(Result.Succeeded);
+        Assert.Equal(2, Result.Value.OpenConflictCount);
+        Assert.Equal(2, Store.CountOpenConflicts("root-1"));
+    }
 
     /// <summary>
     /// Verifies incremental runs use the stored checkpoint and advance it from changes.

@@ -106,6 +106,7 @@ public class MetadataSyncRunner : IMetadataSyncRunner
         RunResult.Kind = MetadataSyncRunKind.Bootstrap;
         RunResult.LocalObservedItemCount = LocalItems.Count;
         RunResult.RemoteObservedItemCount = RemoteItemsResult.Value.Count;
+        RunResult.OpenConflictCount = fStore.CountOpenConflicts(Root.Id);
 
         return Result<MetadataSyncRunResult>.Success(RunResult);
     }
@@ -151,6 +152,7 @@ public class MetadataSyncRunner : IMetadataSyncRunner
         RunResult.Kind = MetadataSyncRunKind.Incremental;
         RunResult.LocalObservedItemCount = LocalItems.Count;
         RunResult.RemoteObservedChangeCount = ChangesResult.Value.Changes.Count;
+        RunResult.OpenConflictCount = fStore.CountOpenConflicts(Root.Id);
 
         return Result<MetadataSyncRunResult>.Success(RunResult);
     }
