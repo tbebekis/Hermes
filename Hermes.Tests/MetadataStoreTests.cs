@@ -928,6 +928,46 @@ public class MetadataStoreTests
         Assert.Equal(0, Store.CountOpenConflicts("root-1"));
     }
     /// <summary>
+    /// Verifies resolved conflict cleanup leaves open conflicts intact.
+    /// </summary>
+    [Fact]
+    public void ResolvedConflictCleanupLeavesOpenConflicts()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        DateTime ObservedTime = new(2026, 7, 11, 9, 30, 0, DateTimeKind.Utc);
+        DateTime OldResolvedTime = new(2026, 7, 11, 9, 35, 0, DateTimeKind.Utc);
+        DateTime NewResolvedTime = new(2026, 7, 11, 9, 45, 0, DateTimeKind.Utc);
+        DateTime CutoffTime = new(2026, 7, 11, 9, 40, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(CreateTrackedItem());
+        Store.InsertTrackedItem(CreateTrackedItem2());
+        Store.UpsertOpenConflict(
+            "root-1",
+            new SyncPlanDecision("item-1", SyncDiffKind.Conflict, SyncPlanDecisionKind.Conflict),
+            "Conflict resolution is required.",
+            ObservedTime);
+        Store.ResolveOpenConflict("item-1", OldResolvedTime);
+        Store.UpsertOpenConflict(
+            "root-1",
+            new SyncPlanDecision("item-2", SyncDiffKind.NamespaceCollision, SyncPlanDecisionKind.Blocked),
+            "Blocked by namespace collision.",
+            ObservedTime);
+        Store.ResolveOpenConflict("item-2", NewResolvedTime);
+        Store.UpsertOpenConflict(
+            "root-1",
+            new SyncPlanDecision("item-1", SyncDiffKind.Conflict, SyncPlanDecisionKind.Conflict),
+            "Conflict resolution is required.",
+            ObservedTime);
+
+        int DeletedCount = Store.DeleteResolvedConflictsBefore(CutoffTime);
+
+        Assert.Equal(1, DeletedCount);
+        Assert.Equal(1, Store.CountOpenConflicts("root-1"));
+        Assert.Equal("item-1", Store.GetOpenConflicts("root-1").Single().TrackedItemId);
+    }
+    /// <summary>
     /// Verifies a local-only item without base state plans as upload.
     /// </summary>
     [Fact]

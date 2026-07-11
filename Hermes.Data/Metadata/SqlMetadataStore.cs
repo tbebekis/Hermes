@@ -851,6 +851,19 @@ where Id = :Id";
                 ["State"] = SyncConflictState.Open.ToString(),
             });
     }
+    /// <summary>
+    /// Deletes resolved conflicts older than the specified cutoff time.
+    /// </summary>
+    public int DeleteResolvedConflictsBefore(DateTime CutoffTime)
+    {
+        return fStore.ExecSql(
+            "delete from SYNC_CONFLICT where State = :State and ResolvedTime is not null and ResolvedTime < :CutoffTime",
+            new Dictionary<string, object>()
+            {
+                ["State"] = SyncConflictState.Resolved.ToString(),
+                ["CutoffTime"] = CutoffTime,
+            });
+    }
 
     // ● private types
 
