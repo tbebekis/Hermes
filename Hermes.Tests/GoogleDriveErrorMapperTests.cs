@@ -88,4 +88,52 @@ public class GoogleDriveErrorMapperTests
         Assert.Equal("rateLimitExceeded", Error.ProviderErrorCode);
         Assert.Equal("Forbidden", Error.ProviderStatusCode);
     }
+    /// <summary>
+    /// Verifies temporary Google service failures map to retryable temporary unavailable errors.
+    /// </summary>
+    [Theory]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.BadGateway)]
+    [InlineData(HttpStatusCode.ServiceUnavailable)]
+    [InlineData(HttpStatusCode.GatewayTimeout)]
+    public void MapClassifiesTemporaryUnavailable(HttpStatusCode StatusCode)
+    {
+        GoogleApiException Ex = CreateException(StatusCode, "Temporary failure.");
+
+        StorageError Error = GoogleDriveErrorMapper.Map(Ex, "ListChanges");
+
+        Assert.Equal(StorageErrorKind.TemporarilyUnavailable, Error.Kind);
+        Assert.True(Error.IsRetryable);
+    }
+    /// <summary>
+    /// Verifies authorization failures map to permission denied errors.
+    /// </summary>
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.Forbidden)]
+    public void MapClassifiesPermissionDenied(HttpStatusCode StatusCode)
+    {
+        GoogleApiException Ex = CreateException(StatusCode, "Permission denied.");
+
+        StorageError Error = GoogleDriveErrorMapper.Map(Ex, "GetItem");
+
+        Assert.Equal(StorageErrorKind.PermissionDenied, Error.Kind);
+        Assert.False(Error.IsRetryable);
+    }
+    /// <summary>
+    /// Verifies provider conflicts map to storage conflict errors.
+    /// </summary>
+    [Theory]
+    [InlineData(HttpStatusCode.Conflict)]
+    [InlineData(HttpStatusCode.PreconditionFailed)]
+    public void MapClassifiesConflict(HttpStatusCode StatusCode)
+    {
+        GoogleApiException Ex = CreateException(StatusCode, "Operation conflicts with current state.");
+
+        StorageError Error = GoogleDriveErrorMapper.Map(Ex, "UpdateItem", "item-1");
+
+        Assert.Equal(StorageErrorKind.Conflict, Error.Kind);
+        Assert.False(Error.IsRetryable);
+        Assert.Equal("item-1", Error.ItemId);
+    }
 }
