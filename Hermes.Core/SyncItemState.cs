@@ -35,6 +35,10 @@ public class SyncItemState
     /// </summary>
     public string LocalRelativePath { get; set; }
     /// <summary>
+    /// Gets or sets the local relative path projected from the remote namespace.
+    /// </summary>
+    public string ProjectedLocalRelativePath { get; set; }
+    /// <summary>
     /// Gets or sets the remote parent id.
     /// </summary>
     public string RemoteParentId { get; set; }

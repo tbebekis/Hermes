@@ -19,16 +19,25 @@ public class MetadataSyncSession
     {
         SyncDiffClassifier Classifier = new();
         List<TrackedItemDiffRecord> Result = new();
+        SyncRootRecord SyncRoot = fStore.GetSyncRoot(SyncRootId);
         HashSet<string> CollidingItemIds = fStore.FindRemoteNamespaceCollisions(SyncRootId)
             .SelectMany(Item => Item.TrackedItemIds)
             .ToHashSet();
 
         foreach (TrackedItemRecord Item in fStore.GetTrackedItems(SyncRootId))
         {
+            BaseSnapshotRecord BaseSnapshot = fStore.GetBaseSnapshot(Item.Id);
+            LocalObservedSnapshotRecord LocalObservation = fStore.GetLocalObservation(Item.Id);
+            RemoteObservedSnapshotRecord RemoteObservation = fStore.GetRemoteObservation(Item.Id);
             Result.Add(new TrackedItemDiffRecord()
             {
                 TrackedItemId = Item.Id,
-                DiffKind = Classifier.Classify(fStore.GetDiffInput(Item.Id, CollidingItemIds.Contains(Item.Id))),
+                DiffKind = Classifier.Classify(SyncItemStateMapper.CreateDiffInput(
+                    BaseSnapshot,
+                    LocalObservation,
+                    RemoteObservation,
+                    CollidingItemIds.Contains(Item.Id),
+                    ProjectRemoteLocalPath(SyncRoot, RemoteObservation))),
             });
         }
 
@@ -293,6 +302,22 @@ public class MetadataSyncSession
             return null;
 
         return ExistingLocalPath(fStore.GetLocalObservation(ParentItem.Id), fStore.GetBaseSnapshot(ParentItem.Id));
+    }
+    string ProjectRemoteLocalPath(SyncRootRecord SyncRoot, RemoteObservedSnapshotRecord RemoteObservation)
+    {
+        if (SyncRoot == null || RemoteObservation == null || string.IsNullOrWhiteSpace(RemoteObservation.Name))
+            return null;
+
+        if (string.Equals(RemoteObservation.RemoteParentId, SyncRoot.RemoteRootItemId, StringComparison.Ordinal))
+            return RemoteObservation.Name;
+
+        string ParentPath = ResolveRemoteParentLocalPath(SyncRoot, RemoteObservation);
+        if (ParentPath == null)
+            return null;
+
+        return string.IsNullOrWhiteSpace(ParentPath)
+            ? RemoteObservation.Name
+            : ParentPath + "/" + RemoteObservation.Name;
     }
     string ResolveLocalParentRemoteId(SyncRootRecord SyncRoot, LocalObservedSnapshotRecord LocalObservation)
     {

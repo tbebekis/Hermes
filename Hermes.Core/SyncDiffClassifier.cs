@@ -113,6 +113,18 @@ public class SyncDiffClassifier
             && !SameText(BaseState.Name, LocalState.Name)
             && !SameText(BaseState.Name, RemoteState.Name);
     }
+    static bool HasCompatibleProjectedNamespaceChange(SyncItemState BaseState, SyncItemState LocalState, SyncItemState RemoteState)
+    {
+        return BaseState != null
+            && !IsMissing(LocalState)
+            && !IsMissing(RemoteState)
+            && SameContent(BaseState, LocalState)
+            && SameContent(BaseState, RemoteState)
+            && !string.IsNullOrWhiteSpace(RemoteState.ProjectedLocalRelativePath)
+            && SameText(LocalState.LocalRelativePath, RemoteState.ProjectedLocalRelativePath)
+            && !SameLocalNamespace(BaseState, LocalState)
+            && !SameRemoteNamespace(BaseState, RemoteState);
+    }
     static SyncDiffKind ClassifyWithoutBase(SyncItemState LocalState, SyncItemState RemoteState)
     {
         bool LocalMissing = IsMissing(LocalState);
@@ -170,6 +182,9 @@ public class SyncDiffClassifier
                 : SyncDiffKind.RemoteTrashed;
 
         if (HasCompatibleRename(Input.BaseState, LocalState, RemoteState))
+            return SyncDiffKind.BothChangedCompatible;
+
+        if (HasCompatibleProjectedNamespaceChange(Input.BaseState, LocalState, RemoteState))
             return SyncDiffKind.BothChangedCompatible;
 
         if (HasOnlyRemoteNamespaceChanged(Input.BaseState, LocalState, RemoteState))

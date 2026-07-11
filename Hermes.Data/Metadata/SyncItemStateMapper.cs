@@ -82,7 +82,12 @@ static public class SyncItemStateMapper
     /// <summary>
     /// Creates classifier input from persisted metadata records.
     /// </summary>
-    static public SyncDiffInput CreateDiffInput(BaseSnapshotRecord BaseSnapshot, LocalObservedSnapshotRecord LocalObservation, RemoteObservedSnapshotRecord RemoteObservation, bool NamespaceCollisionDetected = false)
+    static public SyncDiffInput CreateDiffInput(
+        BaseSnapshotRecord BaseSnapshot,
+        LocalObservedSnapshotRecord LocalObservation,
+        RemoteObservedSnapshotRecord RemoteObservation,
+        bool NamespaceCollisionDetected = false,
+        string RemoteProjectedLocalRelativePath = null)
     {
         SyncItemState BaseState = FromBaseSnapshot(BaseSnapshot);
         SyncItemState LocalState = FromLocalObservation(LocalObservation);
@@ -103,6 +108,9 @@ static public class SyncItemStateMapper
 
         if (RemoteState != null && BaseState != null)
             RemoteState.LocalRelativePath = BaseState.LocalRelativePath;
+
+        if (RemoteState != null)
+            RemoteState.ProjectedLocalRelativePath = RemoteProjectedLocalRelativePath;
 
         if (RemoteObservation != null && RemoteObservation.Removed)
         {
