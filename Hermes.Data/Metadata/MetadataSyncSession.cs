@@ -24,6 +24,7 @@ public class MetadataSyncSession
             .SelectMany(Item => Item.TrackedItemIds)
             .ToHashSet();
         CollidingItemIds.UnionWith(FindProjectedLocalNamespaceCollisionItemIds(SyncRoot));
+        CollidingItemIds.UnionWith(FindTrackedLocalKeyCollisionItemIds(SyncRootId));
 
         foreach (TrackedItemRecord Item in fStore.GetTrackedItems(SyncRootId))
         {
@@ -80,6 +81,15 @@ public class MetadataSyncSession
         }
 
         Items.Add(TrackedItemId);
+    }
+    HashSet<string> FindTrackedLocalKeyCollisionItemIds(string SyncRootId)
+    {
+        return fStore.GetTrackedItems(SyncRootId)
+            .Where(Item => !string.IsNullOrWhiteSpace(Item.LocalKey))
+            .GroupBy(Item => Item.LocalKey, StringComparer.Ordinal)
+            .Where(Group => Group.Count() > 1)
+            .SelectMany(Group => Group.Select(Item => Item.Id))
+            .ToHashSet();
     }
     static bool IsPendingExecutorDecision(SyncPlanDecision Decision)
     {
@@ -160,7 +170,16 @@ public class MetadataSyncSession
     {
         return fStore.GetTrackedItems(SyncRootId)
             .Where(Item => !string.IsNullOrWhiteSpace(Item.LocalKey))
-            .ToDictionary(Item => Item.LocalKey);
+            .GroupBy(Item => Item.LocalKey, StringComparer.Ordinal)
+            .ToDictionary(Group => Group.Key, SelectPreferredLocalKeyTrackedItem, StringComparer.Ordinal);
+    }
+    TrackedItemRecord SelectPreferredLocalKeyTrackedItem(IGrouping<string, TrackedItemRecord> Group)
+    {
+        return Group
+            .OrderByDescending(Item => fStore.GetLocalObservation(Item.Id)?.ExistsFlag == true)
+            .ThenByDescending(Item => !string.IsNullOrWhiteSpace(Item.RemoteItemId))
+            .ThenBy(Item => Item.Id, StringComparer.Ordinal)
+            .First();
     }
     Dictionary<string, TrackedItemRecord> GetTrackedItemsByObservedLocalKey(string SyncRootId)
     {

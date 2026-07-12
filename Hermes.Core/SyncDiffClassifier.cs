@@ -280,7 +280,7 @@ public class SyncDiffClassifier
         if (!LocalChanged && RemoteChanged)
             return SyncDiffKind.RemoteChanged;
 
-        return SameState(LocalState, RemoteState)
+        return SameState(LocalState, RemoteState) || SameProjectedState(LocalState, RemoteState)
             ? SyncDiffKind.BothChangedCompatible
             : SyncDiffKind.Conflict;
     }
