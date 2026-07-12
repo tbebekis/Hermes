@@ -4523,6 +4523,152 @@ public class MetadataSyncSessionTests
         Assert.Equal("remote-file", Store.GetTrackedItemByLocalKey("root-1", "Folder/Nested.txt").RemoteItemId);
     }
     /// <summary>
+    /// Verifies old ancestor folder deletes wait until moved-out descendants are synchronized remotely.
+    /// </summary>
+    [Fact]
+    public void AdvanceMetadataOnlyDefersAncestorDeleteWhenDescendantMovedOutLocally()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 8, 19, 0, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(new TrackedItemRecord()
+        {
+            Id = "target-item",
+            SyncRootId = "root-1",
+            RemoteItemId = "remote-target",
+            LocalKey = "MoveTarget",
+            ItemType = "Folder",
+        });
+        Store.InsertTrackedItem(new TrackedItemRecord()
+        {
+            Id = "tree-item",
+            SyncRootId = "root-1",
+            RemoteItemId = "remote-tree",
+            LocalKey = "local-tree",
+            ItemType = "Folder",
+        });
+        Store.UpsertBaseSnapshot(new BaseSnapshotRecord() { TrackedItemId = "target-item", ExistsFlag = true, ItemType = "Folder", Name = "MoveTarget", LocalRelativePath = "MoveTarget", RemoteParentId = "remote-root", Trashed = false, CommittedTime = Time });
+        Store.UpsertBaseSnapshot(new BaseSnapshotRecord() { TrackedItemId = "tree-item", ExistsFlag = true, ItemType = "Folder", Name = "local-tree", LocalRelativePath = "MoveTarget/local-tree", RemoteParentId = "remote-target", Trashed = false, CommittedTime = Time });
+        Store.UpsertLocalObservation(LocalObservationMapper.Missing("target-item", Time, "scan-move-back"));
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "tree-item",
+            ExistsFlag = true,
+            RelativePath = "local-tree",
+            Name = "local-tree",
+            ItemType = "Folder",
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "target-item",
+            RemoteItemId = "remote-target",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "MoveTarget",
+            RemoteParentId = "remote-root",
+            ItemType = "Folder",
+            ProviderVersion = 1,
+            Trashed = false,
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "tree-item",
+            RemoteItemId = "remote-tree",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "local-tree",
+            RemoteParentId = "remote-target",
+            ItemType = "Folder",
+            ProviderVersion = 1,
+            Trashed = false,
+            ObservedTime = Time,
+        });
+        MetadataSyncSessionResult SessionResult = Session.AdvanceMetadataOnly("root-1", Time);
+
+        Assert.Single(SessionResult.PendingExecutionRequests);
+        Assert.Equal("tree-item", SessionResult.PendingExecutionRequests[0].Decision.TrackedItemId);
+        Assert.Equal(SyncPlanDecisionKind.ApplyLocalNamespaceToRemote, SessionResult.PendingExecutionRequests[0].Decision.DecisionKind);
+        Assert.Contains(SessionResult.Decisions, Item => Item.TrackedItemId == "target-item" && Item.DecisionKind == SyncPlanDecisionKind.None);
+    }
+    /// <summary>
+    /// Verifies old ancestor folder deletes wait while a remote-moved descendant is still local at the old path.
+    /// </summary>
+    [Fact]
+    public void AdvanceMetadataOnlyDefersAncestorDeleteWhenRemoteMovedDescendantIsStillLocalAtOldPath()
+    {
+        using TestDatabase Database = new();
+        SqlMetadataStore Store = new(Database.Store);
+        MetadataSyncSession Session = new(Store, new SyncPlanner());
+        DateTime Time = new(2026, 7, 11, 8, 19, 30, DateTimeKind.Utc);
+
+        Store.InsertSyncRoot(CreateSyncRoot());
+        Store.InsertTrackedItem(new TrackedItemRecord()
+        {
+            Id = "target-item",
+            SyncRootId = "root-1",
+            RemoteItemId = "remote-target",
+            LocalKey = "MoveTarget",
+            ItemType = "Folder",
+        });
+        Store.InsertTrackedItem(new TrackedItemRecord()
+        {
+            Id = "tree-item",
+            SyncRootId = "root-1",
+            RemoteItemId = "remote-tree",
+            LocalKey = "local-tree",
+            ItemType = "Folder",
+        });
+        Store.UpsertBaseSnapshot(new BaseSnapshotRecord() { TrackedItemId = "target-item", ExistsFlag = true, ItemType = "Folder", Name = "MoveTarget", LocalRelativePath = "MoveTarget", RemoteParentId = "remote-root", Trashed = false, CommittedTime = Time });
+        Store.UpsertBaseSnapshot(new BaseSnapshotRecord() { TrackedItemId = "tree-item", ExistsFlag = true, ItemType = "Folder", Name = "local-tree", LocalRelativePath = "local-tree", RemoteParentId = "remote-root", Trashed = false, CommittedTime = Time });
+        Store.UpsertLocalObservation(LocalObservationMapper.Missing("target-item", Time, "scan-remote-move"));
+        Store.UpsertLocalObservation(new LocalObservedSnapshotRecord()
+        {
+            TrackedItemId = "tree-item",
+            ExistsFlag = true,
+            RelativePath = "local-tree",
+            Name = "local-tree",
+            ItemType = "Folder",
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "target-item",
+            RemoteItemId = "remote-target",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "MoveTarget",
+            RemoteParentId = "remote-root",
+            ItemType = "Folder",
+            ProviderVersion = 1,
+            Trashed = false,
+            ObservedTime = Time,
+        });
+        Store.UpsertRemoteObservation(new RemoteObservedSnapshotRecord()
+        {
+            TrackedItemId = "tree-item",
+            RemoteItemId = "remote-tree",
+            ExistsFlag = true,
+            Removed = false,
+            Name = "local-tree",
+            RemoteParentId = "remote-target",
+            ItemType = "Folder",
+            ProviderVersion = 2,
+            Trashed = false,
+            ObservedTime = Time,
+        });
+        MetadataSyncSessionResult SessionResult = Session.AdvanceMetadataOnly("root-1", Time);
+
+        Assert.Single(SessionResult.PendingExecutionRequests);
+        Assert.Equal("tree-item", SessionResult.PendingExecutionRequests[0].Decision.TrackedItemId);
+        Assert.Equal(SyncPlanDecisionKind.ApplyRemoteNamespaceToLocal, SessionResult.PendingExecutionRequests[0].Decision.DecisionKind);
+        Assert.Contains(SessionResult.Decisions, Item => Item.TrackedItemId == "target-item" && Item.DecisionKind == SyncPlanDecisionKind.None);
+    }
+    /// <summary>
     /// Verifies failed executor results are applied without committing base snapshots.
     /// </summary>
     [Fact]

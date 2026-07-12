@@ -528,6 +528,17 @@ public class MetadataSyncSession
         Cache[LocalPath] = Result;
         return Result;
     }
+    static int ExecutionPriority(SyncExecutionRequest Request)
+    {
+        return Request?.Decision?.DecisionKind switch
+        {
+            SyncPlanDecisionKind.ApplyLocalNamespaceToRemote => 0,
+            SyncPlanDecisionKind.ApplyRemoteNamespaceToLocal => 0,
+            SyncPlanDecisionKind.PropagateLocalDelete => 2,
+            SyncPlanDecisionKind.PropagateRemoteDelete => 2,
+            _ => 1,
+        };
+    }
     static IReadOnlyList<SyncExecutionRequest> OrderExecutionRequests(IEnumerable<SyncExecutionRequest> Requests)
     {
         List<SyncExecutionRequest> Result = Requests.ToList();
@@ -545,7 +556,8 @@ public class MetadataSyncSession
         Dictionary<string, int> LocalCache = new();
 
         return Result
-            .OrderBy(Item => RemoteDependencyDepth(Item, RequestsByRemoteId, RemoteCache))
+            .OrderBy(ExecutionPriority)
+            .ThenBy(Item => RemoteDependencyDepth(Item, RequestsByRemoteId, RemoteCache))
             .ThenBy(Item => LocalDependencyDepth(Item, RequestsByLocalPath, LocalCache))
             .ToList();
     }
@@ -652,6 +664,61 @@ public class MetadataSyncSession
     {
         return Observation != null
             && (Observation.Removed || Observation.Trashed == true || !Observation.ExistsFlag);
+    }
+    bool HasActiveMovedOutDescendant(SyncRootRecord SyncRoot, string ParentLocalPath, string ParentTrackedItemId)
+    {
+        foreach (TrackedItemRecord Item in fStore.GetTrackedItems(SyncRoot.Id))
+        {
+            if (string.Equals(Item.Id, ParentTrackedItemId, StringComparison.Ordinal))
+                continue;
+
+            BaseSnapshotRecord BaseSnapshot = fStore.GetBaseSnapshot(Item.Id);
+            RemoteObservedSnapshotRecord RemoteObservation = fStore.GetRemoteObservation(Item.Id);
+            bool IsKnownRemoteDescendant = BaseSnapshot != null
+                && BaseSnapshot.ExistsFlag
+                && IsDescendantPath(ParentLocalPath, BaseSnapshot.LocalRelativePath);
+            bool IsProjectedRemoteDescendant = !IsInactiveRemoteObservation(RemoteObservation)
+                && IsDescendantPath(ParentLocalPath, ProjectRemoteLocalPath(SyncRoot, RemoteObservation));
+
+            if (!IsKnownRemoteDescendant && !IsProjectedRemoteDescendant)
+                continue;
+
+            LocalObservedSnapshotRecord LocalObservation = fStore.GetLocalObservation(Item.Id);
+            if (LocalObservation == null
+                || !LocalObservation.ExistsFlag
+                || string.IsNullOrWhiteSpace(LocalObservation.RelativePath)
+                || IsDescendantPath(ParentLocalPath, LocalObservation.RelativePath))
+                continue;
+
+            if (!IsInactiveRemoteObservation(RemoteObservation))
+                return true;
+        }
+
+        return false;
+    }
+    bool ShouldDeferUnsafeAncestorLocalDelete(SyncPlanDecision Decision)
+    {
+        if (Decision?.DecisionKind != SyncPlanDecisionKind.PropagateLocalDelete)
+            return false;
+
+        TrackedItemRecord TrackedItem = fStore.GetTrackedItem(Decision.TrackedItemId);
+        SyncRootRecord SyncRoot = TrackedItem == null ? null : fStore.GetSyncRoot(TrackedItem.SyncRootId);
+        BaseSnapshotRecord BaseSnapshot = fStore.GetBaseSnapshot(Decision.TrackedItemId);
+
+        if (SyncRoot == null
+            || BaseSnapshot == null
+            || !BaseSnapshot.ExistsFlag
+            || !string.Equals(BaseSnapshot.ItemType, "Folder", StringComparison.OrdinalIgnoreCase)
+            || string.IsNullOrWhiteSpace(BaseSnapshot.LocalRelativePath))
+            return false;
+
+        return HasActiveMovedOutDescendant(SyncRoot, BaseSnapshot.LocalRelativePath, Decision.TrackedItemId);
+    }
+    SyncPlanDecision DeferUnsafeAncestorLocalDelete(SyncPlanDecision Decision)
+    {
+        return ShouldDeferUnsafeAncestorLocalDelete(Decision)
+            ? new SyncPlanDecision(Decision.TrackedItemId, Decision.DiffKind, SyncPlanDecisionKind.None)
+            : Decision;
     }
     static bool ShouldReplaceTrackedRemoteItemId(SyncExecutionResult Result, TrackedItemRecord TrackedItem)
     {
@@ -1072,7 +1139,9 @@ public class MetadataSyncSession
     {
         Guard.NotNullOrWhiteSpace(SyncRootId, nameof(SyncRootId));
 
-        return fPlanner.CreateDecisions(CreatePlanInputs(SyncRootId));
+        return fPlanner.CreateDecisions(CreatePlanInputs(SyncRootId))
+            .Select(DeferUnsafeAncestorLocalDelete)
+            .ToList();
     }
     /// <summary>
     /// Commits base snapshots for planner decisions that require metadata-only base advancement.

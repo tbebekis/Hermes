@@ -424,7 +424,20 @@ order by coalesce(i.LocalKey, l.RelativePath, b.LocalRelativePath, r.Name)";
         List<string> Result = new();
         using SQLiteConnection Connection = OpenDatabase();
         using SQLiteCommand Command = Connection.CreateCommand();
-        Command.CommandText = "select LocalKey from TRACKED_ITEM where LocalKey is not null and LocalKey <> '' order by LocalKey";
+        Command.CommandText = @"
+select i.LocalKey
+from TRACKED_ITEM i
+left join LOCAL_OBSERVED_SNAPSHOT l on l.TrackedItemId = i.Id
+left join REMOTE_OBSERVED_SNAPSHOT r on r.TrackedItemId = i.Id
+left join BASE_SNAPSHOT b on b.TrackedItemId = i.Id
+where i.LocalKey is not null
+  and i.LocalKey <> ''
+  and (
+      l.ExistsFlag = 1
+      or b.ExistsFlag = 1
+      or (r.ExistsFlag = 1 and coalesce(r.Trashed, 0) = 0 and coalesce(r.Removed, 0) = 0)
+  )
+order by i.LocalKey";
         using SQLiteDataReader Reader = Command.ExecuteReader();
 
         while (Reader.Read())
