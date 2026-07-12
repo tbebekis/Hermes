@@ -151,10 +151,24 @@ static public class Program
         StorageItem Renamed = await Client.RenameFileAsync(Item.Id, NewName, CancellationToken);
         Console.WriteLine($"{PathText} -> {NewName}\tid={Renamed.Id}");
     }
+    static async Task RenameDriveItemByIdAsync(string RemoteItemId, string NewName, CancellationToken CancellationToken)
+    {
+        GoogleDriveClient Client = await CreateDriveClientAsync(CancellationToken);
+        StorageItem Renamed = await Client.RenameFileAsync(RemoteItemId, NewName, CancellationToken);
+        Console.WriteLine($"{RemoteItemId} -> {NewName}\tid={Renamed.Id}");
+    }
     static async Task CreateDriveFolderAsync(SyncSettings Settings, string PathText, CancellationToken CancellationToken)
     {
         GoogleDriveClient Client = await CreateDriveClientAsync(CancellationToken);
         StorageItem Folder = await EnsureDriveFolderAsync(Client, ResolveRemoteRootItemId(Settings), PathText, CancellationToken);
+        Console.WriteLine($"{PathText}\tid={Folder.Id}");
+    }
+    static async Task CreateDuplicateDriveFolderAsync(SyncSettings Settings, string PathText, CancellationToken CancellationToken)
+    {
+        GoogleDriveClient Client = await CreateDriveClientAsync(CancellationToken);
+        string RootFolderId = ResolveRemoteRootItemId(Settings);
+        string FolderId = await GetDriveFolderIdAsync(Client, RootFolderId, ParentPath(PathText), CancellationToken);
+        StorageItem Folder = await Client.CreateFolderAsync(FileName(PathText), FolderId, CancellationToken);
         Console.WriteLine($"{PathText}\tid={Folder.Id}");
     }
     static async Task RestoreDriveItemAsync(string RemoteItemId, CancellationToken CancellationToken)
@@ -162,6 +176,12 @@ static public class Program
         GoogleDriveClient Client = await CreateDriveClientAsync(CancellationToken);
         StorageItem Restored = await Client.RestoreFileAsync(RemoteItemId, CancellationToken);
         Console.WriteLine($"{RemoteItemId}\trestored={(!Restored.Trashed).ToString()}\tname={Restored.Name}");
+    }
+    static async Task EmptyDriveTrashAsync(CancellationToken CancellationToken)
+    {
+        GoogleDriveClient Client = await CreateDriveClientAsync(CancellationToken);
+        await Client.EmptyTrashAsync(CancellationToken);
+        Console.WriteLine("DRIVE_EMPTY_TRASH\tOK");
     }
     static async Task TrashDriveItemAsync(SyncSettings Settings, string PathText, CancellationToken CancellationToken)
     {
@@ -173,6 +193,17 @@ static public class Program
 
         StorageItem Trashed = await Client.TrashFileAsync(Item.Id, CancellationToken);
         Console.WriteLine($"{PathText}\ttrashed={Trashed.Trashed}\tid={Trashed.Id}");
+    }
+    static async Task DeleteDriveItemAsync(SyncSettings Settings, string PathText, CancellationToken CancellationToken)
+    {
+        GoogleDriveClient Client = await CreateDriveClientAsync(CancellationToken);
+        StorageItem Item = await FindDriveItemByPathAsync(Client, ResolveRemoteRootItemId(Settings), PathText, CancellationToken);
+
+        if (Item == null)
+            throw new InvalidOperationException("Drive path was not found: " + PathText);
+
+        await Client.DeleteFileAsync(Item.Id, CancellationToken);
+        Console.WriteLine($"{PathText}\tdeleted=True\tid={Item.Id}");
     }
     static async Task WriteDriveFileAsync(SyncSettings Settings, string PathText, string Text, CancellationToken CancellationToken)
     {
@@ -199,6 +230,46 @@ static public class Program
         {
             if (File.Exists(TempFilePath))
                 File.Delete(TempFilePath);
+        }
+    }
+    static async Task WriteDuplicateDriveFileAsync(SyncSettings Settings, string PathText, string Text, CancellationToken CancellationToken)
+    {
+        GoogleDriveClient Client = await CreateDriveClientAsync(CancellationToken);
+        string RootFolderId = ResolveRemoteRootItemId(Settings);
+        string FolderId = await GetDriveFolderIdAsync(Client, RootFolderId, ParentPath(PathText), CancellationToken);
+        string TempFolderPath = Path.Combine(Path.GetTempPath(), CommonConstants.ApplicationName, Guid.NewGuid().ToString("N"));
+        string TempFilePath = Path.Combine(TempFolderPath, FileName(PathText));
+
+        WriteTextFile(TempFilePath, Text);
+
+        try
+        {
+            StorageItem Item = await Client.UploadFileAsync(TempFilePath, FolderId, CancellationToken);
+            Console.WriteLine($"{PathText}\tid={Item.Id}\thash={Item.Md5Hash}");
+        }
+        finally
+        {
+            if (Directory.Exists(TempFolderPath))
+                Directory.Delete(TempFolderPath, true);
+        }
+    }
+    static async Task WriteDriveFileInFolderIdAsync(string ParentFolderId, string Name, string Text, CancellationToken CancellationToken)
+    {
+        GoogleDriveClient Client = await CreateDriveClientAsync(CancellationToken);
+        string TempFolderPath = Path.Combine(Path.GetTempPath(), CommonConstants.ApplicationName, Guid.NewGuid().ToString("N"));
+        string TempFilePath = Path.Combine(TempFolderPath, Name);
+
+        WriteTextFile(TempFilePath, Text);
+
+        try
+        {
+            StorageItem Item = await Client.UploadFileAsync(TempFilePath, ParentFolderId, CancellationToken);
+            Console.WriteLine($"{Name}\tid={Item.Id}\tparent={Item.ParentId}\thash={Item.Md5Hash}");
+        }
+        finally
+        {
+            if (Directory.Exists(TempFolderPath))
+                Directory.Delete(TempFolderPath, true);
         }
     }
     static async Task CleanDriveFolderAsync(GoogleDriveClient Client, string FolderId, CancellationToken CancellationToken)
@@ -543,15 +614,27 @@ order by i.LocalKey";
         Console.WriteLine("  local-delete PATH");
         Console.WriteLine("                    Deletes a local file or folder under the configured local sync folder.");
         Console.WriteLine("  drive-mkdir PATH  Creates a Drive folder under configured remote root.");
+        Console.WriteLine("  drive-mkdir-duplicate PATH");
+        Console.WriteLine("                    Creates a new Drive folder even when the same path already exists.");
         Console.WriteLine("  drive-write PATH TEXT");
         Console.WriteLine("                    Creates or updates a Drive text file under configured remote root.");
+        Console.WriteLine("  drive-write-duplicate PATH TEXT");
+        Console.WriteLine("                    Creates a new Drive text file even when the same path already exists.");
+        Console.WriteLine("  drive-write-parent-id PARENT_ID NAME TEXT");
+        Console.WriteLine("                    Creates a new Drive text file under a parent folder id.");
         Console.WriteLine("  drive-rename PATH NEW_NAME");
         Console.WriteLine("                    Renames a Drive item under configured remote root.");
+        Console.WriteLine("  drive-rename-id ID NEW_NAME");
+        Console.WriteLine("                    Renames a Drive item by remote id.");
         Console.WriteLine("  drive-move SOURCE TARGET_FOLDER");
         Console.WriteLine("                    Moves a Drive item under a Drive folder path, creating target folders.");
         Console.WriteLine("  drive-trash PATH  Moves a Drive item to trash.");
+        Console.WriteLine("  drive-delete PATH");
+        Console.WriteLine("                    Permanently deletes a Drive item under configured remote root.");
         Console.WriteLine("  drive-restore-id ID");
         Console.WriteLine("                    Restores a Drive item from trash by remote id.");
+        Console.WriteLine("  drive-empty-trash");
+        Console.WriteLine("                    Empties Google Drive trash without touching local files or DB.");
         Console.WriteLine("  run-cycle         Calls Hermes.Service /sync/run-once.");
         Console.WriteLine("  status            Calls Hermes.Service /status.");
         Console.WriteLine("  verify-empty      Verifies local, db, and Drive are empty.");
@@ -619,17 +702,41 @@ order by i.LocalKey";
 
                     await CreateDriveFolderAsync(Settings, Args[1], CancellationToken.None);
                     return 0;
+                case "drive-mkdir-duplicate":
+                    if (Args.Length < 2)
+                        throw new ArgumentException("drive-mkdir-duplicate requires PATH.");
+
+                    await CreateDuplicateDriveFolderAsync(Settings, Args[1], CancellationToken.None);
+                    return 0;
                 case "drive-write":
                     if (Args.Length < 3)
                         throw new ArgumentException("drive-write requires PATH and TEXT.");
 
                     await WriteDriveFileAsync(Settings, Args[1], Args[2], CancellationToken.None);
                     return 0;
+                case "drive-write-duplicate":
+                    if (Args.Length < 3)
+                        throw new ArgumentException("drive-write-duplicate requires PATH and TEXT.");
+
+                    await WriteDuplicateDriveFileAsync(Settings, Args[1], Args[2], CancellationToken.None);
+                    return 0;
+                case "drive-write-parent-id":
+                    if (Args.Length < 4)
+                        throw new ArgumentException("drive-write-parent-id requires PARENT_ID, NAME, and TEXT.");
+
+                    await WriteDriveFileInFolderIdAsync(Args[1], Args[2], Args[3], CancellationToken.None);
+                    return 0;
                 case "drive-rename":
                     if (Args.Length < 3)
                         throw new ArgumentException("drive-rename requires PATH and NEW_NAME.");
 
                     await RenameDriveItemAsync(Settings, Args[1], Args[2], CancellationToken.None);
+                    return 0;
+                case "drive-rename-id":
+                    if (Args.Length < 3)
+                        throw new ArgumentException("drive-rename-id requires ID and NEW_NAME.");
+
+                    await RenameDriveItemByIdAsync(Args[1], Args[2], CancellationToken.None);
                     return 0;
                 case "drive-move":
                     if (Args.Length < 3)
@@ -643,11 +750,20 @@ order by i.LocalKey";
 
                     await TrashDriveItemAsync(Settings, Args[1], CancellationToken.None);
                     return 0;
+                case "drive-delete":
+                    if (Args.Length < 2)
+                        throw new ArgumentException("drive-delete requires PATH.");
+
+                    await DeleteDriveItemAsync(Settings, Args[1], CancellationToken.None);
+                    return 0;
                 case "drive-restore-id":
                     if (Args.Length < 2)
                         throw new ArgumentException("drive-restore-id requires ID.");
 
                     await RestoreDriveItemAsync(Args[1], CancellationToken.None);
+                    return 0;
+                case "drive-empty-trash":
+                    await EmptyDriveTrashAsync(CancellationToken.None);
                     return 0;
                 case "run-cycle":
                     await RunCycleAsync(CancellationToken.None);
