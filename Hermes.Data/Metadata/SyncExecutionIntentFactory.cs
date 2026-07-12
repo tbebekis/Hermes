@@ -15,11 +15,21 @@ static public class SyncExecutionIntentFactory
     {
         return Observation != null
             && Observation.ExistsFlag
-            && !Observation.Removed;
+            && !Observation.Removed
+            && Observation.Trashed != true;
     }
     static bool HasText(string Text) => !string.IsNullOrWhiteSpace(Text);
+    static bool IsInactiveRemoteObservation(RemoteObservedSnapshotRecord Observation)
+    {
+        return Observation != null
+            && (Observation.Removed || Observation.Trashed == true || !Observation.ExistsFlag);
+    }
     static string RemoteItemId(SyncExecutionRequest Request)
     {
+        if (Request.Decision?.DecisionKind == SyncPlanDecisionKind.UploadToRemote
+            && IsInactiveRemoteObservation(Request.RemoteObservation))
+            return string.Empty;
+
         if (HasText(Request.TrackedItem?.RemoteItemId))
             return Request.TrackedItem.RemoteItemId;
 
@@ -170,10 +180,14 @@ static public class SyncExecutionIntentFactory
                 return Request.SyncRoot.RemoteRootItemId;
         }
 
-        if (HasText(Request.RemoteObservation?.RemoteParentId))
+        if (HasText(Request.RemoteObservation?.RemoteParentId)
+            && !(Request.Decision?.DecisionKind == SyncPlanDecisionKind.UploadToRemote && IsInactiveRemoteObservation(Request.RemoteObservation)))
             return Request.RemoteObservation.RemoteParentId;
 
-        if (HasText(Request.BaseSnapshot?.RemoteParentId))
+        if (HasText(Request.BaseSnapshot?.RemoteParentId)
+            && !(Request.Decision?.DecisionKind == SyncPlanDecisionKind.UploadToRemote
+                && Request.BaseSnapshot.ExistsFlag == false
+                && IsInactiveRemoteObservation(Request.RemoteObservation)))
             return Request.BaseSnapshot.RemoteParentId;
 
         if (HasText(Request.LocalParentRemoteItemId))

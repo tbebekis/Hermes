@@ -59,8 +59,11 @@ public partial class MainWindow : Window
     readonly ContentControl fPageHost;
     readonly TextBlock fServiceStatusText;
     readonly TextBlock fSyncStatusText;
+    readonly TextBlock fConflictStatusText;
     readonly TextBlock fConnectionStatusText;
     readonly TextBlock fUpdatedTimeText;
+    readonly Border fSyncRunningBadge;
+    readonly TextBlock fSyncRunningBadgeText;
     readonly List<PageDescriptor> fPages;
     readonly LocalServiceClient fServiceClient;
     readonly DashboardPage fDashboardPage;
@@ -76,6 +79,8 @@ public partial class MainWindow : Window
     readonly LocalServiceProcessController fServiceProcessController;
     readonly DispatcherTimer fRefreshTimer;
     bool fRefreshInProgress;
+    bool fManualSyncInProgress;
+    DateTime fManualSyncResultTimeUtc;
 
     static Image CreateLogo(double Size)
     {
@@ -97,6 +102,17 @@ public partial class MainWindow : Window
             Text = Text,
             VerticalAlignment = VerticalAlignment.Center,
             FontSize = 12,
+        };
+    }
+    static Border CreateSyncRunningBadge(TextBlock TextBlock)
+    {
+        return new Border()
+        {
+            Background = Brushes.ForestGreen,
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(10, 3),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = TextBlock,
         };
     }
     static Image CreateSidebarIcon(string IconName)
@@ -199,18 +215,28 @@ public partial class MainWindow : Window
     }
     Border CreateStatusBar()
     {
-        StackPanel Panel = new()
+        Grid Panel = new()
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 18,
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
             Children =
             {
-                fServiceStatusText,
-                fSyncStatusText,
-                fConnectionStatusText,
-                fUpdatedTimeText,
+                new StackPanel()
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 18,
+                    Children =
+                    {
+                        fServiceStatusText,
+                        fSyncStatusText,
+                        fConflictStatusText,
+                        fConnectionStatusText,
+                        fUpdatedTimeText,
+                    }
+                },
+                fSyncRunningBadge,
             }
         };
+        Grid.SetColumn(fSyncRunningBadge, 1);
 
         return new Border()
         {
@@ -266,6 +292,43 @@ public partial class MainWindow : Window
         fPageHost.Content = Page.Page;
         fUpdatedTimeText.Text = "Updated " + DateTime.Now.ToString("HH:mm:ss");
     }
+    void SetSyncRunningBadge(LocalServiceStatus Status)
+    {
+        if (Status == null)
+        {
+            fSyncRunningBadgeText.Text = "OFFLINE";
+            fSyncRunningBadge.Background = Brushes.DimGray;
+            return;
+        }
+
+        if (Status.IsSyncRunning)
+        {
+            fSyncRunningBadgeText.Text = "SYNC RUNNING";
+            fSyncRunningBadge.Background = Brushes.DarkOrange;
+            return;
+        }
+
+        fSyncRunningBadgeText.Text = "IDLE";
+        fSyncRunningBadge.Background = Brushes.ForestGreen;
+    }
+    void ClearManualCommandResultAfterScheduledActivity(IReadOnlyList<LocalSyncActivity> Activities)
+    {
+        if (fManualSyncInProgress || fManualSyncResultTimeUtc == default || Activities == null)
+            return;
+
+        foreach (LocalSyncActivity Activity in Activities)
+        {
+            if (Activity.TimestampUtc <= fManualSyncResultTimeUtc)
+                continue;
+
+            if (string.Equals(Activity.Title, "Sync pass completed", StringComparison.Ordinal))
+            {
+                fActivityPage.SetCommandResult(null);
+                fManualSyncResultTimeUtc = default;
+                return;
+            }
+        }
+    }
     async Task RefreshServiceStatusAsync(bool LogDiagnostics)
     {
         if (fRefreshInProgress)
@@ -279,6 +342,11 @@ public partial class MainWindow : Window
                 fServicePage.AppendMemo("Refreshing service status.");
 
             LocalServiceStatus Status = await fServiceClient.GetStatusAsync();
+            SetSyncRunningBadge(Status);
+
+            if (Status?.IsSyncRunning == true && !fManualSyncInProgress)
+                fActivityPage.SetCommandResult(null);
+
             fDashboardPage.SetStatus(Status);
             fSynchronizationPage.SetStatus(Status);
             fConnectionsPage.SetStatus(Status);
@@ -290,6 +358,8 @@ public partial class MainWindow : Window
             {
                 fServiceStatusText.Text = "Service: Stopped";
                 fSyncStatusText.Text = "Sync: Unknown";
+                fConflictStatusText.Text = "Conflicts: -";
+                fConflictStatusText.Foreground = Brushes.Black;
                 fConnectionStatusText.Text = "HTTP API: Disconnected";
                 fActivityPage.SetActivities(null);
                 fConflictsPage.SetConflicts(null);
@@ -309,6 +379,8 @@ public partial class MainWindow : Window
                 IReadOnlyList<LocalSyncActivity> RecentActivity = await fServiceClient.GetRecentActivityAsync();
                 if (LogDiagnostics && RecentActivity == null && !string.IsNullOrWhiteSpace(fServiceClient.LastErrorMessage))
                     fServicePage.AppendMemo("Activity error: " + fServiceClient.LastErrorMessage);
+                ClearManualCommandResultAfterScheduledActivity(RecentActivity);
+                fDashboardPage.SetActivities(RecentActivity);
                 fActivityPage.SetActivities(RecentActivity);
                 IReadOnlyList<LocalOpenConflict> OpenConflicts = await fServiceClient.GetOpenConflictsAsync();
                 if (LogDiagnostics && OpenConflicts == null && !string.IsNullOrWhiteSpace(fServiceClient.LastErrorMessage))
@@ -317,6 +389,10 @@ public partial class MainWindow : Window
                 fLogsPage.SetLogs(RecentLogs);
                 fServiceStatusText.Text = "Service: " + Status.ServiceStatus;
                 fSyncStatusText.Text = "Sync: " + Status.SynchronizationStatus;
+                fConflictStatusText.Text = "Conflicts: " + Status.OpenConflictCount.ToString();
+                fConflictStatusText.Foreground = Status.OpenConflictCount == 0 ? Brushes.Black : Brushes.Firebrick;
+                fConflictStatusText.FontWeight = Status.OpenConflictCount == 0 ? FontWeight.Normal : FontWeight.SemiBold;
+                fConflictStatusText.FontSize = Status.OpenConflictCount == 0 ? 12 : 13;
                 fConnectionStatusText.Text = "HTTP API: " + Status.IpcStatus;
 
                 if (LogDiagnostics)
@@ -371,6 +447,45 @@ public partial class MainWindow : Window
         await Task.Delay(750);
         await RefreshServiceStatusAsync(true);
     }
+    async void ActivityPage_ClearRequested(object Sender, EventArgs Args)
+    {
+        await fServiceClient.ClearActivityAsync();
+        await RefreshServiceStatusAsync(false);
+    }
+    async Task RunManualSyncAsync()
+    {
+        if (fManualSyncInProgress)
+        {
+            LocalServiceControlResult BusyResult = LocalServiceControlResult.Failure("A manual synchronization request is already in progress.");
+            fSynchronizationPage.SetCommandResult(BusyResult);
+            fActivityPage.SetCommandResult(BusyResult);
+            return;
+        }
+
+        try
+        {
+            fManualSyncInProgress = true;
+            LocalServiceControlResult StartedResult = LocalServiceControlResult.Success("Manual synchronization requested.");
+            fSynchronizationPage.SetCommandResult(StartedResult);
+            fActivityPage.SetCommandResult(StartedResult);
+            fSyncRunningBadgeText.Text = "SYNC RUNNING";
+            fSyncRunningBadge.Background = Brushes.DarkOrange;
+
+            LocalServiceControlResult Result = await fServiceClient.RunSyncCycleAsync();
+            fSynchronizationPage.SetCommandResult(Result);
+            fActivityPage.SetCommandResult(Result);
+            fManualSyncResultTimeUtc = DateTime.UtcNow;
+        }
+        finally
+        {
+            fManualSyncInProgress = false;
+            await RefreshServiceStatusAsync(false);
+        }
+    }
+    async void RunSyncRequested(object Sender, EventArgs Args)
+    {
+        await RunManualSyncAsync();
+    }
 
     // ● constructor
 
@@ -386,8 +501,18 @@ public partial class MainWindow : Window
         fPageHost = new ContentControl();
         fServiceStatusText = CreateStatusText("Service: Unknown");
         fSyncStatusText = CreateStatusText("Sync: Idle");
+        fConflictStatusText = CreateStatusText("Conflicts: -");
         fConnectionStatusText = CreateStatusText("Google Drive: Unknown");
         fUpdatedTimeText = CreateStatusText("Updated -");
+        fSyncRunningBadgeText = new TextBlock()
+        {
+            Text = "OFFLINE",
+            Foreground = Brushes.White,
+            FontWeight = FontWeight.Bold,
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        fSyncRunningBadge = CreateSyncRunningBadge(fSyncRunningBadgeText);
         fServiceClient = new LocalServiceClient();
         fServiceProcessController = new LocalServiceProcessController();
         fRefreshTimer = new DispatcherTimer()
@@ -409,6 +534,9 @@ public partial class MainWindow : Window
         fServicePage.StartRequested += ServicePage_StartRequested;
         fServicePage.StopRequested += ServicePage_StopRequested;
         fServicePage.RestartRequested += ServicePage_RestartRequested;
+        fActivityPage.ClearRequested += ActivityPage_ClearRequested;
+        fActivityPage.RunSyncRequested += RunSyncRequested;
+        fSynchronizationPage.RunSyncRequested += RunSyncRequested;
         fPages = new List<PageDescriptor>()
         {
             new("Dashboard", "Dashboard", "Overall service and synchronization status.", "dashboard.png", fDashboardPage),

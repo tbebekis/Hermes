@@ -22,6 +22,18 @@ public class ServiceControlResponse
             TimestampUtc = DateTime.UtcNow,
         };
     }
+    /// <summary>
+    /// Creates a failed service control response.
+    /// </summary>
+    static public ServiceControlResponse Failure(string Message)
+    {
+        return new ServiceControlResponse()
+        {
+            Succeeded = false,
+            Message = Message ?? string.Empty,
+            TimestampUtc = DateTime.UtcNow,
+        };
+    }
 
     // ● properties
 

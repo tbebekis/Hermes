@@ -39,6 +39,34 @@ public class SyncActivityStore
     // ● public
 
     /// <summary>
+    /// Adds an informational synchronization activity entry.
+    /// </summary>
+    public void AddInformation(string SyncRootId, string Title, string Details)
+    {
+        Add(new SyncActivityRecord()
+        {
+            TimestampUtc = DateTime.UtcNow,
+            Level = "Information",
+            SyncRootId = SyncRootId ?? string.Empty,
+            Title = Title ?? string.Empty,
+            Details = Details ?? string.Empty,
+        });
+    }
+    /// <summary>
+    /// Adds a warning synchronization activity entry.
+    /// </summary>
+    public void AddWarning(string SyncRootId, string Title, string Details)
+    {
+        Add(new SyncActivityRecord()
+        {
+            TimestampUtc = DateTime.UtcNow,
+            Level = "Warning",
+            SyncRootId = SyncRootId ?? string.Empty,
+            Title = Title ?? string.Empty,
+            Details = Details ?? string.Empty,
+        });
+    }
+    /// <summary>
     /// Adds a successful synchronization pass entry.
     /// </summary>
     public void AddSuccess(string SyncRootId, MetadataSyncRunResult Result)
@@ -88,11 +116,19 @@ public class SyncActivityStore
         lock (fLock)
             return fRecords.ToList();
     }
+    /// <summary>
+    /// Clears all activity entries kept in memory.
+    /// </summary>
+    public void Clear()
+    {
+        lock (fLock)
+            fRecords.Clear();
+    }
 
     // ● properties
 
     /// <summary>
     /// Gets or sets the maximum number of activity entries kept in memory.
     /// </summary>
-    public int MaxCount { get; set; } = 200;
+    public int MaxCount { get; set; } = 50;
 }

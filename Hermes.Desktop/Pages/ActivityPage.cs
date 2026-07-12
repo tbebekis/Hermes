@@ -11,6 +11,9 @@ public class ActivityPage : UserControl
     // ● fields
 
     readonly StackPanel fListPanel;
+    readonly Button fClearButton;
+    readonly Button fRunSyncButton;
+    readonly TextBlock fCommandResultText;
 
     // ● private
 
@@ -63,6 +66,14 @@ public class ActivityPage : UserControl
             Opacity = 0.72,
         });
     }
+    void ClearButton_Click(object Sender, RoutedEventArgs Args)
+    {
+        ClearRequested?.Invoke(this, EventArgs.Empty);
+    }
+    void RunSyncButton_Click(object Sender, RoutedEventArgs Args)
+    {
+        RunSyncRequested?.Invoke(this, EventArgs.Empty);
+    }
 
     // ● constructor
 
@@ -72,8 +83,52 @@ public class ActivityPage : UserControl
     public ActivityPage()
     {
         fListPanel = new StackPanel() { Spacing = 8 };
+        fRunSyncButton = new Button()
+        {
+            Content = "Run Sync Cycle",
+            Padding = new Thickness(14, 6),
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        fRunSyncButton.Click += RunSyncButton_Click;
+        fClearButton = new Button()
+        {
+            Content = "Clear",
+            Padding = new Thickness(14, 6),
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        fClearButton.Click += ClearButton_Click;
+        fCommandResultText = new TextBlock()
+        {
+            Text = "-",
+            Opacity = 0.72,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+        };
 
-        Content = fListPanel;
+        Content = new Grid()
+        {
+            RowDefinitions = new RowDefinitions("Auto,*"),
+            RowSpacing = 12,
+            Children =
+            {
+                new StackPanel()
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    Children =
+                    {
+                        fRunSyncButton,
+                        fClearButton,
+                        fCommandResultText,
+                    }
+                },
+                new ScrollViewer()
+                {
+                    Content = fListPanel,
+                }
+            }
+        };
+        Grid.SetRow(((Grid)Content).Children[1], 1);
         SetMessage("No activity loaded.");
     }
 
@@ -101,4 +156,30 @@ public class ActivityPage : UserControl
         foreach (LocalSyncActivity Activity in Activities)
             fListPanel.Children.Add(CreateActivityRow(Activity));
     }
+    /// <summary>
+    /// Displays the latest command result.
+    /// </summary>
+    public void SetCommandResult(LocalServiceControlResult Result)
+    {
+        if (Result == null)
+        {
+            fCommandResultText.Text = string.Empty;
+            fCommandResultText.Foreground = Brushes.Black;
+            return;
+        }
+
+        fCommandResultText.Text = Result.Message;
+        fCommandResultText.Foreground = Result.Succeeded ? Brushes.DarkGreen : Brushes.Firebrick;
+    }
+
+    // ● events
+
+    /// <summary>
+    /// Occurs when the user requests clearing recent activity.
+    /// </summary>
+    public event EventHandler ClearRequested;
+    /// <summary>
+    /// Occurs when the user requests a manual synchronization cycle.
+    /// </summary>
+    public event EventHandler RunSyncRequested;
 }

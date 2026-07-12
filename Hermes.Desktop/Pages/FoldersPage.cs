@@ -17,6 +17,7 @@ public class FoldersPage : UserControl
     readonly TextBlock fEnabledText;
     readonly TextBlock fMutationsText;
     readonly TextBlock fPollingText;
+    string fLocalRootPath;
 
     // ● private
 
@@ -33,6 +34,26 @@ public class FoldersPage : UserControl
         Grid.SetRow(TextBlock, Row);
         Grid.SetColumn(TextBlock, Column);
         return TextBlock;
+    }
+    static void ConfigureLink(TextBlock TextBlock)
+    {
+        TextBlock.Foreground = Brushes.DodgerBlue;
+        TextBlock.TextDecorations = TextDecorations.Underline;
+        TextBlock.Cursor = new Cursor(StandardCursorType.Hand);
+    }
+    void OpenLocalRootPath()
+    {
+        if (string.IsNullOrWhiteSpace(fLocalRootPath) || !Directory.Exists(fLocalRootPath))
+            return;
+
+        Process.Start(new ProcessStartInfo(fLocalRootPath)
+        {
+            UseShellExecute = true,
+        });
+    }
+    void LocalRootText_PointerPressed(object Sender, PointerPressedEventArgs Args)
+    {
+        OpenLocalRootPath();
     }
     Border CreateRootPanel()
     {
@@ -77,11 +98,14 @@ public class FoldersPage : UserControl
     {
         fSyncRootIdText = new TextBlock() { Text = "-" };
         fProviderText = new TextBlock() { Text = "-" };
-        fLocalRootText = new TextBlock() { Text = "-" };
+        fLocalRootText = new TextBlock() { Text = "-", TextWrapping = TextWrapping.NoWrap };
         fRemoteRootText = new TextBlock() { Text = "-" };
         fEnabledText = new TextBlock() { Text = "-" };
         fMutationsText = new TextBlock() { Text = "-" };
         fPollingText = new TextBlock() { Text = "-" };
+        fLocalRootPath = string.Empty;
+        ConfigureLink(fLocalRootText);
+        fLocalRootText.PointerPressed += LocalRootText_PointerPressed;
 
         Content = new StackPanel()
         {
@@ -106,6 +130,7 @@ public class FoldersPage : UserControl
             fSyncRootIdText.Text = "-";
             fProviderText.Text = "-";
             fLocalRootText.Text = "-";
+            fLocalRootPath = string.Empty;
             fRemoteRootText.Text = "-";
             fEnabledText.Text = "-";
             fMutationsText.Text = "-";
@@ -116,6 +141,7 @@ public class FoldersPage : UserControl
         fSyncRootIdText.Text = Status.SyncRootId;
         fProviderText.Text = Status.ProviderName;
         fLocalRootText.Text = Status.LocalRootPath;
+        fLocalRootPath = Status.LocalRootPath;
         fRemoteRootText.Text = Status.RemoteRootItemId;
         fEnabledText.Text = Status.SyncRootEnabled ? "Yes" : "No";
         fMutationsText.Text = Status.MutationsEnabled ? "Enabled" : "Disabled";

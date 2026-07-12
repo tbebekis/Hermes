@@ -10,7 +10,7 @@ public class MetadataSyncLoop
 {
     // ● fields
 
-    readonly IMetadataSyncRunner fRunner;
+    readonly SyncCycleCoordinator fCoordinator;
     readonly SyncRootRecord fSyncRoot;
     readonly SyncSettings fSettings;
     readonly SyncActivityStore fActivityStore;
@@ -48,12 +48,19 @@ public class MetadataSyncLoop
     {
         try
         {
-            Result<MetadataSyncRunResult> Result = await fRunner.RunOnceAsync(fSyncRoot.Id, CancellationToken);
+            Result<MetadataSyncRunResult> Result = await fCoordinator.TryRunOnceAsync(CancellationToken);
 
             if (Result.Failed)
             {
-                fActivityStore.AddFailure(fSyncRoot.Id, Result.ErrorText);
-                fLogger.LogError("Sync pass failed for root {SyncRootId}. {Message}", fSyncRoot.Id, Result.ErrorText);
+                if (Result.ErrorText == SyncCycleCoordinator.SyncAlreadyRunningMessage)
+                {
+                    fLogger.LogInformation("Scheduled sync pass skipped for root {SyncRootId}. {Message}", fSyncRoot.Id, Result.ErrorText);
+                }
+                else
+                {
+                    fActivityStore.AddFailure(fSyncRoot.Id, Result.ErrorText);
+                    fLogger.LogError("Sync pass failed for root {SyncRootId}. {Message}", fSyncRoot.Id, Result.ErrorText);
+                }
             }
             else
                 LogSuccess(Result.Value);
@@ -75,13 +82,13 @@ public class MetadataSyncLoop
     /// Initializes a new instance of the <see cref="MetadataSyncLoop"/> class.
     /// </summary>
     public MetadataSyncLoop(
-        IMetadataSyncRunner Runner,
+        SyncCycleCoordinator Coordinator,
         SyncRootRecord SyncRoot,
         IOptions<SyncSettings> Settings,
         SyncActivityStore ActivityStore,
         ILogger<MetadataSyncLoop> Logger)
     {
-        fRunner = Guard.NotNull(Runner, nameof(Runner));
+        fCoordinator = Guard.NotNull(Coordinator, nameof(Coordinator));
         fSyncRoot = Guard.NotNull(SyncRoot, nameof(SyncRoot));
         fSettings = Guard.NotNull(Settings, nameof(Settings)).Value;
         fActivityStore = Guard.NotNull(ActivityStore, nameof(ActivityStore));

@@ -1286,7 +1286,7 @@ public class MetadataStoreTests
     /// Verifies unknown tombstone changes prevent checkpoint advancement.
     /// </summary>
     [Fact]
-    public void UnknownTombstoneChangesPreventCheckpointAdvance()
+    public void UnknownTombstoneChangesAreIgnoredAndCheckpointAdvances()
     {
         using TestDatabase Database = new();
         SqlMetadataStore Store = new(Database.Store);
@@ -1312,9 +1312,9 @@ public class MetadataStoreTests
 
         Assert.Empty(Result.CreatedTrackedItems);
         Assert.Empty(Result.Observations);
-        Assert.Single(Result.UntrackedChanges);
+        Assert.Empty(Result.UntrackedChanges);
         Assert.Null(Store.GetTrackedItemByRemoteId("root-1", "remote-unknown-tombstone"));
-        Assert.Null(Store.GetRemoteCheckpoint("root-1"));
+        Assert.Equal("change-token-5", Store.GetRemoteCheckpoint("root-1").StartPageToken);
     }
     /// <summary>
     /// Verifies full remote snapshot import stores tracked items, observations, and checkpoint.

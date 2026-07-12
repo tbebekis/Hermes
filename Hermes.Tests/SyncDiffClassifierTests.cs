@@ -131,12 +131,42 @@ public class SyncDiffClassifierTests
         Assert.Equal(SyncDiffKind.RemoteChanged, Kind);
     }
     /// <summary>
+    /// Verifies a local restore after a committed deletion is uploaded as a new local change when the old remote item is trashed.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsLocalChangedWhenCommittedMissingIsRecreatedLocallyAndRemoteIsTrashed()
+    {
+        SyncItemState BaseState = State(Exists: false);
+        SyncItemState RemoteState = State();
+        RemoteState.Trashed = true;
+
+        SyncDiffKind Kind = Classify(BaseState, State(Hash: "hash-local"), RemoteState);
+
+        Assert.Equal(SyncDiffKind.LocalChanged, Kind);
+    }
+    /// <summary>
     /// Verifies matching new item classification.
     /// </summary>
     [Fact]
     public void ClassifyReturnsBothChangedCompatibleWhenNewItemExistsOnBothSides()
     {
         SyncDiffKind Kind = Classify(null, State(), State());
+
+        Assert.Equal(SyncDiffKind.BothChangedCompatible, Kind);
+    }
+    /// <summary>
+    /// Verifies matching new items without base can reconcile through remote projected local path.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsBothChangedCompatibleWhenNewItemProjectedRemotePathMatchesLocalPath()
+    {
+        SyncItemState LocalState = State();
+        LocalState.LocalRelativePath = "Folder/Report.txt";
+        SyncItemState RemoteState = State();
+        RemoteState.LocalRelativePath = string.Empty;
+        RemoteState.ProjectedLocalRelativePath = "Folder/Report.txt";
+
+        SyncDiffKind Kind = Classify(null, LocalState, RemoteState);
 
         Assert.Equal(SyncDiffKind.BothChangedCompatible, Kind);
     }
@@ -508,6 +538,22 @@ public class SyncDiffClassifierTests
         SyncDiffKind Kind = Classify(BaseState, LocalState, RemoteState);
 
         Assert.Equal(SyncDiffKind.RemoteChanged, Kind);
+    }
+    /// <summary>
+    /// Verifies a committed missing item restored remotely and matching locally is treated as compatible.
+    /// </summary>
+    [Fact]
+    public void ClassifyReturnsBothChangedCompatibleWhenCommittedMissingItemIsRestoredAndMatchesLocal()
+    {
+        SyncItemState BaseState = State(Exists: false);
+        SyncItemState LocalState = State();
+        SyncItemState RemoteState = State();
+        LocalState.LocalRelativePath = "Folder/File1.txt";
+        RemoteState.ProjectedLocalRelativePath = "Folder/File1.txt";
+
+        SyncDiffKind Kind = Classify(BaseState, LocalState, RemoteState);
+
+        Assert.Equal(SyncDiffKind.BothChangedCompatible, Kind);
     }
     /// <summary>
     /// Verifies remote permanent removal classification.

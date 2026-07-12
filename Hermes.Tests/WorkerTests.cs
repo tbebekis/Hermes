@@ -23,6 +23,7 @@ public class WorkerTests
         Services.AddSingleton(MetadataSyncTestHost.CreateSyncRoot());
         Services.AddSingleton(Options.Create(MetadataSyncTestHost.CreateSettings()));
         Services.AddSingleton<SyncActivityStore>();
+        Services.AddSingleton<SyncCycleCoordinator>();
         Services.AddSingleton<MetadataSyncLoop>();
         Services.AddHostedService<Worker>();
 

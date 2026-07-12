@@ -11,6 +11,7 @@ public class LocalServiceClient
     // ● fields
 
     readonly HttpClient fClient;
+    readonly HttpClient fCommandClient;
     readonly JsonSerializerOptions fJsonOptions;
 
     // ● private
@@ -49,6 +50,11 @@ public class LocalServiceClient
         {
             BaseAddress = new Uri("http://127.0.0.1:8765"),
             Timeout = TimeSpan.FromSeconds(2),
+        };
+        fCommandClient = new HttpClient()
+        {
+            BaseAddress = new Uri("http://127.0.0.1:8765"),
+            Timeout = TimeSpan.FromMinutes(5),
         };
         fJsonOptions = new JsonSerializerOptions()
         {
@@ -128,6 +134,52 @@ public class LocalServiceClient
         {
             SetError(Ex);
             return null;
+        }
+    }
+    /// <summary>
+    /// Clears recent synchronization activity in the local service.
+    /// </summary>
+    public async Task<LocalServiceControlResult> ClearActivityAsync()
+    {
+        try
+        {
+            ClearError();
+            using HttpResponseMessage Response = await fClient.PostAsync("/activity/clear", new StringContent(string.Empty));
+            using Stream Stream = await Response.Content.ReadAsStreamAsync();
+            LocalServiceControlResult Result = await JsonSerializer.DeserializeAsync<LocalServiceControlResult>(Stream, fJsonOptions);
+
+            if (Result == null)
+                return LocalServiceControlResult.Failure("The local service returned an empty response.");
+
+            return Result;
+        }
+        catch (Exception Ex)
+        {
+            SetError(Ex);
+            return LocalServiceControlResult.Failure(Ex.Message);
+        }
+    }
+    /// <summary>
+    /// Requests one manual synchronization cycle.
+    /// </summary>
+    public async Task<LocalServiceControlResult> RunSyncCycleAsync()
+    {
+        try
+        {
+            ClearError();
+            using HttpResponseMessage Response = await fCommandClient.PostAsync("/sync/run-once", new StringContent(string.Empty));
+            using Stream Stream = await Response.Content.ReadAsStreamAsync();
+            LocalServiceControlResult Result = await JsonSerializer.DeserializeAsync<LocalServiceControlResult>(Stream, fJsonOptions);
+
+            if (Result == null)
+                return LocalServiceControlResult.Failure("The local service returned an empty response.");
+
+            return Result;
+        }
+        catch (Exception Ex)
+        {
+            SetError(Ex);
+            return LocalServiceControlResult.Failure(Ex.Message);
         }
     }
     /// <summary>

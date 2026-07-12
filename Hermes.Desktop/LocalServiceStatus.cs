@@ -71,6 +71,10 @@ public class LocalServiceStatus
     /// </summary>
     public int OpenConflictCount { get; set; }
     /// <summary>
+    /// Gets or sets a value indicating whether a synchronization cycle is currently running.
+    /// </summary>
+    public bool IsSyncRunning { get; set; }
+    /// <summary>
     /// Gets or sets the response timestamp in UTC.
     /// </summary>
     public DateTime TimestampUtc { get; set; }

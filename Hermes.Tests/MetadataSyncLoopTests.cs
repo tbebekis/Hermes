@@ -119,9 +119,10 @@ public class MetadataSyncLoopTests
     };
     static MetadataSyncLoop Loop(IMetadataSyncRunner Runner, ILogger<MetadataSyncLoop> Logger = null)
     {
+        SyncRootRecord Root = SyncRoot();
         return new MetadataSyncLoop(
-            Runner,
-            SyncRoot(),
+            new SyncCycleCoordinator(Runner, Root),
+            Root,
             Options.Create(Settings()),
             new SyncActivityStore(),
             Logger ?? NullLogger<MetadataSyncLoop>.Instance);

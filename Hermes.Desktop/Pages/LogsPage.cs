@@ -12,6 +12,7 @@ public class LogsPage : UserControl
 
     readonly ComboBox fLevelBox;
     readonly TextBox fSearchBox;
+    readonly Button fClearButton;
     readonly TextBox fTextBox;
     IReadOnlyList<LocalRecentLog> fLogs;
 
@@ -77,6 +78,11 @@ public class LogsPage : UserControl
     {
         RefreshText();
     }
+    void ClearButton_Click(object Sender, RoutedEventArgs Args)
+    {
+        fLogs = new List<LocalRecentLog>();
+        fTextBox.Text = "Log view cleared.";
+    }
 
     // ● constructor
 
@@ -105,6 +111,11 @@ public class LogsPage : UserControl
             PlaceholderText = "Search logs",
             MinWidth = 240,
         };
+        fClearButton = new Button()
+        {
+            Content = "Clear",
+            Padding = new Thickness(14, 6),
+        };
         fTextBox = new TextBox()
         {
             Text = "No log entries loaded.",
@@ -118,6 +129,7 @@ public class LogsPage : UserControl
         ScrollViewer.SetVerticalScrollBarVisibility(fTextBox, ScrollBarVisibility.Auto);
         fLevelBox.SelectionChanged += Filter_Changed;
         fSearchBox.TextChanged += Filter_Changed;
+        fClearButton.Click += ClearButton_Click;
 
         Grid Layout = new()
         {
@@ -133,6 +145,7 @@ public class LogsPage : UserControl
                     {
                         fLevelBox,
                         fSearchBox,
+                        fClearButton,
                     }
                 },
                 fTextBox,

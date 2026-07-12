@@ -56,6 +56,7 @@ static public class ServiceRegistrations
         Services.AddSingleton<MetadataSyncSession>();
         Services.AddSingleton<SyncActivityStore>();
         Services.AddSingleton<IMetadataSyncRunner, MetadataSyncRunner>();
+        Services.AddSingleton<SyncCycleCoordinator>();
         Services.AddSingleton<MetadataSyncLoop>();
         Services.AddSingleton<SyncPlanner>();
         Services.AddSingleton<LocalScanner>();

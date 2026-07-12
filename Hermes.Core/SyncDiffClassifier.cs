@@ -64,6 +64,20 @@ public class SyncDiffClassifier
             && !RemoteState.Removed
             && !RemoteState.Trashed;
     }
+    static bool IsCompatibleRestore(SyncItemState BaseState, SyncItemState LocalState, SyncItemState RemoteState)
+    {
+        return IsCommittedMissing(BaseState)
+            && !IsMissing(LocalState)
+            && !IsMissing(RemoteState)
+            && SameRestoredProjectedState(LocalState, RemoteState);
+    }
+    static bool IsLocalRestoreAfterRemoteRemoval(SyncItemState BaseState, SyncItemState LocalState, SyncItemState RemoteState)
+    {
+        return IsCommittedMissing(BaseState)
+            && !IsMissing(LocalState)
+            && RemoteState != null
+            && (RemoteState.Removed || RemoteState.Trashed || !RemoteState.Exists);
+    }
     static bool IsCompatibleEndpointRemoval(SyncItemState BaseState, SyncItemState LocalState, SyncItemState RemoteState)
     {
         return BaseState != null
@@ -142,6 +156,28 @@ public class SyncDiffClassifier
             && !SameLocalNamespace(BaseState, LocalState)
             && !SameRemoteNamespace(BaseState, RemoteState);
     }
+    static bool SameProjectedState(SyncItemState LocalState, SyncItemState RemoteState)
+    {
+        return SameContent(LocalState, RemoteState)
+            && SameText(LocalState.Name, RemoteState.Name)
+            && !string.IsNullOrWhiteSpace(RemoteState.ProjectedLocalRelativePath)
+            && SameText(LocalState.LocalRelativePath, RemoteState.ProjectedLocalRelativePath);
+    }
+    static bool SameRestoredProjectedState(SyncItemState LocalState, SyncItemState RemoteState)
+    {
+        return LocalState != null
+            && RemoteState != null
+            && LocalState.Exists
+            && RemoteState.Exists
+            && !RemoteState.Removed
+            && !RemoteState.Trashed
+            && SameText(LocalState.ItemType, RemoteState.ItemType)
+            && SameText(LocalState.Name, RemoteState.Name)
+            && SameText(LocalState.ContentHash, RemoteState.ContentHash)
+            && LocalState.Size == RemoteState.Size
+            && !string.IsNullOrWhiteSpace(RemoteState.ProjectedLocalRelativePath)
+            && SameText(LocalState.LocalRelativePath, RemoteState.ProjectedLocalRelativePath);
+    }
     static SyncDiffKind ClassifyWithoutBase(SyncItemState LocalState, SyncItemState RemoteState)
     {
         bool LocalMissing = IsMissing(LocalState);
@@ -156,7 +192,7 @@ public class SyncDiffClassifier
         if (LocalMissing && !RemoteMissing)
             return SyncDiffKind.RemoteChanged;
 
-        return SameState(LocalState, RemoteState)
+        return SameState(LocalState, RemoteState) || SameProjectedState(LocalState, RemoteState)
             ? SyncDiffKind.BothChangedCompatible
             : SyncDiffKind.Conflict;
     }
@@ -178,6 +214,12 @@ public class SyncDiffClassifier
 
         if (IsReconciledRemoteRemoval(Input.BaseState, LocalState, RemoteState))
             return SyncDiffKind.NoChange;
+
+        if (IsCompatibleRestore(Input.BaseState, LocalState, RemoteState))
+            return SyncDiffKind.BothChangedCompatible;
+
+        if (IsLocalRestoreAfterRemoteRemoval(Input.BaseState, LocalState, RemoteState))
+            return SyncDiffKind.LocalChanged;
 
         if (IsRemoteRestore(Input.BaseState, LocalState, RemoteState))
             return SyncDiffKind.RemoteChanged;

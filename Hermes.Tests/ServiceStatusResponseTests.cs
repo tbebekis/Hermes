@@ -37,7 +37,7 @@ public class ServiceStatusResponseTests
     [Fact]
     public void CreateReturnsCurrentServiceStatus()
     {
-        ServiceStatusResponse Response = ServiceStatusResponse.Create(SyncRoot(), Settings(), 3);
+        ServiceStatusResponse Response = ServiceStatusResponse.Create(SyncRoot(), Settings(), 3, true);
 
         Assert.Equal("Running", Response.ServiceStatus);
         Assert.Equal("Unknown", Response.SynchronizationStatus);
@@ -54,6 +54,7 @@ public class ServiceStatusResponseTests
         Assert.True(Response.MutationsEnabled);
         Assert.Equal(60, Response.PollingIntervalSeconds);
         Assert.Equal(3, Response.OpenConflictCount);
+        Assert.True(Response.IsSyncRunning);
         Assert.True(Response.TimestampUtc <= DateTime.UtcNow);
     }
 }

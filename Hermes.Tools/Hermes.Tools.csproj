@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Hermes.Common\Hermes.Common.csproj" />
+        <ProjectReference Include="..\Hermes.Core\Hermes.Core.csproj" />
+        <ProjectReference Include="..\Hermes.Data\Hermes.Data.csproj" />
+        <ProjectReference Include="..\Hermes.GoogleDrive\Hermes.GoogleDrive.csproj" />
+        <ProjectReference Include="..\Hermes.Storage\Hermes.Storage.csproj" />
+    </ItemGroup>
+
+</Project>

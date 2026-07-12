@@ -234,6 +234,15 @@ public class GoogleDriveClient
         await Request.ExecuteAsync(CancellationToken);
     }
     /// <summary>
+    /// Permanently deletes all trashed Google Drive items.
+    /// </summary>
+    public async Task EmptyTrashAsync(CancellationToken CancellationToken)
+    {
+        DriveService Service = RequireDriveService();
+        FilesResource.EmptyTrashRequest Request = Service.Files.EmptyTrash();
+        await Request.ExecuteAsync(CancellationToken);
+    }
+    /// <summary>
     /// Lists changes after a page token.
     /// </summary>
     public async Task<StorageChangeListResult> ListChangesAsync(string PageToken, CancellationToken CancellationToken)

@@ -17,7 +17,7 @@ public class ServiceStatusResponse
     /// <summary>
     /// Creates the current service status response.
     /// </summary>
-    static public ServiceStatusResponse Create(SyncRootRecord SyncRoot, SyncSettings Settings, int OpenConflictCount)
+    static public ServiceStatusResponse Create(SyncRootRecord SyncRoot, SyncSettings Settings, int OpenConflictCount, bool IsSyncRunning)
     {
         Guard.NotNull(SyncRoot, nameof(SyncRoot));
         Guard.NotNull(Settings, nameof(Settings));
@@ -39,6 +39,7 @@ public class ServiceStatusResponse
             MutationsEnabled = Settings.EnableMutations,
             PollingIntervalSeconds = Settings.PollingIntervalSeconds,
             OpenConflictCount = OpenConflictCount,
+            IsSyncRunning = IsSyncRunning,
             TimestampUtc = DateTime.UtcNow,
         };
     }
@@ -105,6 +106,10 @@ public class ServiceStatusResponse
     /// Gets or sets the current durable open conflict count.
     /// </summary>
     public int OpenConflictCount { get; set; }
+    /// <summary>
+    /// Gets or sets a value indicating whether a synchronization cycle is currently running.
+    /// </summary>
+    public bool IsSyncRunning { get; set; }
     /// <summary>
     /// Gets or sets the response timestamp in UTC.
     /// </summary>

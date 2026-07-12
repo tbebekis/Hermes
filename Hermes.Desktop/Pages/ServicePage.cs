@@ -15,12 +15,15 @@ public class ServicePage : UserControl
     readonly TextBlock fUptimeText;
     readonly TextBlock fIpcText;
     readonly TextBlock fVersionText;
+    readonly TextBlock fConflictLabelText;
+    readonly TextBlock fConflictText;
     readonly TextBlock fCommandText;
     readonly TextBox fMemoTextBox;
     readonly Button fRefreshButton;
     readonly Button fStartButton;
     readonly Button fStopButton;
     readonly Button fRestartButton;
+    readonly Button fClearButton;
 
     // ● private
 
@@ -34,7 +37,7 @@ public class ServicePage : UserControl
             CornerRadius = new CornerRadius(6),
             Child = new Grid()
             {
-                RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto"),
+                RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto"),
                 ColumnDefinitions = new ColumnDefinitions("180,*"),
                 RowSpacing = 10,
                 Children =
@@ -49,6 +52,8 @@ public class ServicePage : UserControl
                     Field(fIpcText, 3, 1),
                     Label("Version", 4, 0),
                     Field(fVersionText, 4, 1),
+                    Field(fConflictLabelText, 5, 0),
+                    Field(fConflictText, 5, 1),
                 }
             }
         };
@@ -115,6 +120,22 @@ public class ServicePage : UserControl
     {
         RestartRequested?.Invoke(this, EventArgs.Empty);
     }
+    void ClearButton_Click(object Sender, RoutedEventArgs Args)
+    {
+        fMemoTextBox.Text = LogLine("Service memo cleared.");
+        fMemoTextBox.CaretIndex = fMemoTextBox.Text.Length;
+    }
+    void SetConflictVisualState(int OpenConflictCount)
+    {
+        fConflictText.Text = OpenConflictCount.ToString();
+        fConflictText.Foreground = OpenConflictCount == 0 ? Brushes.Black : Brushes.Firebrick;
+        fConflictText.FontWeight = OpenConflictCount == 0 ? FontWeight.SemiBold : FontWeight.Bold;
+        fConflictText.FontSize = OpenConflictCount == 0 ? 14 : 15;
+        fConflictLabelText.Foreground = OpenConflictCount == 0 ? Brushes.Black : Brushes.Firebrick;
+        fConflictLabelText.FontWeight = OpenConflictCount == 0 ? FontWeight.SemiBold : FontWeight.Bold;
+        fConflictLabelText.FontSize = OpenConflictCount == 0 ? 14 : 15;
+        fConflictLabelText.Opacity = OpenConflictCount == 0 ? 0.72 : 1;
+    }
 
     // ● constructor
 
@@ -128,6 +149,8 @@ public class ServicePage : UserControl
         fUptimeText = new TextBlock() { Text = "-" };
         fIpcText = new TextBlock() { Text = "localhost HTTP API not connected" };
         fVersionText = new TextBlock() { Text = "-" };
+        fConflictLabelText = new TextBlock() { Text = "Open conflicts", Opacity = 0.72, TextWrapping = TextWrapping.Wrap };
+        fConflictText = new TextBlock() { Text = "-" };
         fCommandText = new TextBlock() { Text = "No service command has been requested.", Opacity = 0.72 };
         fMemoTextBox = new TextBox()
         {
@@ -144,10 +167,12 @@ public class ServicePage : UserControl
         fStartButton = ActionButton("Start", true);
         fStopButton = ActionButton("Stop", false);
         fRestartButton = ActionButton("Restart", false);
+        fClearButton = ActionButton("Clear", true);
         fRefreshButton.Click += RefreshButton_Click;
         fStartButton.Click += StartButton_Click;
         fStopButton.Click += StopButton_Click;
         fRestartButton.Click += RestartButton_Click;
+        fClearButton.Click += ClearButton_Click;
 
         Grid Layout = new()
         {
@@ -166,6 +191,7 @@ public class ServicePage : UserControl
                         fStartButton,
                         fStopButton,
                         fRestartButton,
+                        fClearButton,
                     }
                 },
                 fCommandText,
@@ -192,6 +218,14 @@ public class ServicePage : UserControl
             fUptimeText.Text = "-";
             fIpcText.Text = "localhost HTTP API not connected";
             fVersionText.Text = "-";
+            fConflictText.Text = "-";
+            fConflictText.Foreground = Brushes.Black;
+            fConflictText.FontWeight = FontWeight.SemiBold;
+            fConflictText.FontSize = 14;
+            fConflictLabelText.Foreground = Brushes.Black;
+            fConflictLabelText.FontWeight = FontWeight.SemiBold;
+            fConflictLabelText.FontSize = 14;
+            fConflictLabelText.Opacity = 0.72;
             fStartButton.IsEnabled = true;
             fStopButton.IsEnabled = false;
             fRestartButton.IsEnabled = false;
@@ -203,6 +237,7 @@ public class ServicePage : UserControl
         fUptimeText.Text = FormatUptime(Status.UptimeSeconds);
         fIpcText.Text = Status.IpcStatus;
         fVersionText.Text = Status.Version;
+        SetConflictVisualState(Status.OpenConflictCount);
         fStartButton.IsEnabled = false;
         fStopButton.IsEnabled = true;
         fRestartButton.IsEnabled = true;

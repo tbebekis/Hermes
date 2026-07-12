@@ -12,10 +12,10 @@ static public class Program
 
     static void MapServiceApi(IEndpointRouteBuilder Endpoints)
     {
-        Endpoints.MapGet("/status", (SyncRootRecord SyncRoot, IOptions<SyncSettings> Settings, SqlMetadataStore Store) =>
+        Endpoints.MapGet("/status", (SyncRootRecord SyncRoot, IOptions<SyncSettings> Settings, SqlMetadataStore Store, SyncCycleCoordinator Coordinator) =>
         {
             int OpenConflictCount = Store.CountOpenConflicts(SyncRoot.Id);
-            return ServiceStatusResponse.Create(SyncRoot, Settings.Value, OpenConflictCount);
+            return ServiceStatusResponse.Create(SyncRoot, Settings.Value, OpenConflictCount, Coordinator.IsRunning);
         });
         Endpoints.MapGet("/conflicts/open", (SyncRootRecord SyncRoot, SqlMetadataStore Store) =>
         {
@@ -43,6 +43,29 @@ static public class Program
                 Result.Add(SyncActivityResponse.FromRecord(Record));
 
             return Result;
+        });
+        Endpoints.MapPost("/activity/clear", (SyncActivityStore Store) =>
+        {
+            Store.Clear();
+            return ServiceControlResponse.Success("Activity cleared.");
+        });
+        Endpoints.MapPost("/sync/run-once", async (SyncRootRecord SyncRoot, SyncCycleCoordinator Coordinator, SyncActivityStore ActivityStore, CancellationToken CancellationToken) =>
+        {
+            ActivityStore.AddInformation(SyncRoot.Id, "Manual sync requested", "A manual synchronization cycle was requested.");
+            Result<MetadataSyncRunResult> Result = await Coordinator.TryRunOnceAsync(CancellationToken);
+
+            if (Result.Failed)
+            {
+                if (Result.ErrorText == SyncCycleCoordinator.SyncAlreadyRunningMessage)
+                    ActivityStore.AddWarning(SyncRoot.Id, "Manual sync skipped", Result.ErrorText);
+                else
+                    ActivityStore.AddFailure(SyncRoot.Id, Result.ErrorText);
+
+                return ServiceControlResponse.Failure(Result.ErrorText);
+            }
+
+            ActivityStore.AddSuccess(SyncRoot.Id, Result.Value);
+            return ServiceControlResponse.Success("Manual synchronization cycle completed.");
         });
         Endpoints.MapPost("/control/stop", (IHostApplicationLifetime Lifetime) =>
         {

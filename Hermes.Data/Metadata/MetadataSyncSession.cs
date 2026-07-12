@@ -23,6 +23,7 @@ public class MetadataSyncSession
         HashSet<string> CollidingItemIds = fStore.FindRemoteNamespaceCollisions(SyncRootId)
             .SelectMany(Item => Item.TrackedItemIds)
             .ToHashSet();
+        CollidingItemIds.UnionWith(FindProjectedLocalNamespaceCollisionItemIds(SyncRoot));
 
         foreach (TrackedItemRecord Item in fStore.GetTrackedItems(SyncRootId))
         {
@@ -42,6 +43,43 @@ public class MetadataSyncSession
         }
 
         return Result;
+    }
+    HashSet<string> FindProjectedLocalNamespaceCollisionItemIds(SyncRootRecord SyncRoot)
+    {
+        Dictionary<string, HashSet<string>> Map = new(StringComparer.Ordinal);
+
+        if (SyncRoot == null)
+            return new HashSet<string>();
+
+        foreach (TrackedItemRecord Item in fStore.GetTrackedItems(SyncRoot.Id))
+        {
+            LocalObservedSnapshotRecord LocalObservation = fStore.GetLocalObservation(Item.Id);
+            RemoteObservedSnapshotRecord RemoteObservation = fStore.GetRemoteObservation(Item.Id);
+
+            if (LocalObservation != null && LocalObservation.ExistsFlag && !string.IsNullOrWhiteSpace(LocalObservation.RelativePath))
+                AddProjectedLocalNamespaceItem(Map, LocalObservation.RelativePath, Item.Id);
+
+            if (!IsInactiveRemoteObservation(RemoteObservation))
+                AddProjectedLocalNamespaceItem(Map, ProjectRemoteLocalPath(SyncRoot, RemoteObservation), Item.Id);
+        }
+
+        return Map.Values
+            .Where(Item => Item.Count > 1)
+            .SelectMany(Item => Item)
+            .ToHashSet();
+    }
+    static void AddProjectedLocalNamespaceItem(Dictionary<string, HashSet<string>> Map, string LocalPath, string TrackedItemId)
+    {
+        if (string.IsNullOrWhiteSpace(LocalPath) || string.IsNullOrWhiteSpace(TrackedItemId))
+            return;
+
+        if (!Map.TryGetValue(LocalPath, out HashSet<string> Items))
+        {
+            Items = new HashSet<string>(StringComparer.Ordinal);
+            Map[LocalPath] = Items;
+        }
+
+        Items.Add(TrackedItemId);
     }
     static bool IsPendingExecutorDecision(SyncPlanDecision Decision)
     {
@@ -280,6 +318,13 @@ public class MetadataSyncSession
         int Index = LocalRelativePath.LastIndexOf('/');
         return Index < 0 ? string.Empty : LocalRelativePath[..Index];
     }
+    static int LocalPathDepth(string LocalRelativePath)
+    {
+        if (string.IsNullOrWhiteSpace(LocalRelativePath))
+            return 0;
+
+        return LocalRelativePath.Count(Char => Char == '/');
+    }
     static bool CanAdoptLocalNamespaceChange(LocalScanItem ScanItem, TrackedItemRecord TrackedItem, BaseSnapshotRecord BaseSnapshot)
     {
         if (ScanItem == null || TrackedItem == null || BaseSnapshot == null || !BaseSnapshot.ExistsFlag)
@@ -304,6 +349,8 @@ public class MetadataSyncSession
     TrackedItemRecord FindLocalNamespaceCandidate(string SyncRootId, LocalScanItem ScanItem, HashSet<string> ObservedLocalKeys, HashSet<string> UsedTrackedItemIds)
     {
         List<TrackedItemRecord> Candidates = new();
+        List<TrackedItemRecord> NameMatchedCandidates = new();
+        List<TrackedItemRecord> ParentMatchedCandidates = new();
 
         foreach (TrackedItemRecord TrackedItem in fStore.GetTrackedItems(SyncRootId))
         {
@@ -313,10 +360,53 @@ public class MetadataSyncSession
                 continue;
 
             if (CanAdoptLocalNamespaceChange(ScanItem, TrackedItem, fStore.GetBaseSnapshot(TrackedItem.Id)))
+            {
                 Candidates.Add(TrackedItem);
+
+                if (string.Equals(ScanItem.ItemType, "Folder", StringComparison.Ordinal))
+                {
+                    BaseSnapshotRecord BaseSnapshot = fStore.GetBaseSnapshot(TrackedItem.Id);
+                    if (string.Equals(BaseSnapshot?.Name, ScanItem.Name, StringComparison.Ordinal))
+                        NameMatchedCandidates.Add(TrackedItem);
+                    if (string.Equals(ParentLocalPath(BaseSnapshot?.LocalRelativePath), ScanItem.ParentRelativePath ?? string.Empty, StringComparison.Ordinal))
+                        ParentMatchedCandidates.Add(TrackedItem);
+                }
+            }
         }
 
+        if (NameMatchedCandidates.Count == 1)
+            return NameMatchedCandidates[0];
+        if (ParentMatchedCandidates.Count == 1)
+            return ParentMatchedCandidates[0];
+
         return Candidates.Count == 1 ? Candidates[0] : null;
+    }
+    static TrackedItemRecord FindLocalNamespaceDescendantCandidate(
+        LocalScanItem ScanItem,
+        Dictionary<string, TrackedItemRecord> TrackedItemsByLocalKey,
+        IEnumerable<(string OldPrefix, string NewPrefix)> NamespacePrefixMaps,
+        HashSet<string> ObservedLocalKeys,
+        HashSet<string> UsedTrackedItemIds)
+    {
+        string Key = LocalKey(ScanItem);
+
+        foreach ((string OldPrefix, string NewPrefix) in NamespacePrefixMaps)
+        {
+            if (!IsDescendantPath(NewPrefix, Key))
+                continue;
+
+            string OldKey = ReplacePathPrefix(Key, NewPrefix, OldPrefix);
+            if (!TrackedItemsByLocalKey.TryGetValue(OldKey, out TrackedItemRecord TrackedItem))
+                continue;
+
+            if (ObservedLocalKeys.Contains(TrackedItem.LocalKey) || UsedTrackedItemIds.Contains(TrackedItem.Id))
+                continue;
+
+            if (string.Equals(TrackedItem.ItemType, ScanItem.ItemType, StringComparison.Ordinal))
+                return TrackedItem;
+        }
+
+        return null;
     }
     string ResolveRemoteParentLocalPath(SyncRootRecord SyncRoot, RemoteObservedSnapshotRecord RemoteObservation)
     {
@@ -394,6 +484,16 @@ public class MetadataSyncSession
 
         return string.Empty;
     }
+    static string RequestLocalPath(SyncExecutionRequest Request)
+    {
+        if (!string.IsNullOrWhiteSpace(Request?.LocalObservation?.RelativePath))
+            return Request.LocalObservation.RelativePath;
+
+        if (!string.IsNullOrWhiteSpace(Request?.BaseSnapshot?.LocalRelativePath))
+            return Request.BaseSnapshot.LocalRelativePath;
+
+        return string.Empty;
+    }
     static int RemoteDependencyDepth(SyncExecutionRequest Request, Dictionary<string, SyncExecutionRequest> RequestsByRemoteId, Dictionary<string, int> Cache)
     {
         string RemoteItemId = RequestRemoteItemId(Request);
@@ -411,6 +511,23 @@ public class MetadataSyncSession
         Cache[RemoteItemId] = Result;
         return Result;
     }
+    static int LocalDependencyDepth(SyncExecutionRequest Request, Dictionary<string, SyncExecutionRequest> RequestsByLocalPath, Dictionary<string, int> Cache)
+    {
+        string LocalPath = RequestLocalPath(Request);
+        if (string.IsNullOrWhiteSpace(LocalPath))
+            return 0;
+
+        if (Cache.TryGetValue(LocalPath, out int Cached))
+            return Cached;
+
+        string ParentPath = Request?.LocalObservation?.ParentRelativePath;
+        int Result = !string.IsNullOrWhiteSpace(ParentPath) && RequestsByLocalPath.TryGetValue(ParentPath, out SyncExecutionRequest Parent)
+            ? LocalDependencyDepth(Parent, RequestsByLocalPath, Cache) + 1
+            : 0;
+
+        Cache[LocalPath] = Result;
+        return Result;
+    }
     static IReadOnlyList<SyncExecutionRequest> OrderExecutionRequests(IEnumerable<SyncExecutionRequest> Requests)
     {
         List<SyncExecutionRequest> Result = Requests.ToList();
@@ -418,10 +535,18 @@ public class MetadataSyncSession
             .Select(Item => new { RemoteItemId = RequestRemoteItemId(Item), Request = Item })
             .Where(Item => !string.IsNullOrWhiteSpace(Item.RemoteItemId))
             .ToDictionary(Item => Item.RemoteItemId, Item => Item.Request);
-        Dictionary<string, int> Cache = new();
+        Dictionary<string, SyncExecutionRequest> RequestsByLocalPath = Result
+            .Select(Item => new { LocalPath = RequestLocalPath(Item), Request = Item })
+            .Where(Item => !string.IsNullOrWhiteSpace(Item.LocalPath))
+            .GroupBy(Item => Item.LocalPath, StringComparer.Ordinal)
+            .Where(Group => Group.Count() == 1)
+            .ToDictionary(Group => Group.Key, Group => Group.First().Request, StringComparer.Ordinal);
+        Dictionary<string, int> RemoteCache = new();
+        Dictionary<string, int> LocalCache = new();
 
         return Result
-            .OrderBy(Item => RemoteDependencyDepth(Item, RequestsByRemoteId, Cache))
+            .OrderBy(Item => RemoteDependencyDepth(Item, RequestsByRemoteId, RemoteCache))
+            .ThenBy(Item => LocalDependencyDepth(Item, RequestsByLocalPath, LocalCache))
             .ToList();
     }
     static bool CanCommitExecutionResult(SyncExecutionResult Result)
@@ -472,7 +597,12 @@ public class MetadataSyncSession
     }
     static string ReplacePathPrefix(string LocalPath, string OldPrefix, string NewPrefix)
     {
-        return NewPrefix + LocalPath[OldPrefix.Length..];
+        string Suffix = LocalPath[OldPrefix.Length..];
+
+        if (string.IsNullOrWhiteSpace(NewPrefix))
+            return Suffix.StartsWith("/", StringComparison.Ordinal) ? Suffix[1..] : Suffix;
+
+        return NewPrefix + Suffix;
     }
     static string LocalName(string LocalRelativePath)
     {
@@ -518,6 +648,19 @@ public class MetadataSyncSession
 
         return Observation?.ModifiedTime;
     }
+    static bool IsInactiveRemoteObservation(RemoteObservedSnapshotRecord Observation)
+    {
+        return Observation != null
+            && (Observation.Removed || Observation.Trashed == true || !Observation.ExistsFlag);
+    }
+    static bool ShouldReplaceTrackedRemoteItemId(SyncExecutionResult Result, TrackedItemRecord TrackedItem)
+    {
+        return Result?.RemoteItem != null
+            && TrackedItem != null
+            && !string.Equals(TrackedItem.RemoteItemId, Result.RemoteItem.Id, StringComparison.Ordinal)
+            && Result.Request?.Decision?.DecisionKind == SyncPlanDecisionKind.UploadToRemote
+            && IsInactiveRemoteObservation(Result.Request.RemoteObservation);
+    }
     static LocalObservedSnapshotRecord CreateLocalObservationFromExecution(SyncExecutionResult Result, DateTime ObservedTime)
     {
         RemoteObservedSnapshotRecord RemoteObservation = Result.Request.RemoteObservation;
@@ -562,7 +705,7 @@ public class MetadataSyncSession
         string ItemId = TrackedItemId(Result);
         TrackedItemRecord TrackedItem = Result.Request.TrackedItem ?? fStore.GetTrackedItem(ItemId);
 
-        if (TrackedItem != null && string.IsNullOrWhiteSpace(TrackedItem.RemoteItemId))
+        if (TrackedItem != null && (string.IsNullOrWhiteSpace(TrackedItem.RemoteItemId) || ShouldReplaceTrackedRemoteItemId(Result, TrackedItem)))
         {
             TrackedItem.RemoteItemId = Result.RemoteItem.Id;
             fStore.UpdateTrackedItem(TrackedItem);
@@ -736,6 +879,7 @@ public class MetadataSyncSession
         Dictionary<string, TrackedItemRecord> TrackedItemsByObservedLocalKey = GetTrackedItemsByObservedLocalKey(SyncRootId);
         HashSet<string> ObservedLocalKeys = new();
         HashSet<string> UsedNamespaceTrackedItemIds = new();
+        List<(string OldPrefix, string NewPrefix)> NamespacePrefixMaps = new();
         List<LocalScanItem> UnmatchedItems = new();
 
         foreach (LocalScanItem Item in Items)
@@ -761,18 +905,28 @@ public class MetadataSyncSession
             Result.Observations.Add(LocalObservationMapper.FromScanItem(Item, TrackedItem.Id, ObservedTime, ScanId));
         }
 
-        foreach (LocalScanItem Item in UnmatchedItems)
+        foreach (LocalScanItem Item in UnmatchedItems.OrderBy(Item => LocalPathDepth(LocalKey(Item))))
         {
             string Key = LocalKey(Item);
-            TrackedItemRecord TrackedItem = FindLocalNamespaceCandidate(SyncRootId, Item, ObservedLocalKeys, UsedNamespaceTrackedItemIds);
+            TrackedItemRecord TrackedItem = FindLocalNamespaceDescendantCandidate(
+                Item,
+                TrackedItemsByLocalKey,
+                NamespacePrefixMaps,
+                ObservedLocalKeys,
+                UsedNamespaceTrackedItemIds)
+                ?? FindLocalNamespaceCandidate(SyncRootId, Item, ObservedLocalKeys, UsedNamespaceTrackedItemIds);
 
             if (TrackedItem != null)
             {
+                string OldKey = TrackedItem.LocalKey;
                 TrackedItemsByLocalKey.Remove(TrackedItem.LocalKey);
                 TrackedItem.LocalKey = Key;
                 TrackedItemsByLocalKey[Key] = TrackedItem;
                 UsedNamespaceTrackedItemIds.Add(TrackedItem.Id);
                 fStore.UpdateTrackedItem(TrackedItem);
+
+                if (string.Equals(Item.ItemType, "Folder", StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(OldKey) && !string.Equals(OldKey, Key, StringComparison.Ordinal))
+                    NamespacePrefixMaps.Add((OldKey, Key));
             }
             else
             {
@@ -865,6 +1019,8 @@ public class MetadataSyncSession
                     TrackedItemsByRemoteId[Change.ItemId] = TrackedItem;
                     Result.CreatedTrackedItems.Add(TrackedItem);
                 }
+                else if (Change.Removed)
+                    continue;
                 else
                 {
                     Result.UntrackedChanges.Add(Change);
